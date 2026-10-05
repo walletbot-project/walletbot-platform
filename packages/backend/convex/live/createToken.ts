@@ -86,7 +86,17 @@ export type CreateLiveTokenOptions = {
      * off.
      */
     flags?: Partial<Record<FlagKey, boolean>>
+    /**
+     * Who ends a user turn. 'auto' (the default, and every build that predates
+     * the field) leaves Gemini's voice activity detection on, which only closes
+     * a turn after it hears silence. 'manual' turns it off: the client brackets
+     * each turn with `activityStart`/`activityEnd`, which is what a voice note
+     * released mid-word needs.
+     */
+    turnDetection?: LiveTurnDetection
 }
+
+export type LiveTurnDetection = 'manual' | 'auto'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Compatibility gating (versioning, not an experiment switch): the mint must
@@ -600,6 +610,13 @@ export async function createLiveToken(
                     }),
                 },
             ],
+            ...(options.turnDetection === 'manual'
+                ? {
+                      realtimeInputConfig: {
+                          automaticActivityDetection: { disabled: true },
+                      },
+                  }
+                : {}),
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             sessionResumption: {},

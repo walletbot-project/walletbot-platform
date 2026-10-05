@@ -80,6 +80,10 @@ Future<LiveToken> fetchLiveToken({
   String? localAccountId,
   Future<Map<String, Object?>> Function()? buildMintArgs,
   void Function(String phase, Map<String, Object?> extra)? onPhase,
+
+  /// `'manual'` or `'auto'` (`VoiceConversationMode.turnDetection`). Null
+  /// leaves the server default, which is what builds before it got.
+  String? turnDetection,
 }) async {
   final fetchStopwatch = Stopwatch()..start();
   // The mint args (platform identity, locale/timezone, USER_CONTEXT snapshot)
@@ -94,6 +98,9 @@ Future<LiveToken> fetchLiveToken({
         'error': e.toString(),
       });
     }
+  }
+  if (turnDetection != null) {
+    mintArgs = {...mintArgs, 'turnDetection': turnDetection};
   }
   Map<String, Object?>? body;
   var via = 'http_endpoint';

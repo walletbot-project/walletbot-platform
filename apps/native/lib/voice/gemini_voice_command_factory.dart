@@ -106,6 +106,8 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       buildMintArgs: buildMintArgs,
       onPhase: (phase, extra) =>
           debugPrint('[voice] token prefetch $phase: $extra'),
+      // Conversations open in chat; live mode always mints its own token.
+      turnDetection: VoiceConversationMode.chat.turnDetection,
     );
     // A failed or credential-less prefetch must not poison the real connect:
     // drop it so takeFreshPrefetch hands out nothing and the command runs

@@ -315,7 +315,10 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   bool get isConnected => true;
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {}
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {}
 
   @override
   Future<void> prepareAudio() async {}
@@ -327,7 +330,19 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {}
 
   @override
-  Future<void> endAudioStream() async {}
+  Future<void> endTurn() async {}
+
+  @override
+  VoiceConversationMode get mode => VoiceConversationMode.chat;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {}
+
+  @override
+  void discardTurn() {}
+
+  @override
+  bool get isNoteFull => false;
 
   @override
   Future<void> sendText(String text) async {}

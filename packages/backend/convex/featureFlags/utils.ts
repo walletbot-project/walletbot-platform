@@ -1,6 +1,8 @@
 export type FlagKey =
     | 'agentGemini31'
     | 'agentLocalAccounts'
+    | 'agentPromptSuggestions'
+    | 'agentRecordHint'
     | 'aiConsent'
     | 'agentReportButton'
     | 'debugToolCalls'
@@ -24,6 +26,18 @@ export const KNOWN_FLAGS: {
         key: 'agentLocalAccounts',
         description:
             'Let native LOCAL accounts (no sign-in) mint a Gasti live token, so the agent works without an account. Off makes the agent sign-in only and local accounts are told to sign in.',
+        enabledByDefault: true,
+    },
+    {
+        key: 'agentPromptSuggestions',
+        description:
+            'Show per-user prompt suggestions on the empty Gasti screen, built on the device from the latest movements, accounts, categories and tags (native + web). Tapping one fills the input. Off shows the start screen without them.',
+        enabledByDefault: false,
+    },
+    {
+        key: 'agentRecordHint',
+        description:
+            'Show the "Tap or hold to record a voice note" hint over the composer mic on the empty Gasti chat, so the voice note mic reads apart from the live mode button (native + web). Off hides it.',
         enabledByDefault: true,
     },
     {

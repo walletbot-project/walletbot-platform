@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/voice/voice_event.dart';
 import 'package:app/voice/voice_expense_command.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -73,7 +73,7 @@ void main() {
 
 Future<void> _sendText(WidgetTester tester, String text) async {
   await tester.enterText(find.byType(TextField), text);
-  await tester.testTextInput.receiveAction(TextInputAction.send);
+  await tester.sendKeyEvent(LogicalKeyboardKey.enter);
   await tester.pump();
 }
 
@@ -140,7 +140,10 @@ class _RecordingCommand implements VoiceExpenseCommand {
   String get label => 'test';
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {
     if (failStarts) throw StateError('injected start failure');
     _active = true;
   }
@@ -155,9 +158,21 @@ class _RecordingCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {}
 
   @override
-  Future<void> endAudioStream() async {
+  Future<void> endTurn() async {
     if (failCleanup) throw StateError('injected cleanup failure');
   }
+
+  @override
+  VoiceConversationMode get mode => VoiceConversationMode.chat;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {}
+
+  @override
+  void discardTurn() {}
+
+  @override
+  bool get isNoteFull => false;
 
   @override
   Future<void> sendText(String text) async {

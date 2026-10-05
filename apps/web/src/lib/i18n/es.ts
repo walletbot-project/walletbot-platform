@@ -728,9 +728,6 @@ export const es = {
 
     voice: {
         title: 'Habla con Gaston',
-        statusIdle: 'inactivo',
-        statusConnecting: 'conectando',
-        statusConnected: 'conectado',
         speaking: 'Hablando',
         you: 'Vos',
         agent: 'Gaston',
@@ -739,17 +736,61 @@ export const es = {
         toolRunning: 'Ejecutando',
         toolDone: 'Listo',
         toolCancelled: 'Cancelado',
-        connectingEllipsis: 'Conectando…',
-        tapToStart: 'Tocá el micrófono o escribí un mensaje para empezar',
         microphone: 'Micrófono',
-        mute: 'Silenciar',
-        unmute: 'Activar micrófono',
         connect: 'Conectar',
         disconnect: 'Desconectar',
-        startConversation: 'Iniciar una conversación',
         endSession: 'Finalizar sesión',
         typeMessage: 'Escribí un mensaje…',
         send: 'Enviar',
+        welcomeTitle: '¿En qué te ayudo?',
+        welcome: 'Contame un gasto o preguntame por tus cuentas',
+        startTalking: 'Iniciar llamada',
+        liveHint: 'Modo manos libres',
+        exitLive: 'Terminar llamada',
+        recordVoiceNote: 'Grabar un audio',
+        discardVoiceNote: 'Descartar audio',
+        noteLimit: 'Límite de 5 minutos',
+        onCall: 'En llamada',
+        recordHint: 'Tocá o mantené apretado para grabar un audio',
+        preparingMic: 'Preparando el micrófono',
+        listening: 'Te escucho',
+        micPaused: 'Micrófono en pausa',
+        slideToLock: 'Deslizá para bloquear',
+        pause: 'Pausar',
+        resume: 'Continuar',
+        suggestions: {
+            logExpense: (p: { amount: string; category: string }) =>
+                `Gasté ${p.amount} en ${p.category}`,
+            logExpenseWithAccount: (p: {
+                amount: string
+                category: string
+                account: string
+            }) => `Gasté ${p.amount} en ${p.category} con ${p.account}`,
+            spentInCategoryThisMonth: (p: { category: string }) =>
+                `¿Cuánto gasté en ${p.category} este mes?`,
+            accountBalance: (p: { account: string }) =>
+                `¿Cuánto tengo en ${p.account}?`,
+            topSpendingThisMonth: '¿En qué gasté más este mes?',
+            compareCategoryLastMonth: (p: { category: string }) =>
+                `¿Gasté más en ${p.category} que el mes pasado?`,
+            transfer: (p: {
+                amount: string
+                account: string
+                toAccount: string
+            }) => `Pasé ${p.amount} de ${p.account} a ${p.toAccount}`,
+            logIncome: (p: { amount: string; account: string }) =>
+                `Cobré ${p.amount} en ${p.account}`,
+            spentWithTag: (p: { tag: string }) =>
+                `¿Cuánto gasté con la etiqueta ${p.tag}?`,
+            recentExpenses: '¿Cuáles fueron mis últimos gastos?',
+            whatCanYouDo: '¿Qué podés hacer?',
+            createCashAccount: 'Creá una cuenta de efectivo',
+            setupCategories: 'Ayudame a armar mis categorías',
+            howToLogExpense: '¿Cómo anoto un gasto?',
+            homeWidget: 'Agregá un widget en Inicio con mis gastos del mes',
+            homeWidgetForCategory: (p: { category: string }) =>
+                `Agregá un widget en Inicio con mis gastos en ${p.category}`,
+        },
         systemConnecting: 'Conectando…',
         systemTokenReceived: (p: { model: string }) =>
             `Token recibido para ${p.model}`,

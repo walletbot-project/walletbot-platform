@@ -58,6 +58,16 @@ abstract final class LiveProtocol {
     },
   };
 
+  /// Opens a user turn on a socket minted with voice activity detection off.
+  static Map<String, dynamic> activityStart() => {
+    'realtimeInput': {'activityStart': <String, dynamic>{}},
+  };
+
+  /// Closes the turn [activityStart] opened; the model answers right away.
+  static Map<String, dynamic> activityEnd() => {
+    'realtimeInput': {'activityEnd': <String, dynamic>{}},
+  };
+
   static Map<String, dynamic> audio(Uint8List bytes) => {
     'realtimeInput': {
       'audio': {
