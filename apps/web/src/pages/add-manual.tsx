@@ -226,14 +226,15 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
 export function TransactionForm({
     onClose,
     onSaved,
-    initialType = 'income',
     initialAccountId = '',
     initialCategoryId = '',
 }: {
     onClose: () => void
     onSaved: () => void
-    /** Prefills from an entity detail (an account's or category's sheet). */
-    initialType?: MovementType
+    /**
+     * Prefills from an entity detail (an account's or category's sheet). A
+     * type change resets the form back to them.
+     */
     initialAccountId?: string
     initialCategoryId?: string
 }) {
@@ -292,7 +293,7 @@ export function TransactionForm({
         createdTags,
     )
 
-    const [type, setType] = useState<MovementType>(initialType)
+    const [type, setType] = useState<MovementType>('income')
     const [amount, setAmount] = useState('0')
     const [destinationAmount, setDestinationAmount] = useState('0')
     const [sourceAmountTouched, setSourceAmountTouched] = useState(false)
@@ -377,7 +378,7 @@ export function TransactionForm({
     )
     const config = typeCopy(type, t)
 
-    const resetFields = () => {
+    const resetFields = (nextType: MovementType) => {
         setAmount('0')
         setDestinationAmount('0')
         setSourceAmountTouched(false)
@@ -386,9 +387,9 @@ export function TransactionForm({
         setDescription('')
         setDate(today())
         setTime('')
-        setAccountId('')
+        setAccountId(initialAccountId)
         setDestinationAccountId('')
-        setCategoryId('')
+        setCategoryId(nextType === 'transfer' ? '' : initialCategoryId)
         setTagInput('')
         setTags([])
         setPendingTagName(null)
@@ -401,7 +402,7 @@ export function TransactionForm({
 
     const changeType = (nextType: MovementType) => {
         setType(nextType)
-        resetFields()
+        resetFields(nextType)
     }
 
     const addResolvedTag = (tag: FormTag) => {

@@ -224,7 +224,6 @@
   "expenses": "Expenses",
   "transfer": "Transfer",
   "transfers": "Transfers",
-  "chooseTransactionType": "What do you want to record?",
   "balanceAdjustment": "Balance adjustment",
   "@balanceAdjustment": {"description": "Transaction type label. Also the display name of an auto-generated balance-adjustment transaction (stored canonically as 'Ajuste de saldo')."},
   "balanceAdjustments": "Adjustments",

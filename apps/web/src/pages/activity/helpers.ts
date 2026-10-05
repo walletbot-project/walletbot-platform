@@ -76,7 +76,6 @@ export type ActivityFilterSeed = Partial<
  * prefills plus where to go back to once it closes.
  */
 export type TransactionFormSeed = {
-    type?: 'income' | 'expense'
     accountId?: string
     categoryId?: string
     returnTo?: string
@@ -91,10 +90,6 @@ export function readTransactionFormSeed(state: unknown): TransactionFormSeed {
     if (typeof state !== 'object' || state === null) return {}
     const seed: Record<string, unknown> = { ...state }
     return {
-        type:
-            seed.type === 'income' || seed.type === 'expense'
-                ? seed.type
-                : undefined,
         accountId:
             typeof seed.accountId === 'string' ? seed.accountId : undefined,
         categoryId:

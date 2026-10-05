@@ -335,7 +335,6 @@ export function TransactionCreateRoute() {
         <TransactionForm
             onClose={close}
             onSaved={close}
-            initialType={seed.type}
             initialAccountId={seed.accountId}
             initialCategoryId={seed.categoryId}
         />

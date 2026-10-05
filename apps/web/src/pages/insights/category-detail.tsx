@@ -15,7 +15,6 @@ import { EntityRecentTransactions } from '@/components/entity-recent-transaction
 import { IconPicker } from '@/components/icon-picker'
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
 import { Icon } from '@/components/m3/icon'
-import { TransactionTypeSheet } from '@/components/transaction-type-sheet'
 import { Input } from '@/components/ui/input'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
@@ -137,11 +136,8 @@ export function CategoryDetail({
     }
 
     const location = useLocation()
-    const [typePickerOpen, setTypePickerOpen] = useState(false)
-    const openTransactionForm = (type: 'income' | 'expense') => {
-        setTypePickerOpen(false)
+    const openTransactionForm = () => {
         const seed: TransactionFormSeed = {
-            type,
             categoryId: category.id,
             returnTo: location.pathname,
         }
@@ -237,11 +233,10 @@ export function CategoryDetail({
                     onDelete={() => setDeleteOpen(true)}
                 />
 
-                {/* A general "add movement" — the kind is chosen in a sheet. */}
                 <Button
                     variant="tonal"
                     className="mt-2 w-full"
-                    onPress={() => setTypePickerOpen(true)}
+                    onPress={openTransactionForm}
                     isDisabled={saving}
                 >
                     <Icon name="add" size={18} />
@@ -264,12 +259,6 @@ export function CategoryDetail({
                     })}
                     saving={saving}
                     onDelete={handleDelete}
-                />
-
-                <TransactionTypeSheet
-                    open={typePickerOpen}
-                    onOpenChange={setTypePickerOpen}
-                    onSelect={openTransactionForm}
                 />
             </div>
         </div>

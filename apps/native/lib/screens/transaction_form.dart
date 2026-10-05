@@ -21,13 +21,11 @@ const _defaultRecurrenceDayInterval = 15;
 
 enum _TransferAmountField { source, destination }
 
-/// Pushes [TransactionFormScreen] as a full-screen route prefilled with
-/// [type] and, optionally, an account/category. Resolves to whether a
-/// transaction was saved.
+/// Pushes [TransactionFormScreen] as a full-screen route prefilled with an
+/// account or category. Resolves to whether a transaction was saved.
 Future<bool?> pushTransactionForm(
   BuildContext context, {
   required AppRepositories repos,
-  required TransactionFormType type,
   String? accountId,
   String? categoryId,
 }) {
@@ -38,7 +36,6 @@ Future<bool?> pushTransactionForm(
       builder: (_) => Provider<AppRepositories>.value(
         value: repos,
         child: TransactionFormScreen(
-          initialType: type,
           initialAccountId: accountId,
           initialCategoryId: categoryId,
         ),
@@ -47,39 +44,10 @@ Future<bool?> pushTransactionForm(
   );
 }
 
-/// The "what do you want to record?" step an entity detail shows before the
-/// manual form: a floating dialog on every window size, matching the web
-/// chooser. Resolves to null when dismissed.
-Future<TransactionFormType?> showTransactionTypeChooser(BuildContext context) {
-  return showDialog<TransactionFormType>(
-    context: context,
-    builder: (dialogContext) => SimpleDialog(
-      title: Text(dialogContext.l10n.chooseTransactionType),
-      contentPadding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
-      children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: const Icon(Icons.add_rounded),
-          title: Text(dialogContext.l10n.income),
-          onTap: () => Navigator.pop(dialogContext, TransactionFormType.income),
-        ),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: const Icon(Icons.remove_rounded),
-          title: Text(dialogContext.l10n.expense),
-          onTap: () =>
-              Navigator.pop(dialogContext, TransactionFormType.expense),
-        ),
-      ],
-    ),
-  );
-}
-
 class TransactionFormScreen extends StatefulWidget {
   const TransactionFormScreen({
     super.key,
     this.onResult,
-    this.initialType = TransactionFormType.income,
     this.initialAccountId,
     this.initialCategoryId,
   });
@@ -91,7 +59,6 @@ class TransactionFormScreen extends StatefulWidget {
 
   /// Prefills opened from an entity detail (account or category sheet).
   /// Ids that are not among the active accounts/categories are ignored.
-  final TransactionFormType initialType;
   final String? initialAccountId;
   final String? initialCategoryId;
 
@@ -106,7 +73,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _titleController = TextEditingController();
   TextEditingController _descriptionController = TextEditingController();
 
-  late TransactionFormType _type = widget.initialType;
+  TransactionFormType _type = TransactionFormType.income;
   AppRepositories? _repos;
   List<Account> _accounts = const [];
   List<Category> _categories = const [];
@@ -1042,7 +1009,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _type = type;
       _replaceEditableControllers();
       _selectedCategory = _resolveSelectedCategory(
-        current: null,
+        current: type == TransactionFormType.transfer
+            ? null
+            : _findById(_categories, widget.initialCategoryId, (c) => c.id),
         categories: _categories,
         type: type,
       );

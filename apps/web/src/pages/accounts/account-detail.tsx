@@ -14,7 +14,6 @@ import { IconPicker } from '@/components/icon-picker'
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
-import { TransactionTypeSheet } from '@/components/transaction-type-sheet'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
@@ -174,11 +173,8 @@ export function AccountDetail({
     }
 
     const location = useLocation()
-    const [typePickerOpen, setTypePickerOpen] = useState(false)
-    const openTransactionForm = (type: 'income' | 'expense') => {
-        setTypePickerOpen(false)
+    const openTransactionForm = () => {
         const seed: TransactionFormSeed = {
-            type,
             accountId: account.id,
             returnTo: location.pathname,
         }
@@ -329,11 +325,10 @@ export function AccountDetail({
                     </IconButton>
                 </div>
 
-                {/* A general "add movement" — the kind is chosen in a sheet. */}
                 <Button
                     variant="tonal"
                     className="mt-2 w-full"
-                    onPress={() => setTypePickerOpen(true)}
+                    onPress={openTransactionForm}
                     isDisabled={saving}
                 >
                     <Icon name="add" size={18} />
@@ -378,12 +373,6 @@ export function AccountDetail({
                         autoFocus
                     />
                 </M3Dialog>
-
-                <TransactionTypeSheet
-                    open={typePickerOpen}
-                    onOpenChange={setTypePickerOpen}
-                    onSelect={openTransactionForm}
-                />
 
                 <ConfirmDeleteDialog
                     open={deleteOpen}

@@ -935,7 +935,6 @@ export const es = {
         recurrenceTooLong: (max: number) =>
             `Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es ${max}.`,
         newTransaction: 'Añadir movimiento',
-        chooseType: '¿Qué querés registrar?',
         select: 'Seleccionar',
         newAccount: 'Nueva cuenta',
         date: 'Fecha',

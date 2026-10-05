@@ -508,15 +508,11 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     }
   }
 
-  /// Asks for the movement kind first, then opens the manual form with this
-  /// account preselected.
-  Future<void> _chooseTransactionType() async {
-    final type = await showTransactionTypeChooser(context);
-    if (type == null || !mounted) return;
+  /// Opens the manual form with this account preselected.
+  Future<void> _openTransactionForm() async {
     await pushTransactionForm(
       context,
       repos: widget.repos,
-      type: type,
       accountId: _accountId,
     );
   }
@@ -590,7 +586,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         _buildActions(context),
         const SizedBox(height: 8),
         M3EFilledButton.tonalIcon(
-          onPressed: _saving ? null : _chooseTransactionType,
+          onPressed: _saving ? null : _openTransactionForm,
           size: M3EButtonSize.md,
           icon: const Icon(Icons.add_rounded),
           label: Text(context.l10n.addTransaction),

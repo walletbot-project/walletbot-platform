@@ -889,7 +889,6 @@ export const en: Messages = {
         recurrenceTooLong: (max: number) =>
             `That end date would create too many movements. The maximum for this frequency is ${max}.`,
         newTransaction: 'Add transaction',
-        chooseType: 'What do you want to record?',
         select: 'Select',
         newAccount: 'New account',
         date: 'Date',
