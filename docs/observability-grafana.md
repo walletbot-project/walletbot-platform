@@ -278,7 +278,8 @@ gauge with the latest total registered accounts.
 `agent.user.monthly_cost_usd` is emitted every 6 hours by the Convex cron
 `record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
 and exports one gauge for each of the top 20 `user_hash + month + model + mode`
-rows by monthly estimated cost.
+rows **per account scope** by monthly estimated cost (at most 40 rows).
+The `account_scope` label distinguishes `local` from `remote`.
 
 `system.latency.quantile_ms` and `system.latency.samples_count` are emitted
 every hour by the Convex cron `record latency percentiles`: p50/p95/p99 and
@@ -358,3 +359,132 @@ The exporter also writes a structured `console.warn("telemetry export failed",
 For manual tests, omit `timestamp` or use the current epoch milliseconds.
 Old timestamps may export successfully but will not appear in Grafana's default
 time range.
+
+## Local account identities and AI usage (WAL-196)
+
+`appUsers` records local accounts observed requesting an AI token. Each account
+gets a random UUID (`localAccountId`) persisted with its native account entry,
+separate from the on-device database ID. Existing accounts get that UUID once
+on load. The stable `appUserId` is `local:<UUID>`; it is not an authenticated
+`userId` and contains no name or financial data.
+
+The parent is `device:<SHA-256(device:deviceId)>`. Despite its name, the existing
+`ClientInfo.deviceId` is a random per-installation UUID stored under
+`native_device_id` in secure storage, not a hardware identifier. It already
+travels with live-token requests, so we reuse it instead of introducing another
+ID or unifying it with telemetry's independent `telemetry_installation_id`.
+That older telemetry ID continues to travel in telemetry envelopes but does
+not determine account identity or grouping. The `unknown` fallback is rejected.
+
+Two different local accounts created on one installation have different
+`appUserId`s and the same `parentId`. Accounts originating on another installation
+have a different parent. This represents a common installation of origin, not
+proof of a common person or ownership. The parent is immutable after the first
+successful registration: restoring an account elsewhere does not rewrite its
+origin. Clearing secure storage or reinstalling may lose IDs (some platforms
+retain secure storage across reinstalls); an unregistered restored account's
+origin can only be the installation from which it first registers.
+
+Registration happens in `/v1/live/token`, after the existing rate limit and
+before minting the provider token, and is idempotent on reconnect. It is not
+performed when a local account is created offline. Speculative token prefetch
+may register an account even if a conversation is never started. Bookkeeping
+failure does not block AI use; a later token request retries registration.
+Metrics for missing/unregistered identities remain in ordinary telemetry but
+do not enter the monthly rollup. Earlier lost costs are explicitly not recovered.
+
+Anonymous interaction samples carry a separate `appUserId`. Only a registered
+local identity may enter the rollup, and its parent is read from `appUsers`,
+never trusted from a metric body. Authenticated requests always use the
+server-verified user and ignore any supplied local identity. Native sessions
+capture their local identity when created; late metrics after account switching
+do not borrow another account's identity or bearer token. The registry provides
+no authentication and no public listing, linking or deletion endpoints.
+
+Samples and rollups carry explicit `actorType=local`, `actorKey`, `appUserId`, and
+`parentId`. Local deduplication and monthly keys include the individual account,
+not just its parent; siblings can reuse a sample ID without colliding. Remote
+keys, hashes and authenticated queries stay unchanged, including historical
+rows without actor fields. USD continues to be computed in the backend from
+tokens. No financial accounts, transactions, categories, tags, filters, widgets,
+memories or conversations are created by this identity/metrics path.
+
+`appUsers` is an observation registry, not a synchronized inventory of active
+accounts. Removing a local account does not remove its historical identity or
+costs, and creating a new account generates a new UUID. There is no reactivation
+flow. The schema separates stable `appUserId`, account type and optional
+authenticated `userId`: a later promotion can link the same row while retaining
+its origin. A local registration cannot downgrade a linked registered row.
+Promotion, verification of that link, and merging historical costs are future
+features; this PR does not implement them or register every Better Auth user.
+
+Samples are retained for 90 days by the existing cleanup, so sample deduplication
+is limited to that retention window. Monthly rollups and identity registry rows
+currently have no automatic expiration. The raw telemetry buffer retains its
+existing installation ID for up to 90 days (14 days for failed exports). No
+historical anonymous backfill is performed.
+
+Grafana receives only the existing 24-hex `user_hash` (the local account's hash),
+`parent_hash` for its installation of origin, and `account_scope=local|remote`.
+Raw user/account/device IDs are never metric labels. The account table shows the
+parent hash so sibling accounts are recognizable. Both panels preserve `$Scope`
+and `$model` and use a 25-hour lookback compatible with PR #284. Queries collapse
+rank changes per account/model/mode before summing. Snapshots contain the top 20
+rows **per scope**, at most 40 rows; they are not complete billing totals and a
+single actor's model/mode breakdown may be partially represented.
+
+Automated coverage includes sibling grouping, immutable origin, registration
+before token mint, reconnect idempotency, missing identities, authenticated
+isolation, old remote retries, month/model separation, OTLP pseudonyms, offline
+UUID persistence and account-switch telemetry. To validate live, use AI with two
+local accounts from the same installation, confirm separate samples and a shared
+parent, force `telemetry/actions:recordAgentMonthlyUsageNow` in development, and
+inspect both local accounts in Grafana. Development validation was completed on 2026-10-04 with an existing local
+account and a newly created sibling; see [the validation record](metrics/wal196-validation.md).
+Production deployment and dashboard import remain separate release steps.
+
+### Upgrade test for an existing local account
+
+1. Run a build without WAL-196 (for example commit `593f910`) on a test iOS
+   simulator/device. Create a local account and a recognizable transaction.
+2. Stop the app, then run this PR's build on the **same** simulator/device,
+   with the same bundle identifier (`live.walletbot.app`) and signing/keychain
+   configuration. Do not uninstall, erase the simulator or clear secure storage.
+   Separate Git worktrees are fine; preservation depends on installed app identity.
+3. Use debug builds and the same explicit development `CONVEX_URL` and
+   `CONVEX_SITE_URL` for both runs. Deploy the PR backend to that development
+   deployment before exercising the new AI flow.
+4. Confirm the original local account, selected account and transaction survive.
+   Loading the new app assigns and persists its missing `localAccountId`; it
+   does not change the on-device database ID or register it remotely yet.
+5. Open/use AI. Token prefetch or a real token request creates its `appUsers`
+   record. Complete an interaction and check its sample and monthly rollup.
+6. Fully restart and use AI again: the same `appUserId` and `parentId` must be
+   reused, with no duplicate registry row. Repeat for a second old local account
+   and verify a distinct child under the same parent.
+
+Regression coverage also verifies that a failed secure-storage read/write can
+be retried on the next telemetry send and that local identity survives a failed
+optional mint-context build. This
+retry does not queue or replay the telemetry sample that already failed.
+
+### Confirmar el registro sin esperar a Grafana
+
+En el deployment de Convex usado por la app, abrir **Data → appUsers** después
+de abrir/usar IA. Debe existir una fila con `type = local`,
+`appUserId = local:<UUID>` y `parentId = device:<hash>`. Crear o cargar una
+cuenta offline no la registra: hace falta pedir el token de IA con el backend
+de este PR desplegado. La fila confirma registro, no consumo.
+
+Después de completar una interacción, buscar ese mismo `appUserId` en
+`agentUsageSamples` y `agentUsageMonthly` (`actorType = local`). Reiniciar y
+repetir no debe duplicar `appUsers`; otra cuenta de la misma instalación debe
+tener otro hijo y el mismo padre. Si falta la fila, comprobar primero que
+`CONVEX_SITE_URL` apunta al mismo deployment que se está inspeccionando.
+
+Para Grafana, ejecutar `telemetry/actions:recordAgentMonthlyUsageNow` desde
+Convex en desarrollo una vez que exista consumo; después esperar al export
+de la cola y seleccionar el `$Scope` correspondiente. El dashboard usa hashes
+seudónimos, por lo que sus IDs no coinciden literalmente con los de `appUsers`.
+Ver [la validación del dashboard](metrics/wal196-validation.md) para los datos
+reales comprobados y lo que sigue pendiente de validar en vivo.

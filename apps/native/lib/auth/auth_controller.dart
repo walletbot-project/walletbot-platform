@@ -13,6 +13,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:uuid/uuid.dart';
 
 /// Owns the device's account list and the active Convex auth session.
 /// Token refresh scheduling is delegated to [ConvexClient.setAuth].
@@ -76,6 +77,21 @@ class AuthController extends ChangeNotifier {
       _accounts = list
           .map((e) => UserAccount.fromJson(e as Map<String, Object?>))
           .toList();
+    }
+    // Assign once, persist offline, and send only when the account uses AI.
+    if (_accounts.any(
+      (a) => a.type == AccountType.local && a.localAccountId == null,
+    )) {
+      _accounts = [
+        for (final a in _accounts)
+          if (a.type == AccountType.local && a.localAccountId == null)
+            a.copyWith(localAccountId: const Uuid().v4())
+          else
+            a,
+      ];
+      // Preserve the active selection while persisting the migration.
+      _activeId = await _storage.read(key: _activeIdKey);
+      await _persist();
     }
     _activeId = await _storage.read(key: _activeIdKey);
     await _attachAuthForActive();
@@ -213,6 +229,7 @@ class AuthController extends ChangeNotifier {
       id: id,
       type: AccountType.local,
       name: trimmedName,
+      localAccountId: const Uuid().v4(),
     );
     _accounts = [..._accounts, account];
     _activeId = id;

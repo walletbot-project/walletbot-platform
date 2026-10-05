@@ -39,6 +39,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.liveToken,
     required this.convexSiteUrl,
     required this.onEnded,
+    this.localAccountId,
     this.buildMintArgs,
     this.takePrefetchedToken,
     DisplaySettingsController? displaySettings,
@@ -61,6 +62,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
   final String? deviceId;
+
+  /// Stable local identity, independent of the optional context snapshot.
+  final String? localAccountId;
   final ConvexClient? convexClient;
   final String liveToken;
   final String convexSiteUrl;
@@ -373,6 +377,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       convexClient: convexClient,
       sessionToken: sessionToken,
       deviceId: deviceId,
+      localAccountId: localAccountId,
       convexSiteUrl: convexSiteUrl,
       buildMintArgs: buildMintArgs,
       turnDetection: _mode.turnDetection,

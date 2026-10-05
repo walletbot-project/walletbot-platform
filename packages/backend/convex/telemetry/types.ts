@@ -71,6 +71,7 @@ export type MetricInput = {
     sessionId?: string
     sampleId?: string
     userId?: string
+    appUserId?: string
     appVersion?: string
     platform?: TelemetryPlatform
 }

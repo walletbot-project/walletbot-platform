@@ -77,6 +77,7 @@ Future<LiveToken> fetchLiveToken({
   required String? sessionToken,
   required String? deviceId,
   required String convexSiteUrl,
+  String? localAccountId,
   Future<Map<String, Object?>> Function()? buildMintArgs,
   void Function(String phase, Map<String, Object?> extra)? onPhase,
 
@@ -166,6 +167,7 @@ Future<LiveToken> fetchLiveToken({
           body: jsonEncode({
             ...mintArgs,
             if (device.isNotEmpty) 'deviceId': device,
+            'localAccountId': ?localAccountId,
           }),
         )
         .timeout(const Duration(seconds: 15));

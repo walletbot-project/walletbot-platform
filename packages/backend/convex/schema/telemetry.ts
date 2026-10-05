@@ -95,6 +95,7 @@ export const telemetryMetrics = defineTable({
     sessionId: v.optional(v.string()),
     sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
+    appUserId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(
         v.union(

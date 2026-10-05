@@ -4,7 +4,16 @@ import 'duration_bucket.dart';
 import 'telemetry_client.dart';
 
 class AgentMetrics {
-  const AgentMetrics(this._telemetry);
+  const AgentMetrics(this._telemetry, {String? localAppUserId})
+    : _localAppUserId = localAppUserId;
+
+  // Capture the account in the voice factory, not from the active account at
+  // send time: a late sample must keep its owner after an account switch.
+  final String? _localAppUserId;
+  AgentMetrics forLocalAccount(String? accountId) => AgentMetrics(
+    _telemetry,
+    localAppUserId: accountId == null ? null : 'local:$accountId',
+  );
 
   // Local estimate for generation/session samples. Backend pricing
   // recalculates USD from token attributes before storing/exporting metrics.
@@ -29,6 +38,7 @@ class AgentMetrics {
   }) async {
     await _telemetry?.sendMetricBatch([
       TelemetryMetric(
+        appUserId: _localAppUserId,
         name: 'agent.sessions.started_count',
         timestamp: DateTime.now(),
         source: 'native',
@@ -123,6 +133,7 @@ class AgentMetrics {
         tokenAttributes: tokenAttributes,
       ),
       TelemetryMetric(
+        appUserId: _localAppUserId,
         name: 'agent.interactions.completed_count',
         timestamp: DateTime.now(),
         source: 'native',
@@ -356,6 +367,7 @@ class AgentMetrics {
     required double costUsd,
     required Map<String, int> tokenAttributes,
   }) => TelemetryMetric(
+    appUserId: _localAppUserId,
     name: name,
     timestamp: DateTime.now(),
     source: 'native',

@@ -78,6 +78,7 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
         context?: unknown
         turnDetection?: LiveTurnDetection
     } = {}
+    let localAccountId: string | undefined
     let deviceId: string | undefined
     try {
         const body: unknown = await req.json()
@@ -111,6 +112,10 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
                         ? record.turnDetection
                         : undefined,
             }
+            localAccountId =
+                typeof record.localAccountId === 'string'
+                    ? record.localAccountId
+                    : undefined
             deviceId =
                 typeof record.deviceId === 'string'
                     ? record.deviceId
@@ -151,6 +156,19 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
             { error: gate.error, retryAfter: gate.retryAfter },
             { status: liveRefusalStatus(gate.error) },
         )
+    }
+
+    // Register before any new AI usage can emit costs. Missing identities from
+    // older builds and failed bookkeeping do not prevent a voice session.
+    if (!userId && deviceId && localAccountId) {
+        try {
+            await ctx.runMutation(internal.appUsers.internal.registerLocal, {
+                deviceId,
+                localAccountId,
+            })
+        } catch {
+            console.warn('appUsers: registration failed at live-token mint')
+        }
     }
 
     // Flag-gated tools are resolved server-side, never taken from the request
