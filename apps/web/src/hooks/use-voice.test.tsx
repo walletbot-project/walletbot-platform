@@ -166,6 +166,25 @@ it('cancellation while connecting discards buffered speech and prevents restart'
     expect(voice.isMicOn).toBe(false)
     expect(session.sendRealtimeInput).not.toHaveBeenCalled()
 })
+it('a hold released while connecting is sent once connected', async () => {
+    await start()
+    await act(async () => {
+        onAudio(new Float32Array([0.5]))
+        onAudio(new Float32Array([0.2]))
+        voice.releaseMic()
+    })
+    expect(voice.isMicOn).toBe(false)
+    expect(session.sendRealtimeInput).not.toHaveBeenCalled()
+    await establish()
+    const audio = {
+        audio: expect.objectContaining({ data: expect.any(String) }),
+    }
+    expect(session.sendRealtimeInput.mock.calls).toEqual([
+        [audio],
+        [audio],
+        [{ audioStreamEnd: true }],
+    ])
+})
 it('silent text never acquires audio and preserves both usage and content in combined messages', async () => {
     await start('text')
     await establish()

@@ -1169,7 +1169,7 @@ export function Add() {
     }
 
     const handleLongPressEnd = () => {
-        voice.setMicOn(false)
+        voice.releaseMic()
     }
 
     /** `voice.openMic`, tracked so the bar can show it opening. */

@@ -79,6 +79,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   static const _startupAudioLimit = MicCapture.sampleRate * 2 * 5;
   List<Uint8List>? _startupAudio;
   int _startupAudioBytes = 0;
+  List<Uint8List>? _releasedStartupAudio;
   bool _resumeMicrophone = false;
   bool _foreground = true;
   int _lifecycleGeneration = 0;
@@ -422,6 +423,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   void _handleVoiceLongPressEnd() {
     if (!mounted) return;
     final wasOn = _userMicOn;
+    final startupAudio = _startupAudio;
+    if (startupAudio != null && startupAudio.isNotEmpty) {
+      _releasedStartupAudio = startupAudio;
+    }
     setState(() {
       _userMicOn = false;
       _level = 0;
@@ -677,6 +682,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       if (mode == _SessionMode.audio) {
         _startupAudio = [];
         _startupAudioBytes = 0;
+        _releasedStartupAudio = null;
         await Future.wait([connecting, _startMicCapture(turnOn: true)]);
       } else {
         await connecting;
@@ -986,14 +992,23 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           _clearConnectionNotice();
           final pending = _startupAudio;
           _startupAudio = null;
+          final released = _releasedStartupAudio;
+          _releasedStartupAudio = null;
           if (!_isMicEffectivelyMuted && _command?.isConnected == true) {
             for (final chunk in pending ?? <Uint8List>[]) {
               unawaited(_command?.addAudioChunk(chunk));
             }
           }
+          if (released != null && _command?.isConnected == true) {
+            for (final chunk in released) {
+              unawaited(_command?.addAudioChunk(chunk));
+            }
+            unawaited(_command?.endAudioStream());
+          }
           _flushPendingTexts();
         case VoiceDisconnectedEvent():
           if (_startupAudio != null) unawaited(_stopMicCapture());
+          _releasedStartupAudio = null;
           conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
@@ -1008,6 +1023,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           }
         case VoiceErrorEvent(:final message, :final isTransient, :final code):
           if (_startupAudio != null) unawaited(_stopMicCapture());
+          _releasedStartupAudio = null;
           // Raw error text never reaches the chat; details are persisted in
           // the session log. Most errors leave the session running (and
           // reconnecting) — the End button is the explicit way out. Only a
