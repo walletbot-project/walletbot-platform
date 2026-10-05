@@ -171,6 +171,8 @@ export function useVoice(opts: UseVoiceOpts) {
         samples: number
     } | null>(null)
     const selectedDeviceIdRef = useRef(selectedDeviceId)
+    /** The mic the user chose, which a fallback in the picker never replaces. */
+    const preferredDeviceIdRef = useRef(selectedDeviceId)
 
     // Mirrors of the state above, so the audio callbacks and the message
     // handler read the live value instead of the one captured at render.
@@ -584,7 +586,9 @@ export function useVoice(opts: UseVoiceOpts) {
                 await playbackRef.current.open()
                 controller.signal.throwIfAborted()
                 const microphone = await captureMicrophone({
-                    deviceId: selectedDeviceIdRef.current,
+                    deviceId:
+                        preferredDeviceIdRef.current ||
+                        selectedDeviceIdRef.current,
                     signal: controller.signal,
                     onAudio: (samples) => {
                         if (
@@ -668,6 +672,7 @@ export function useVoice(opts: UseVoiceOpts) {
             writeMicrophonePreference(deviceId)
             setSelectedDeviceId(deviceId)
             selectedDeviceIdRef.current = deviceId
+            preferredDeviceIdRef.current = deviceId
             if (!micCaptureActiveRef.current) return
             const wasOn = micOnRef.current
             endAudioStream()

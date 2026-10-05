@@ -292,6 +292,30 @@ it('remembers the chosen microphone on remount while recording stays off', async
     expect(f.capture).not.toHaveBeenCalled()
 })
 
+it('shows the fallback microphone but retries the chosen one on the next open', async () => {
+    await act(async () => {
+        await voice.handleDeviceChange('usb-mic')
+    })
+    await start('text')
+    await establish()
+    f.capture.mockImplementationOnce(async (opts) => {
+        onAudio = opts.onAudio
+        return { stop: vi.fn(), deviceId: 'built-in' }
+    })
+    await act(async () => {
+        await voice.openMic()
+    })
+    expect(voice.selectedDeviceId).toBe('built-in')
+
+    await act(async () => {
+        voice.setMicOn(false)
+        await voice.openMic()
+    })
+    expect(f.capture).toHaveBeenLastCalledWith(
+        expect.objectContaining({ deviceId: 'usb-mic' }),
+    )
+})
+
 it('unavailable storage does not block choosing or using a microphone', async () => {
     const write = vi
         .spyOn(Storage.prototype, 'setItem')
