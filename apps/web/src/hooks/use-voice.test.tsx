@@ -36,6 +36,10 @@ const f = vi.hoisted(() => {
             interrupt: vi.fn(),
             enqueue: vi.fn(),
         },
+        metrics: {
+            recordSetupComplete: vi.fn(),
+            recordFirstResponse: vi.fn(),
+        },
     }
 })
 vi.mock('convex/react', () => ({
@@ -51,6 +55,7 @@ vi.mock('@/lib/gemini-live', () => ({
     WEB_LIVE_VERSION: '0.5.1',
     connectGeminiLive: f.connect,
 }))
+vi.mock('@/lib/agent-metrics', () => f.metrics)
 vi.mock('@/lib/voice-audio', async (importOriginal) => ({
     ...(await importOriginal<object>()),
     captureMicrophone: f.capture,
@@ -329,4 +334,131 @@ it('leaving the screen releases capture and returning does not restart recording
     expect(voice.isConnected).toBe(true)
     expect(f.capture).toHaveBeenCalledOnce()
     expect(f.playback.close).toHaveBeenCalled()
+})
+
+it('reports setup completion per connect, resumed only after a failed attempt', async () => {
+    await start('text')
+    await establish()
+    expect(f.metrics.recordSetupComplete).toHaveBeenCalledOnce()
+    expect(f.metrics.recordSetupComplete).toHaveBeenLastCalledWith({
+        elapsedMs: expect.any(Number),
+        resumed: false,
+    })
+    vi.useFakeTimers()
+    try {
+        await act(async () => {
+            onclose({ code: 1006, reason: 'network lost' } as CloseEvent)
+            vi.advanceTimersByTime(1000)
+        })
+    } finally {
+        vi.useRealTimers()
+    }
+    await act(async () => {
+        await tick()
+        ready(session)
+        await tick()
+    })
+    expect(voice.isConnected).toBe(true)
+    expect(f.metrics.recordSetupComplete).toHaveBeenCalledTimes(2)
+    expect(f.metrics.recordSetupComplete).toHaveBeenLastCalledWith({
+        elapsedMs: expect.any(Number),
+        resumed: true,
+    })
+})
+it('times a typed turn to its first transcript delta, once per turn', async () => {
+    await start('text')
+    await establish()
+    await act(async () => {
+        onmessage({
+            serverContent: { outputTranscription: { text: 'Seed reply' } },
+        })
+    })
+    // No turn was sent yet: nothing to report.
+    expect(f.metrics.recordFirstResponse).not.toHaveBeenCalled()
+    await act(async () => {
+        voice.sendText('coffee 3 dollars')
+        onmessage({
+            serverContent: { outputTranscription: { text: 'Got' } },
+        })
+        onmessage({
+            serverContent: { outputTranscription: { text: ' it' } },
+        })
+    })
+    expect(f.metrics.recordFirstResponse).toHaveBeenCalledOnce()
+    expect(f.metrics.recordFirstResponse).toHaveBeenCalledWith({
+        elapsedMs: expect.any(Number),
+        mode: 'text',
+    })
+})
+it('times a turn typed before setup from its delayed send', async () => {
+    await act(async () => {
+        voice.sendText('coffee 3 dollars')
+        await tick()
+    })
+    expect(f.metrics.recordFirstResponse).not.toHaveBeenCalled()
+    await act(async () => {
+        ready(session)
+        await tick()
+    })
+    expect(session.sendClientContent).toHaveBeenCalled()
+    await act(async () => {
+        onmessage({
+            serverContent: { outputTranscription: { text: 'Got it' } },
+        })
+    })
+    expect(f.metrics.recordFirstResponse).toHaveBeenCalledOnce()
+    expect(f.metrics.recordFirstResponse).toHaveBeenCalledWith({
+        elapsedMs: expect.any(Number),
+        mode: 'text',
+    })
+})
+it('times a spoken turn from the audio stream end to the first audio chunk, even unplayed', async () => {
+    await start()
+    await establish()
+    await act(async () => {
+        onAudio(new Float32Array([0.2]))
+        voice.setMicOn(false)
+    })
+    expect(session.sendRealtimeInput).toHaveBeenLastCalledWith({
+        audioStreamEnd: true,
+    })
+    await act(async () => {
+        voice.detach()
+        onmessage({
+            serverContent: {
+                modelTurn: {
+                    parts: [
+                        {
+                            inlineData: {
+                                data: 'AAAA',
+                                mimeType: 'audio/pcm;rate=24000',
+                            },
+                        },
+                    ],
+                },
+            },
+        })
+    })
+    expect(f.playback.enqueue).not.toHaveBeenCalled()
+    expect(f.metrics.recordFirstResponse).toHaveBeenCalledOnce()
+    expect(f.metrics.recordFirstResponse).toHaveBeenCalledWith({
+        elapsedMs: expect.any(Number),
+        mode: 'voice',
+    })
+})
+it('the explicit End drops a pending turn', async () => {
+    await start()
+    await establish()
+    await act(async () => {
+        onAudio(new Float32Array([0.2]))
+        voice.disconnect()
+    })
+    await start('text')
+    await establish()
+    await act(async () => {
+        onmessage({
+            serverContent: { outputTranscription: { text: 'Hello' } },
+        })
+    })
+    expect(f.metrics.recordFirstResponse).not.toHaveBeenCalled()
 })

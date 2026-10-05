@@ -2,6 +2,7 @@
 // sync with the TS version — both implement the same contract so behavior is
 // identical between web and native tool executors.
 
+import 'package:app/data/occurrence.dart' show pastCutoffMs;
 import 'package:app/database.dart';
 
 export '../shared/money.dart' show parseAmountToCents;
@@ -114,6 +115,30 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
     throw FormatException('Unrecognized date: $input');
   }
   return BigInt.from(parsed.millisecondsSinceEpoch);
+}
+
+/// The exclusive upper bound of "the balance on [input]" — what a balance
+/// read uses as its as-of moment. Every movement of that local calendar day
+/// counts, so the day is inclusive: the bound is the next local midnight.
+///
+/// Today is the exception: its bound is the occurrence cutoff, so a movement
+/// scheduled for later today does not count yet and the answer matches the
+/// balance the app shows right now. A future day counts the movements already
+/// scheduled up to its end. Mirrors `balanceAsOfMs` in
+/// packages/shared/src/tools/parsing.ts.
+BigInt balanceAsOfMs(String input, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final day = DateTime.fromMillisecondsSinceEpoch(
+    parseNaturalDate(input, now: reference).toInt(),
+  );
+  final isToday =
+      day.year == reference.year &&
+      day.month == reference.month &&
+      day.day == reference.day;
+  if (isToday) return pastCutoffMs(reference);
+  return BigInt.from(
+    DateTime(day.year, day.month, day.day + 1).millisecondsSinceEpoch,
+  );
 }
 
 BigInt? parseOptionalDate(String? input, {DateTime? now}) {

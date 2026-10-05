@@ -1,6 +1,7 @@
 import { internal } from '../_generated/api'
 import type { MutationCtx } from '../_generated/server'
 import { costBucket, normalizeAgentCostMetric } from './agentPricing'
+import { scheduleLatencySample } from './latency'
 import type { MetricAttributeValue, MetricInput, MetricName } from './types'
 import { usageActor } from './usageActor'
 
@@ -34,6 +35,17 @@ type FunctionStatus = 'ok' | 'rejected' | 'error'
 const functionDurationBucket = (durationMs: number): string => {
     if (durationMs < 100) return '0-100'
     if (durationMs < 250) return '100-250'
+    if (durationMs < 500) return '250-500'
+    if (durationMs < 1000) return '500-1000'
+    if (durationMs < 2500) return '1000-2500'
+    if (durationMs < 5000) return '2500-5000'
+    return '5000+'
+}
+
+// Client-observed latencies (voice connect, first response) use a finer
+// scale. Mirrors native `duration_bucket.dart:clientDurationBucket`.
+const clientDurationBucket = (durationMs: number): string => {
+    if (durationMs < 250) return '0-250'
     if (durationMs < 500) return '250-500'
     if (durationMs < 1000) return '500-1000'
     if (durationMs < 2500) return '1000-2500'
@@ -294,6 +306,21 @@ export const recordAgentToolError = (
     })
 
 /**
+ * One per tool call that reached `agent/tools.ts:execute`: the denominator
+ * for `agent.tool.errors.count`. Recorded by `execute` for calls that return
+ * and by `agent/runner.ts` for calls that throw (their rollback discards
+ * anything `execute` wrote), so each call is counted exactly once.
+ */
+export const recordAgentToolCall = (
+    ctx: MutationCtx,
+    args: { toolName: string },
+): Promise<void> =>
+    recordMetricSafely(ctx, {
+        name: 'agent.tool.calls.count',
+        attributes: { tool_name: args.toolName },
+    })
+
+/**
  * Total call duration only — no DB/external-API breakdown (see
  * docs/metrics/error-rate-and-latency.md, "Traces, eventually"). Reuses the
  * bucket-then-increment-counter shape `insertMetricBatch` already uses for
@@ -316,6 +343,57 @@ export const recordFunctionDuration = (
         },
     })
 
+/**
+ * A client reports the raw time to first response; the bucketed counter the
+ * distribution panels read is derived here, like `cost_bucket_count` below,
+ * so a client sends one metric per response instead of two. Binaries from
+ * before `first_token_ms` still send the bucket counter themselves.
+ *
+ * Only an authenticated request feeds the percentiles: the endpoint also
+ * accepts anonymous metrics (R-011), and an anonymous caller must not be able
+ * to move the p99.
+ */
+const recordFirstResponse = async (
+    ctx: MutationCtx,
+    metric: MetricInput,
+    receivedAt: number,
+): Promise<number> => {
+    if (!Number.isFinite(metric.value) || metric.value < 0) return 0
+    const mode = stringAttribute(metric.attributes, 'mode')
+    const platform = stringAttribute(metric.attributes, 'platform')
+    await ctx.db.insert('telemetryMetrics', {
+        name: 'agent.response.first_token_bucket_count',
+        timestamp: metric.timestamp,
+        receivedAt,
+        source: metric.source,
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+            bucket: clientDurationBucket(metric.value),
+            ...(mode ? { mode } : {}),
+            ...(platform ? { platform } : {}),
+        },
+        ...(metric.userId ? { userId: metric.userId } : {}),
+        ...(metric.sessionId ? { sessionId: metric.sessionId } : {}),
+        ...(metric.installationId
+            ? { installationId: metric.installationId }
+            : {}),
+        ...(metric.appVersion ? { appVersion: metric.appVersion } : {}),
+        ...(metric.platform ? { platform: metric.platform } : {}),
+        exportStatus: 'pending',
+        exportAttempts: 0,
+    })
+    if (metric.userId && (mode === 'text' || mode === 'voice')) {
+        await scheduleLatencySample(ctx, {
+            operation: 'agent_first_response',
+            segment: mode,
+            durationMs: metric.value,
+        })
+    }
+    return 1
+}
+
 export const insertMetricBatch = async (
     ctx: MutationCtx,
     args: { metrics: MetricInput[]; receivedAt: number },
@@ -333,6 +411,14 @@ export const insertMetricBatch = async (
             exportAttempts: 0,
         })
         accepted += 1
+
+        if (normalizedMetric.name === 'agent.response.first_token_ms') {
+            accepted += await recordFirstResponse(
+                ctx,
+                normalizedMetric,
+                args.receivedAt,
+            )
+        }
 
         if (normalizedMetric.name === 'agent.session.cost_usd') {
             await ctx.db.insert('telemetryMetrics', {

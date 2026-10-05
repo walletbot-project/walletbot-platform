@@ -8,7 +8,11 @@ import {
     tagAggregateDeleteTransaction,
     tagAggregateDetach,
 } from '../../tags/helpers'
-import { aggregateInsert, aggregateReplace } from '../../transactions/helpers'
+import {
+    aggregateInsert,
+    aggregateReplace,
+    reconcileAfterLedgerChange,
+} from '../../transactions/helpers'
 import {
     reconcileAccountDuplicates,
     resolveAccountId,
@@ -703,6 +707,7 @@ async function applyTombstone(
                     await inflowsByAccount.deleteIfExists(ctx, row)
                     await tagAggregateDeleteTransaction(ctx, row)
                     await ctx.db.delete(row._id)
+                    await reconcileAfterLedgerChange(ctx, row, null)
                 }
             }
             break

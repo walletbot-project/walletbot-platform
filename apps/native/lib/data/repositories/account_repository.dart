@@ -66,10 +66,11 @@ class AccountRepository extends RepositoryBase {
   Future<Account?> getById(String id) =>
       (db.select(db.accounts)..where((a) => a.id.equals(id))).getSingleOrNull();
 
-  /// Current balance in cents (see `queries/account_balance.dart` for the
-  /// arithmetic, which must stay in lockstep with the sync recompute).
-  Future<BigInt> getBalanceCents(String accountId) =>
-      computeAccountBalance(db, accountId);
+  /// Current balance in cents, or the balance as of [asOfMs] (exclusive) when
+  /// given (see `queries/account_balance.dart` for the arithmetic, which must
+  /// stay in lockstep with the sync recompute).
+  Future<BigInt> getBalanceCents(String accountId, {BigInt? asOfMs}) =>
+      computeAccountBalance(db, accountId, asOfMs: asOfMs);
 
   /// Live balance: re-emits whenever any transaction touching the account
   /// changes (local writes, agent writes, or sync merges).
@@ -78,11 +79,18 @@ class AccountRepository extends RepositoryBase {
 
   /// Live total balance across the active accounts in [currency], for the
   /// dashboard Balance card. [accountIds] narrows it to those accounts; empty
-  /// (the default) is every account in the currency.
+  /// (the default) is every account in the currency. [asOfMs] reads it at
+  /// another moment (exclusive) instead of now.
   Stream<BigInt> watchBalanceForCurrency(
     String currency, {
     List<String> accountIds = const [],
-  }) => watchTotalBalanceForCurrency(db, currency, accountIds: accountIds);
+    BigInt? asOfMs,
+  }) => watchTotalBalanceForCurrency(
+    db,
+    currency,
+    accountIds: accountIds,
+    asOfMs: asOfMs,
+  );
 
   /// Throws [DuplicateAccountException] when an active account with the
   /// same [currency] and a name equal to [name] (trim + case-insensitive)

@@ -45,6 +45,11 @@ export type MetricName =
     | 'system.function.duration_bucket_count'
     | 'voice.connect.setup_complete_bucket_count'
     | 'agent.response.first_token_bucket_count'
+    | 'agent.response.first_token_ms'
+    | 'sync.push.client_failures.count'
+    | 'agent.tool.calls.count'
+    | 'system.latency.quantile_ms'
+    | 'system.latency.samples_count'
 
 export type MetricSource = 'web' | 'native' | 'backend'
 

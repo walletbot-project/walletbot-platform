@@ -23,6 +23,7 @@
 
 import {
     AGENT_CONTEXT_CAPS,
+    adjustmentAmount,
     convertAmount,
     DEFAULT_FX_MARKET,
     fxAlternatives,
@@ -38,6 +39,7 @@ import {
     toolSchemas,
 } from '@wallet-bot/shared'
 import { v } from 'convex/values'
+import { ZodError } from 'zod'
 import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
@@ -47,12 +49,17 @@ import { nextSeq, writeTombstone } from '../sync/helpers'
 import { tagAggregateDetach } from '../tags/helpers'
 import {
     type AgentToolErrorReason,
+    recordAgentToolCall,
     recordAgentToolError,
     recordFinancialAccountCreated,
     recordMovementCreated,
     recordTransferCreated,
 } from '../telemetry/metrics'
-import { aggregateInsert, aggregateReplace } from '../transactions/helpers'
+import {
+    aggregateInsert,
+    aggregateReplace,
+    balanceBeforeInLedger,
+} from '../transactions/helpers'
 import { hasDuplicateAccount } from '../v1/accounts/helpers'
 import {
     DEFAULT_ACCOUNT_COLOR,
@@ -66,12 +73,14 @@ import { DEFAULT_TAG_COLOR } from '../v1/tags/mutations'
 import { attachTags, detachTags } from '../v1/transactions/mutations'
 import { computeAccountBalance } from '../v1/transactions/queries'
 import { getDefaultCurrency } from '../v1/users/helpers'
+import { invalidToolArgsError } from './helpers'
 import { newEntityId } from './idempotency'
 import type { Resolution } from './resolve'
 import { resolveAccount, resolveCategory, resolveTag } from './resolve'
 import {
     formatLocalDateTime,
     hostDateAtLocalWallClock,
+    parseAgentBalanceAsOf,
     parseAgentDate,
     parseAgentDateEndOfDay,
     parseAgentTransactionDate,
@@ -1042,17 +1051,6 @@ const addBalanceAdjustmentTool = async (
     const replay = await getTransactionRow(ctx, userId, id)
     if (replay) return ok({ id, duplicate: true })
 
-    // `balanceAfter` is the user's observed truth and is stored verbatim; the
-    // delta is derived, never the other way around.
-    const balanceAfter = parseAmountToCents(args.balanceAfter)
-    const current = await computeAccountBalance(
-        ctx,
-        userId,
-        account.value.id,
-        pastCutoffBigInt(new Date(clock.nowMs)),
-    )
-    const amount = balanceAfter - current
-
     const date = BigInt(
         parseAgentTransactionDate(
             args.date,
@@ -1062,9 +1060,25 @@ const addBalanceAdjustmentTool = async (
             clock.offsetMinutes,
         ),
     )
+    const now = BigInt(Date.now())
+
+    // `balanceAfter` is the user's declaration and is stored verbatim; the
+    // delta is derived from the ledger just before the adjustment's own date,
+    // never the other way around, and later writes before it re-derive it.
+    const balanceAfter = parseAmountToCents(args.balanceAfter)
+    const current = await balanceBeforeInLedger(ctx, userId, account.value.id, {
+        id,
+        type: 'balance_adjustment',
+        accountId: account.value.id,
+        amount: 0n,
+        balanceAfter,
+        date,
+        createdAt: now,
+        isArchived: false,
+    })
+    const amount = adjustmentAmount(balanceAfter, current)
 
     const seq = await nextSeq(ctx, userId)
-    const now = BigInt(Date.now())
     const inserted = await ctx.db.insert('transactions', {
         userId,
         id,
@@ -1110,6 +1124,24 @@ const updateTransactionTool = async (
 ): Promise<ToolResult> => {
     const row = await getTransactionRow(ctx, userId, args.id)
     if (!row) return fail('Transaction not found')
+
+    // An adjustment's amount is derived from the ledger and its date is when
+    // the declaration was made; neither is editable. A new declaration is a
+    // new adjustment.
+    if (row.type === 'balance_adjustment') {
+        if (args.amount !== undefined) {
+            return fail(
+                'A balance adjustment amount cannot be changed; record a new balance adjustment instead',
+            )
+        }
+        if (
+            args.date !== undefined ||
+            args.time !== undefined ||
+            args.timeStatus !== undefined
+        ) {
+            return fail('A balance adjustment date cannot be changed')
+        }
+    }
 
     let categoryId: string | undefined
     if (args.categoryIdOrName !== undefined) {
@@ -1612,17 +1644,28 @@ const dispatch = async (
             const args = toolSchemas.getAccountBalance.parse(raw)
             const found = await resolveAccount(ctx, userId, args.idOrName)
             if (found.kind !== 'resolved') return unresolved('Account', found)
+            // With a date, the balance at the end of that day in the user's
+            // calendar; without one, the balance right now.
+            const asOfMs =
+                args.date === undefined
+                    ? pastCutoffBigInt(new Date(clock.nowMs))
+                    : parseAgentBalanceAsOf(
+                          args.date,
+                          clock.nowMs,
+                          clock.offsetMinutes,
+                      )
             const balance = await computeAccountBalance(
                 ctx,
                 userId,
                 found.value.id,
-                pastCutoffBigInt(new Date(clock.nowMs)),
+                asOfMs,
             )
             return ok({
                 accountId: found.value.id,
                 accountName: found.value.name,
                 balance: centsToDecimal(balance),
                 currency: found.value.currency,
+                ...(args.date !== undefined ? { date: args.date } : {}),
             })
         }
         case 'createAccount':
@@ -1863,10 +1906,11 @@ export const execute = internalMutation({
         writeKey: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<string> => {
-        // Records `agent.tool.errors.count` for a failed result, then strips
-        // the telemetry-only `reason` field before the envelope reaches the
-        // model.
+        // Records `agent.tool.calls.count`, plus `agent.tool.errors.count`
+        // for a failed result, then strips the telemetry-only `reason` field
+        // before the envelope reaches the model.
         const finish = async (result: ToolResult): Promise<string> => {
+            await recordAgentToolCall(ctx, { toolName: args.name })
             if (result.ok === false) {
                 await recordAgentToolError(ctx, {
                     toolName: args.name,
@@ -1898,7 +1942,18 @@ export const execute = internalMutation({
                 )
             }
         }
-        const raw: unknown = JSON.parse(args.argsJson)
+        // A throw (a malformed argument via zod's `.parse`, a failed aggregate
+        // write) rolls this whole transaction back — any telemetry written
+        // here included — so thrown errors are recorded by the caller,
+        // outside the transaction (`agent/runner.ts`). Malformed arguments are
+        // rethrown as a coded `ConvexError` so the caller can tell them from
+        // a bug; they still throw, so the rollback is unchanged.
+        let raw: unknown
+        try {
+            raw = JSON.parse(args.argsJson)
+        } catch (error) {
+            throw invalidToolArgsError(error)
+        }
         if (hasUnsupportedRecurrenceArguments(args.name, raw)) {
             return await finish(
                 fail(
@@ -1906,18 +1961,20 @@ export const execute = internalMutation({
                 ),
             )
         }
-        // A throw (a malformed argument via zod's `.parse`, a failed aggregate
-        // write) rolls this whole transaction back — any telemetry written
-        // here included — so thrown errors are recorded by the caller,
-        // outside the transaction (`agent/runner.ts`).
-        const result = await dispatch(
-            ctx,
-            args.userId,
-            args.name,
-            raw,
-            { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
-            args.writeKey,
-        )
-        return await finish(result)
+        try {
+            const result = await dispatch(
+                ctx,
+                args.userId,
+                args.name,
+                raw,
+                { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
+                args.writeKey,
+            )
+            return await finish(result)
+        } catch (error) {
+            throw error instanceof ZodError
+                ? invalidToolArgsError(error)
+                : error
+        }
     },
 })

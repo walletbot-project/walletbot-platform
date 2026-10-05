@@ -331,6 +331,11 @@ export const en: Messages = {
         typeList: 'Transactions',
         typeBalance: 'Balance',
         typeChart: 'Chart',
+        typeBalanceComparison: 'Balance comparison',
+        // Balance comparison rows: last month's close, now, and the change.
+        lastMonthBalance: "Last month's balance",
+        currentBalance: 'Current balance',
+        balanceDifference: 'Difference',
 
         aggregation: 'Aggregation',
         aggregationSum: 'Sum',
@@ -596,6 +601,10 @@ export const en: Messages = {
         tags: 'Tags',
         noTags: 'No tags',
         balanceUnavailable: 'Balance unavailable',
+        // A balance adjustment: what the user declared, and what the app had
+        // computed for the account just before it (it moves as the past does).
+        declaredBalance: 'Declared balance',
+        platformBalance: 'Calculated balance',
         chooseAccount: 'Choose an account',
         sameAccounts: 'Source and destination accounts must differ',
         amountGreaterThanZero: 'Enter an amount greater than zero',

@@ -85,6 +85,14 @@ void main() {
   test('a transfer moves value between scoped accounts', () async {
     final cash = await accountWith('Efectivo', 'ARS', 10000);
     final bank = await accountWith('Banco', 'ARS', 0);
+    // Dated just after the accounts opened: a movement at the very same
+    // instant as an initial balance is ordered before it, so the declaration
+    // would absorb the transfer.
+    final opened = await (db.select(
+      db.transactions,
+    )..where((t) => t.type.equals('balance_adjustment'))).get();
+    final afterOpening =
+        opened.map((t) => t.date).reduce((a, b) => a > b ? a : b) + BigInt.one;
     await repos.transactions.addTransfer(
       fromAccountId: cash,
       toAccountId: bank,
@@ -93,6 +101,7 @@ void main() {
       currency: 'ARS',
       toAmountCents: BigInt.from(4000),
       toCurrency: 'ARS',
+      dateMs: afterOpening,
     );
 
     expect(await balance('ARS', accountIds: [cash]), BigInt.from(6000));

@@ -364,6 +364,11 @@ export const es = {
         typeList: 'Movimientos',
         typeBalance: 'Saldo',
         typeChart: 'Gráfico',
+        typeBalanceComparison: 'Comparación de saldo',
+        // Balance comparison rows: last month's close, now, and the change.
+        lastMonthBalance: 'Saldo del mes pasado',
+        currentBalance: 'Saldo actual',
+        balanceDifference: 'Diferencia',
 
         aggregation: 'Agregación',
         aggregationSum: 'Suma',
@@ -636,6 +641,10 @@ export const es = {
         tags: 'Etiquetas',
         noTags: 'Sin etiquetas',
         balanceUnavailable: 'Saldo no disponible',
+        // A balance adjustment: what the user declared, and what the app had
+        // computed for the account just before it (it moves as the past does).
+        declaredBalance: 'Saldo declarado',
+        platformBalance: 'Saldo calculado',
         chooseAccount: 'Elegí una cuenta',
         sameAccounts: 'La cuenta origen y destino deben ser distintas',
         amountGreaterThanZero: 'Ingresá un monto mayor a cero',

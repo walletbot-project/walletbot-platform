@@ -241,13 +241,20 @@ class ToolExecutors {
       await repos.resolver.account(args['idOrName'] as String),
     );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final balance = await repos.accounts.getBalanceCents(acc.id);
+    // With a date, the balance at the end of that day on this device's
+    // calendar; without one, the balance right now.
+    final date = args['date'] as String?;
+    final balance = await repos.accounts.getBalanceCents(
+      acc.id,
+      asOfMs: date == null ? null : balanceAsOfMs(date),
+    );
     return {
       'ok': true,
       'accountId': acc.id,
       'accountName': acc.name,
       'balance': centsToDouble(balance),
       'currency': acc.currency,
+      'date': ?date,
     };
   }
 
@@ -913,6 +920,28 @@ class ToolExecutors {
     final id = args['id'] as String;
     final txn = await repos.transactions.getById(id);
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
+
+    // An adjustment's amount is derived from the ledger and its date is when
+    // the declaration was made; neither is editable. A new declaration is a
+    // new adjustment. Mirrors the backend agent's `updateTransaction`.
+    if (txn.type == 'balance_adjustment') {
+      if (args['amount'] != null) {
+        return {
+          'ok': false,
+          'error':
+              'A balance adjustment amount cannot be changed; record a new '
+              'balance adjustment instead',
+        };
+      }
+      if (args['date'] != null ||
+          args['time'] != null ||
+          args['timeStatus'] != null) {
+        return {
+          'ok': false,
+          'error': 'A balance adjustment date cannot be changed',
+        };
+      }
+    }
 
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
@@ -1681,6 +1710,7 @@ class ToolExecutors {
     WidgetType.list => DashboardWidth.full,
     WidgetType.balance => DashboardWidth.half,
     WidgetType.chart => DashboardWidth.full,
+    WidgetType.balanceComparison => DashboardWidth.half,
   };
 
   ({Map<String, Object?> options, String? error}) _widgetOptionsFor(
@@ -1704,6 +1734,7 @@ class ToolExecutors {
             _positiveInt(existingOptions['limit']) ??
             5;
       case WidgetType.balance:
+      case WidgetType.balanceComparison:
         final currency =
             args['currency'] as String? ??
             existingOptions['currency'] as String?;
@@ -1805,7 +1836,7 @@ class ToolExecutors {
     String title,
     Map<String, dynamic> args,
   ) async {
-    if (type == WidgetType.balance || !args.containsKey('filterConfigJson')) {
+    if (type.readsBalances || !args.containsKey('filterConfigJson')) {
       return null;
     }
     final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
@@ -1819,7 +1850,7 @@ class ToolExecutors {
     String title,
     Map<String, dynamic> args,
   ) async {
-    if (type == WidgetType.balance) return null;
+    if (type.readsBalances) return null;
 
     if (args.containsKey('filterConfigJson')) {
       final config = _canonicalFilterConfig(args['filterConfigJson'] as String);

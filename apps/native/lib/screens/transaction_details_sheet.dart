@@ -6,6 +6,7 @@ import 'package:app/components/raised_card.dart';
 import 'package:app/components/recurrence_summary.dart';
 import 'package:app/components/tag_chip.dart';
 import 'package:app/components/readable_time_picker.dart';
+import 'package:app/data/balance_adjustments.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
@@ -201,6 +202,13 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   }
 
   bool get _canEditAccount {
+    return _transaction?.type != 'balance_adjustment';
+  }
+
+  /// A balance adjustment's date is when the declaration was made; its amount
+  /// is derived from everything before that moment, so moving it is not an
+  /// edit the user can make.
+  bool get _canEditDate {
     return _transaction?.type != 'balance_adjustment';
   }
 
@@ -704,7 +712,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: _selectedDateConfirmed
             ? context.l10n.date
             : context.l10n.estimatedDate,
-        trailing: _editing
+        trailing: _editing && _canEditDate
             ? TextButton(onPressed: _pickDate, child: Text(context.l10n.change))
             : null,
         value: _filterableValue(
@@ -733,11 +741,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: timeNeedsAttention
             ? context.l10n.estimatedTime
             : context.l10n.time,
-        trailing: _editing
+        trailing: _editing && _canEditDate
             ? TextButton(onPressed: _pickTime, child: Text(context.l10n.change))
             : null,
         value: Text(_formatTime(context, _selectedDate)),
       ),
+      ..._adjustmentRows(transaction),
       if (_account != null)
         _accountReceiptRow(
           label: transaction.type == 'transfer'
@@ -897,6 +906,33 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       onTap: () => _close(filter),
       child: child,
     );
+  }
+
+  /// For a balance adjustment: what the user declared, and what the app had
+  /// computed for the account just before it. Both come from the stored row —
+  /// the amount is re-derived whenever a movement before the adjustment
+  /// changes, so the second figure follows the past.
+  List<Widget> _adjustmentRows(Transaction transaction) {
+    final balanceAfter = transaction.balanceAfter;
+    if (transaction.type != 'balance_adjustment' || balanceAfter == null) {
+      return const [];
+    }
+    final previous = adjustmentPreviousBalance(
+      amount: transaction.amount,
+      balanceAfter: balanceAfter,
+    );
+    return [
+      _ReceiptRow(
+        icon: Icons.fact_check_outlined,
+        label: context.l10n.declaredBalance,
+        value: Text(formatMoney(balanceAfter.toInt(), transaction.currency)),
+      ),
+      _ReceiptRow(
+        icon: Icons.calculate_outlined,
+        label: context.l10n.platformBalance,
+        value: Text(formatMoney(previous.toInt(), transaction.currency)),
+      ),
+    ];
   }
 
   _ReceiptRow _accountReceiptRow({

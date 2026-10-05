@@ -1,5 +1,10 @@
 import { AGENT_TOOL_NAMES } from '../agent/toolset'
 import { agentPricingAttributeSpec } from './agentPricing'
+import {
+    BATCH_SIZE_BUCKETS,
+    FIRST_RESPONSE_MODES,
+    LATENCY_OPERATIONS,
+} from './latency'
 import type {
     MetricAttributeValue,
     MetricName,
@@ -55,6 +60,11 @@ export const metricNames = new Set<MetricName>([
     'system.function.duration_bucket_count',
     'voice.connect.setup_complete_bucket_count',
     'agent.response.first_token_bucket_count',
+    'agent.response.first_token_ms',
+    'sync.push.client_failures.count',
+    'agent.tool.calls.count',
+    'system.latency.quantile_ms',
+    'system.latency.samples_count',
 ])
 
 export const metricSources = new Set<MetricSource>(['web', 'native', 'backend'])
@@ -274,6 +284,62 @@ export const metricCatalog: Record<
             bucket: new Set(CLIENT_DURATION_BUCKETS),
             mode: new Set(['voice', 'text']),
             platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    // The raw time to first response. Ingest derives
+    // `agent.response.first_token_bucket_count` from it and, for an
+    // authenticated request, a percentile sample (`telemetry/metrics.ts`).
+    'agent.response.first_token_ms': {
+        type: 'gauge',
+        unit: 'ms',
+        attributes: {
+            mode: new Set(FIRST_RESPONSE_MODES),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    // Push calls that threw on the client before the backend could record an
+    // outcome: unauthenticated (`requireAuth` throws first), or a request
+    // that never landed. Client-only, so `sync.errors.count{direction="push"}`
+    // keeps the backend as its single emitter.
+    'sync.push.client_failures.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            reason: new Set(['auth_failure', 'network', 'unknown']),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    // Denominator for `agent.tool.errors.count`.
+    'agent.tool.calls.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            tool_name: new Set(AGENT_TOOL_NAMES),
+        },
+    },
+    // Backend-only gauges, exported hourly from the rolling window in
+    // `telemetry/latency.ts`. `batch_size` segments `sync_push`, `mode`
+    // segments `agent_first_response`; `batch_size="all"` is every push
+    // together. Text and voice are never combined (voice timing is approximate).
+    'system.latency.quantile_ms': {
+        type: 'gauge',
+        unit: 'ms',
+        attributes: {
+            operation: new Set(LATENCY_OPERATIONS),
+            batch_size: new Set(['all', ...BATCH_SIZE_BUCKETS]),
+            mode: new Set(FIRST_RESPONSE_MODES),
+            quantile: new Set(['0.5', '0.95', '0.99']),
+            window: new Set(['24h']),
+        },
+    },
+    'system.latency.samples_count': {
+        type: 'gauge',
+        unit: 'count',
+        attributes: {
+            operation: new Set(LATENCY_OPERATIONS),
+            batch_size: new Set(['all', ...BATCH_SIZE_BUCKETS]),
+            mode: new Set(FIRST_RESPONSE_MODES),
+            window: new Set(['24h']),
         },
     },
 }
