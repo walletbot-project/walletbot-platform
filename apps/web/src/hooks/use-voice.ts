@@ -171,7 +171,6 @@ export function useVoice(opts: UseVoiceOpts) {
         chunks: string[]
         samples: number
     } | null>(null)
-    const releasedAudioRef = useRef<string[] | null>(null)
     const selectedDeviceIdRef = useRef(selectedDeviceId)
     /** The mic the user chose, which a fallback in the picker never replaces. */
     const preferredDeviceIdRef = useRef(selectedDeviceId)
@@ -595,13 +594,6 @@ export function useVoice(opts: UseVoiceOpts) {
         },
         [endAudioStream, recordMute, stopMicCapture],
     )
-
-    /** Ends a hold: unlike muting, speech buffered while connecting still goes out. */
-    const releaseMic = useCallback(() => {
-        const pending = startupAudioRef.current
-        if (pending?.chunks.length) releasedAudioRef.current = pending.chunks
-        setMicOn(false)
-    }, [setMicOn])
 
     /** Open the mic — prompts for permission the first time. */
     const openMic = useCallback(
@@ -1089,7 +1081,6 @@ export function useVoice(opts: UseVoiceOpts) {
                         audioStreamOpenRef.current = false
                         playbackRef.current.interrupt()
                         if (startupAudioRef.current) stopMicCapture()
-                        releasedAudioRef.current = null
                         finalisePendingUser()
                         finalisePendingAgent()
                         // The explicit End already cleaned everything up —
@@ -1174,20 +1165,9 @@ export function useVoice(opts: UseVoiceOpts) {
                     audioStreamOpenRef.current = true
                 }
             }
-            const releasedAudio = releasedAudioRef.current
-            releasedAudioRef.current = null
-            if (releasedAudio) {
-                for (const data of releasedAudio) {
-                    session.sendRealtimeInput({
-                        audio: { data, mimeType: 'audio/pcm;rate=16000' },
-                    })
-                }
-                session.sendRealtimeInput({ audioStreamEnd: true })
-            }
         } catch (err) {
             if (generation !== generationRef.current) return
             if (startupAudioRef.current) stopMicCapture()
-            releasedAudioRef.current = null
             playbackRef.current.interrupt()
             const message = catalog.voice.systemConnectionFailed({
                 error: err instanceof Error ? err.message : String(err),
@@ -1266,7 +1246,6 @@ export function useVoice(opts: UseVoiceOpts) {
                 message: catalog.voice.systemConnecting,
             })
 
-            releasedAudioRef.current = null
             if (mode === 'audio') {
                 startupAudioRef.current = { chunks: [], samples: 0 }
                 await Promise.all([connectAttempt(), openMic({ turnOn: true })])
@@ -1517,7 +1496,6 @@ export function useVoice(opts: UseVoiceOpts) {
         detach,
         openMic,
         setMicOn,
-        releaseMic,
         sendText,
         setComposing,
         messages,

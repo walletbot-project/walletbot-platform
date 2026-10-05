@@ -14,7 +14,6 @@ class _Command extends DebugVoiceExpenseCommand {
   final controller = StreamController<VoiceEvent>.broadcast();
   final connecting = Completer<void>();
   final audio = <List<int>>[];
-  final streamEndsAfter = <int>[];
   bool connected = false;
   @override
   bool get isActive => true;
@@ -27,11 +26,6 @@ class _Command extends DebugVoiceExpenseCommand {
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
     if (connected) audio.add(chunk.toList());
-  }
-
-  @override
-  Future<void> endAudioStream() async {
-    if (connected) streamEndsAfter.add(audio.length);
   }
 
   @override
@@ -98,77 +92,6 @@ void main() {
     );
     await tester.pump();
   }
-
-  Future<TestGesture> hold(WidgetTester tester, _Command command) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: VoiceScreen(commandFactory: _Factory(command)),
-      ),
-    );
-    await tester.pump();
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byIcon(Icons.mic_rounded).last),
-    );
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pump();
-    await tester.pump();
-    expect(captureCalls, ['listen']);
-    expect(command.connecting.isCompleted, false);
-    return gesture;
-  }
-
-  Future<void> release(WidgetTester tester, TestGesture gesture) async {
-    await gesture.up();
-    await tester.pump();
-    // Stream cancellation may complete in the root zone, outside fake time.
-    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-    await tester.pump();
-    expect(captureCalls, ['listen', 'cancel']);
-  }
-
-  testWidgets(
-    'a hold released before connecting is sent once connected',
-    (tester) async {
-      final command = _Command();
-      final gesture = await hold(tester, command);
-      await chunk(tester, [1, 0]);
-      await chunk(tester, [2, 0]);
-      await release(tester, gesture);
-      expect(command.audio, isEmpty);
-      command.ready();
-      await tester.pump();
-      expect(command.audio, [
-        [1, 0],
-        [2, 0],
-      ]);
-      expect(command.streamEndsAfter, [2]);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
-
-  testWidgets(
-    'a hold released before a failed connection is never sent',
-    (tester) async {
-      final command = _Command();
-      final gesture = await hold(tester, command);
-      await chunk(tester, [1, 0]);
-      await release(tester, gesture);
-      command.controller.add(
-        VoiceErrorEvent('setup failed', isTransient: true),
-      );
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      expect(command.audio, isEmpty);
-      expect(command.streamEndsAfter, isEmpty);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
 
   testWidgets(
     'captures before setup and sends startup audio before live audio',

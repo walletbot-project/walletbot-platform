@@ -24,7 +24,6 @@ const f = vi.hoisted(() => ({
         disconnect: vi.fn(),
         openMic: vi.fn(async () => {}),
         setMicOn: vi.fn(),
-        releaseMic: vi.fn(),
         sendText: vi.fn(),
         setComposing: vi.fn(),
         markReported: vi.fn(),
@@ -163,7 +162,7 @@ it('a tap starts a hands-free session', () => {
     expect(button('Pause')?.disabled).toBe(true)
 })
 
-it('holding talks and releasing ends the hold through releaseMic', () => {
+it('holding talks and releasing mutes through the long-press path', () => {
     setVoice({ isConnected: true })
     const mic = byLabel('Start talking')
     pointer(mic, 'pointerdown', 500)
@@ -173,8 +172,7 @@ it('holding talks and releasing ends the hold through releaseMic', () => {
     expect(byText('Slide up to lock')).toBeDefined()
 
     pointer(mic, 'pointerup', 500)
-    expect(f.voice.releaseMic).toHaveBeenCalledOnce()
-    expect(f.voice.setMicOn).not.toHaveBeenCalled()
+    expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
     expect(byText('Slide up to lock')).toBeUndefined()
 
     // The click that follows a hold is not a tap.
