@@ -90,3 +90,13 @@ export const transactionsByTag = new DirectAggregate<{
     Key: bigint
     Id: string
 }>(components.transactionsByTag)
+
+// Raw durations for the latency percentiles, one entry per `latencySamples`
+// row and segment it belongs to (see telemetry/latency.ts). Namespace
+// `${operation}:${segment}`, keyed by duration in ms, so `.at(rank)` is a
+// percentile.
+export const latencyByOperation = new DirectAggregate<{
+    Namespace: string
+    Key: number
+    Id: string
+}>(components.latencyByOperation)

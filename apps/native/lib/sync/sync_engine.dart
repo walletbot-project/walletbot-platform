@@ -57,7 +57,9 @@ class SyncEngine extends ChangeNotifier {
   // push results and timing are recorded by the backend, which applies the
   // batch. `pull` is a Convex query and cannot write telemetry (no
   // `ctx.db`/scheduler on the backend), so its errors and timing are
-  // reported only from here, sourced 'native'.
+  // reported only from here, sourced 'native'. A push the backend never
+  // answered (the call threw) is the one push outcome it cannot record; that
+  // goes to its own `sync.push.client_failures.count`, from here.
   final TelemetryClient? _telemetry;
 
   /// Null when the app runs without a Convex transport (widget tests). The
@@ -260,6 +262,22 @@ class SyncEngine extends ChangeNotifier {
     );
   }
 
+  /// Push failures the backend never records: the `push` call itself threw
+  /// (see [_sendChunk]). Returned `ok: false` outcomes are recorded by the
+  /// backend in `sync.errors.count{direction="push"}`, so they never go
+  /// through here — one emitter per event.
+  void _recordPushClientFailureBestEffort({required String reason}) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'sync.push.client_failures.count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {'reason': reason, 'platform': currentPlatform},
+      ),
+    );
+  }
+
   void _recordSyncPullDurationBestEffort({
     required int elapsedMs,
     required String status,
@@ -437,9 +455,7 @@ class SyncEngine extends ChangeNotifier {
     } catch (e) {
       status = 'error';
       _recordPullErrorBestEffort(
-        reason: e is ConvexFunctionError && e.errorMessage == 'Unauthenticated'
-            ? 'auth_failure'
-            : 'unknown',
+        reason: _isUnauthenticated(e) ? 'auth_failure' : 'unknown',
       );
       rethrow;
     } finally {
@@ -647,10 +663,19 @@ class SyncEngine extends ChangeNotifier {
       'appVersion': _clientInfo.appVersion,
     };
 
-    final decoded = await _requireClient.mutation<Object?>(
-      'v1/sync/mutations:push',
-      args,
-    );
+    // Only a *thrown* push is recorded here. A returned value (`ok: true`, or
+    // `ok: false` with cursor_mismatch / client_outdated / push_failed / …)
+    // means the backend ran and already recorded the outcome itself.
+    final Object? decoded;
+    try {
+      decoded = await _requireClient.mutation<Object?>(
+        'v1/sync/mutations:push',
+        args,
+      );
+    } catch (e) {
+      _recordPushClientFailureBestEffort(reason: _pushClientFailureReason(e));
+      rethrow;
+    }
     if (decoded is! Map) {
       throw StateError('sync: malformed push response: $decoded');
     }
@@ -668,6 +693,29 @@ class SyncEngine extends ChangeNotifier {
       throw StateError('sync: push failed: $decoded');
     }
     return _PushResult.ok(newSeq: decoded['newSeq'] as BigInt);
+  }
+
+  /// `requireAuth` (backend `users/helpers.ts`) throws a plain
+  /// `Error('Unauthenticated')`, which the client surfaces as a
+  /// [ConvexFunctionError] carrying that message.
+  static bool _isUnauthenticated(Object error) =>
+      error is ConvexFunctionError && error.errorMessage == 'Unauthenticated';
+
+  /// Closed set: `auth_failure` | `network` | `unknown`.
+  ///
+  /// `network` is this client's own typed transport errors. A WebSocket
+  /// mutation that never got an answer fails with [OperationTimeoutError]
+  /// (connect or operation timeout, `request_manager.dart`); mutations are
+  /// resent across reconnects, so [ConnectionLostError] is not expected for
+  /// them today and is listed only because it is the client's other
+  /// transport error. Anything else (server threw something other than
+  /// `Unauthenticated`, client disposed, fatal error) is `unknown`.
+  static String _pushClientFailureReason(Object error) {
+    if (_isUnauthenticated(error)) return 'auth_failure';
+    return switch (error) {
+      OperationTimeoutError() || ConnectionLostError() => 'network',
+      _ => 'unknown',
+    };
   }
 
   Future<void> _applyChunkAck(_Chunk chunk, {required BigInt ackedSeq}) async {

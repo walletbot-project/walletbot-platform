@@ -181,7 +181,12 @@ existing metric.
 | `agent.tool.errors.count` | counter | count | `tool_name` (bounded — existing tool registry), `reason` (`invalid_args`\|`not_found`\|`provider_error`\|`unknown`) | backend |
 | `system.function.duration_bucket_count` | counter | count | `function` (`sync_push`\|`sync_pull`\|`agent_turn` — the handful we instrument, not all 98), `bucket` (`0-100`\|`100-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `status` (`ok`\|`rejected`\|`error`) | backend for `sync_push`/`agent_turn`, native for `sync_pull` |
 | `voice.connect.setup_complete_bucket_count` | counter | count | `bucket` (`0-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `platform`, `resumed` | native (later: web) |
-| `agent.response.first_token_bucket_count` | counter | count | `bucket` (same shape as above), `mode` (`voice`\|`text`), `platform` | native (later: web) |
+| `agent.response.first_token_bucket_count` | counter | count | `bucket` (same shape as above), `mode` (`voice`\|`text`), `platform` | backend, derived from `agent.response.first_token_ms` at ingest (WAL-216); native builds from before WAL-216 still send it directly |
+| `agent.response.first_token_ms` (WAL-216) | gauge | ms | `mode` (`voice`\|`text`), `platform` | native and web: the raw time to first response, one per turn |
+| `sync.push.client_failures.count` (WAL-216) | counter | count | `reason` (`auth_failure`\|`network`\|`unknown`), `platform` | native: push calls that **threw** before the backend could record an outcome |
+| `agent.tool.calls.count` (WAL-216) | counter | count | `tool_name` | backend: one per tool call, the denominator of the tool error rate |
+| `system.latency.quantile_ms` (WAL-216) | gauge | ms | `operation` (`sync_push`\|`agent_first_response`), `batch_size` (or `all`) or `mode` (never `all`: text and voice stay apart), `quantile` (`0.5`\|`0.95`\|`0.99`), `window` (`24h`) | backend, hourly cron |
+| `system.latency.samples_count` (WAL-216) | gauge | count | same as above, without `quantile` | backend, hourly cron |
 
 All of them are total-duration/count signals — none of them break a call down
 into DB time vs. external-API time vs. our own code. That breakdown is
@@ -210,10 +215,22 @@ double-counting, so each operation has a single owner:
 |---|---|---|---|
 | Sync push (apply one batch) | `sync.errors.count{direction="push"}` | `sync_push` | **Backend.** It applies the batch, and sees rejections returned as data that an HTTP status would never show. |
 | Sync pull | `sync.errors.count{direction="pull"}` | `sync_pull` | **Native.** `pull` is a Convex query and cannot write. The duration covers the network download **and** the local Drift apply of every page, not backend time alone. |
-| Agent tool call (WhatsApp) | `agent.tool.errors.count` | — | **Backend.** |
+| Agent tool call (WhatsApp) | `agent.tool.errors.count`, over `agent.tool.calls.count` | — | **Backend.** `execute` records calls that return; `agent/runner.ts` records calls that throw (their rollback discards whatever `execute` wrote). Each call is counted exactly once. |
 | Agent turn (WhatsApp) | — | `agent_turn` | **Backend.** Model + tools loop only, not queue wait or reply send. |
-| Time to first agent response | — | `agent.response.first_token_bucket_count` | **Native.** `mode` separates text from voice. |
-| Voice connect | — | `voice.connect.setup_complete_bucket_count` | **Native.** |
+| Time to first agent response | — | `agent.response.first_token_ms` → derived `agent.response.first_token_bucket_count` + percentile sample | **Client (native and web).** One raw sample per turn; the backend derives the bucket counter, so a client never sends both. `mode` separates text from voice, and the two are never combined (see below). |
+| Voice connect | — | `voice.connect.setup_complete_bucket_count` | **Client (native and web).** |
+| Push calls that threw on the client | `sync.push.client_failures.count` | — | **Native.** A *separate* metric: the backend stays the only emitter of push outcomes (`sync.errors.count{direction="push"}` and the `sync_push` duration). A push that **returned** `ok: false` is never counted here. |
+
+**Time to first response: text is the reliable metric, voice is
+approximate.** In text the start is exact: the message is sent. In voice we
+don't know when the user finished speaking. The timer starts in
+`endAudioStream()`, which also runs when the mic is muted, when the user
+starts typing or when they leave the screen, and in hands-free mode Gemini's
+VAD ends the turn without telling us. A 78 ms voice sample on the WAL-216
+preview is that error showing. So the two are never combined: there is no
+`mode="all"` percentile, and the dashboard shows text and voice in separate
+panels (percentiles and buckets), the voice ones marked as approximate.
+Read voice as an order of magnitude.
 
 **Recording errors outside the failing transaction.** A Convex mutation that
 throws rolls back *all* its writes, a telemetry row included, so "catch →
@@ -243,21 +260,40 @@ outer layer is:
 - **Agent turn.** Already outside any transaction (an action calling
   `ctx.runMutation`), so it records directly.
 
-**Not recorded yet** (explicit gaps, not oversights):
+**Coverage gaps from WAL-203, and what WAL-216 decided** (each one resolved
+or an explicit decision):
 
-- **Unauthenticated push.** `requireAuth` throws before anything can be
-  recorded, and turning it into a returned value would change how clients
-  detect an expired session.
-- **Push failures the backend never sees**: network/connection failures
-  before the request lands. If we want them, they belong in a separate
-  client-side metric, not in `sync.errors.count`, so the push count keeps a
-  single emitter.
-- **The reason for thrown tool errors.** They cross the action boundary as
-  `reason: 'unknown'`, including zod argument errors.
-- **WhatsApp paths** (`agent.tool.errors.count`, `agent_turn`) are not
-  reachable from a PR preview. Tertiary priority; they don't block this
-  iteration.
-- **Web**, which has no telemetry client yet.
+- **Unauthenticated push — recorded on the client.** `requireAuth` still
+  throws before `push` can record anything, and stays a throw: turning it
+  into a returned value would change how clients detect an expired session.
+  Native records it as `sync.push.client_failures.count{reason="auth_failure"}`
+  (`sync_engine.dart:_sendChunk`). *Caveat, not yet verified:* the
+  classification compares the error message to `'Unauthenticated'`, and
+  `requireAuth` throws a plain `Error`. If production redacts plain-error
+  messages, prod `auth_failure` lands in `unknown`, for push and for the
+  existing pull classification alike (checklist row 11).
+- **Push failures the backend never sees — recorded on the client**, in the
+  same separate metric: `network` is the client's own transport errors
+  (`OperationTimeoutError`, `ConnectionLostError` from `lib/convex/`), anything
+  else is `unknown`. Native's default `connectTimeout` is unset, so an offline
+  push waits for the socket instead of failing; `network` therefore mostly
+  means the operation timeout after the push was sent.
+- **Reason for thrown tool errors — resolved.** `execute` rethrows malformed
+  arguments (zod `.parse` failures and unparseable `argsJson`) as a
+  `ConvexError` with `kind: 'agent_tool_error'`, `reason: 'invalid_args'`
+  (`agent/helpers.ts`), so the rollback is unchanged and the reason survives
+  the `runMutation` boundary. Any other throw is still `unknown`, which now
+  means "a bug or an outage", not "anything".
+- **Tool error rate — resolved.** `agent.tool.calls.count` is the
+  denominator.
+- **Pull errors in Grafana — still not validated** (checklist row 2). Needs a
+  device; tracked as pending evidence, not new code.
+- **WhatsApp-only paths — still not validated on preview** (rows 3, 6, 14).
+  Tertiary priority, unchanged.
+- **Web telemetry client — resolved.** `apps/web/src/lib/telemetry.ts` (parity
+  with native's `TelemetryClient`), wired for voice connect and time to first
+  response in `hooks/use-voice.ts`. Web has no local sync engine, so the sync
+  metrics stay native-only by construction.
 
 ### Starter PromQL
 
@@ -315,15 +351,51 @@ percentile):
 sum by (function, bucket) (count_over_time(system_function_duration_bucket_count_total{deployment_environment="$Scope"}[$__range]))
 ```
 
+Push calls that threw on the client (separate from push outcomes above):
+
+```promql
+sum by (reason, platform) (count_over_time(sync_push_client_failures_count_total{deployment_environment="$Scope"}[$__range]))
+```
+
+Tool error rate per tool (`or (... * 0)` keeps tools with calls and no
+errors in the result):
+
+```promql
+(sum by (tool_name) (count_over_time(agent_tool_errors_count_total{deployment_environment="$Scope"}[$__range])) or (sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment="$Scope"}[$__range])) * 0))
+/ sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment="$Scope"}[$__range]))
+```
+
+p50/p95/p99 with the sample count beside them (gauges, so the latest hourly
+snapshot, read with `last_over_time` over a lookback longer than the cron
+period). **The Prometheus name of the `ms` gauge is a hypothesis until
+checklist row 12 confirms it:** standard OTLP translation appends the unit
+(`ms` → `_milliseconds`), the way `business.users.registered_total` gained
+`_count`:
+
+```promql
+max by (batch_size, quantile) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment="$Scope", operation="sync_push", window="24h"}[2h]))
+max by (batch_size) (last_over_time(system_latency_samples_count{deployment_environment="$Scope", operation="sync_push", window="24h"}[2h]))
+```
+
 Voice connect and time to first response:
 
 ```promql
 sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="$Scope"}[$__range]))
 ```
 
+Text and voice in separate queries (and panels), never as series of one:
+
 ```promql
-sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope"}[$__range]))
+sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope", mode="text"}[$__range]))
+sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope", mode="voice"}[$__range]))
 ```
+
+```promql
+max by (quantile) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment="$Scope", operation="agent_first_response", mode="text", window="24h"}[2h]))
+max(last_over_time(system_latency_samples_count{deployment_environment="$Scope", operation="agent_first_response", mode="text", window="24h"}[2h]))
+```
+
+The voice percentiles are the same queries with `mode="voice"`.
 
 ### Grafana validation checklist
 
@@ -352,6 +424,13 @@ trigger time, not just presence.
 | 7 | Voice connect | Start a voice session on the APK | `sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="preview"}[2h]))` | 1 sample per connect, `resumed="false"` on a fresh one | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 1 sample, `500-1000`, `resumed="false"` |
 | 8 | First response, text | Send a typed message to the agent | `sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="preview"}[2h]))` | 1 `mode="text"` sample per message | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 1 `mode="text"`, `2500-5000` |
 | 9 | First response, voice | Speak a turn | same query | 1 `mode="voice"` sample per turn | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 1 `mode="voice"`, `2500-5000` |
+
+| 10 | Push client failures | APK on the WAL-216 preview: airplane mode while a push is in flight (≥ the 30s operation timeout) → `network`; revoke the session server-side, then edit → `auth_failure` | `sum by (reason, platform) (count_over_time(sync_push_client_failures_count_total{deployment_environment="preview"}[2h]))` | 1 sample per failed push call with the matching `reason`, `metric_source="native"`; none for a push that returned `ok: false` | **Pending** |
+| 11 | `auth_failure` classification | Same as row 10, auth case | same | `reason="auth_failure"`, not `unknown` — confirms the `'Unauthenticated'` message survives on the deployment | **Pending** |
+| 12 | Latency gauges | Edits on the APK (WAL-216 preview), then `pnpm -C packages/backend exec convex run telemetry/mutations:recordLatencyPercentiles` instead of waiting for the hourly cron | `--series-days 1 '{__name__=~"system_latency.*"}'`, then the panel queries | the exact `quantile` series name (fix the dashboard and this doc if it isn't `system_latency_quantile_ms_milliseconds`); `samples_count` = applied pushes | **Pending** |
+| 13 | First response percentiles | Text and voice turns while signed in, then force the snapshot as in row 12 | `max by (mode, quantile) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment="preview", operation="agent_first_response"}[2h]))` | `mode="text"` / `"voice"` rows and no `"all"`; still exactly one `agent_response_first_token_bucket_count_total` sample per turn | **Pending** |
+| 14 | Tool calls | WhatsApp only | `sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment="preview"}[1h]))` | — | **Not verifiable on preview** |
+| 15 | Web first response and connect | A web voice session on the WAL-216 preview | rows 7–9 queries with `platform="web"` | samples with `metric_source="web"` | **Pending** |
 
 Attribution: `deployment_environment="preview"` is shared by every PR
 preview, but these metrics only exist on this branch, and before
@@ -394,7 +473,7 @@ without redoing what's already implemented.
   gaps listed in "Emitters and coverage". Not yet answered: whether sync
   *converges correctly* after failures — see "Next iteration".
 
-## Path to p50/p95/p99 (not yet built)
+## Path to p50/p95/p99 (option 1 built in WAL-216)
 
 The ticket that opened this spike explicitly asked for p50/p95/p99 latency
 and an error *rate*. What shipped in this iteration (Option A,
@@ -456,6 +535,41 @@ attempts counter for a true tool error rate (sync already has one). Both are
 additive to what's merged in this PR; Path 2 is a deliberate,
 separate scope decision, not an extension of Option A.
 
+### What WAL-216 built (Path 1)
+
+- **Source.** A `latencySamples` table (raw `durationMs`, `recordedAt`) and a
+  `latencyByOperation` `DirectAggregate`, namespaced
+  `${operation}:${segment}` and keyed by duration, so `.at(rank)` is a
+  percentile. A `sync_push` sample goes in twice, under its batch size and
+  under `all`; a first response only under its `mode` (`telemetry/latency.ts`).
+- **Segments.** `sync_push` by **batch size** (rows in the batch, counted the
+  way native sizes a chunk: `0-1`, `2-10`, `11-40`, `41-80`, `81+`; native
+  caps a chunk at 80). `agent_first_response` by `mode` (`text`, `voice`),
+  with no combined segment: voice timing is approximate, so text is never
+  ranked together with it (see "Emitters and coverage").
+- **What is sampled.** `sync_push`: only applied batches (`status: ok`).
+  Rejections and errors never applied a batch, and they already have their
+  own counters. First response: only **authenticated** requests, since the
+  endpoint also accepts anonymous metrics (R-011) and an anonymous caller must
+  not be able to move the p99. A signed-out local account therefore feeds the
+  bucket counter but not the percentiles.
+- **Writes off the hot path.** The aggregate is shared by every user, so the
+  sample is written by a scheduled mutation
+  (`telemetry/mutations:recordLatencySample`), never inside the push
+  transaction: unrelated users' pushes can't conflict on telemetry.
+- **Window.** Rolling 24h. `delete expired latency samples` runs every 15
+  minutes (and continues itself while a batch comes back full), so a
+  snapshot can include up to 15 extra minutes.
+- **Export.** `record latency percentiles` runs hourly: nearest-rank p50, p95
+  and p99 as `system.latency.quantile_ms`, plus `system.latency.samples_count`
+  for every segment. The count is exported even when it is 0, and the
+  percentiles are skipped when it is, so "no traffic" and "no data" stay
+  distinguishable. Panels: "Latencia (p50/p95/p99)" in the main dashboard.
+- **Not changed.** The bucketed counters keep feeding the distribution
+  panels. Time to first response is now sent raw by clients
+  (`agent.response.first_token_ms`), and its bucket counter is derived at
+  ingest, so each turn is still exactly one bucket sample.
+
 ## Prerequisites / follow-up work (not yet created as Linear tickets)
 
 1. ✅ **Done.** Small closed error-code enum at the sync push/pull throw
@@ -485,15 +599,13 @@ separate scope decision, not an extension of Option A.
 4. ✅ **Done.** Redirected native's existing connect-phase `Stopwatch` into
    `voice.connect.setup_complete_bucket_count`; added a
    time-to-first-response timer (`agent.response.first_token_bucket_count`).
-5. Build a web telemetry client (parity with native) — prerequisite for any
-   web-side latency metric. Not started.
+5. ✅ **Done (WAL-216).** Web telemetry client (`apps/web/src/lib/telemetry.ts`),
+   wired for voice connect and time to first response.
 6. **Deferred, not this iteration:** hand-rolled OTLP traces (Option E) —
    new `telemetrySpans` outbox + exporter, targeted at whatever #3 points at
    as slow. Revisit once total-latency data exists to point at something.
-7. **Real p50/p95/p99 + a true error rate** — see "Path to p50/p95/p99"
-   above. Not started; the ticket asked for this and Option A doesn't
-   provide it, so treat it as its own scope decision rather than assuming
-   it falls out of what's already shipped.
+7. ✅ **Done (WAL-216).** Real p50/p95/p99 (Path 1) and a tool error rate
+   (`agent.tool.calls.count`) — see "What WAL-216 built".
 
 Two things surfaced only after implementing and testing against a real
 Grafana Cloud stack, not knowable at spike time: every counter above exports
@@ -525,6 +637,31 @@ Goals for the report, all building on what this PR records:
 Voice connect timing stays, but isn't a report goal. WhatsApp coverage is
 tertiary. Distributed traces aren't required for any of the above.
 
+**Status after WAL-216:**
+
+1. Push error rate and outcome panels are in the main dashboard ("Salud
+   operativa"), with the queries from "Starter PromQL". Checked against the
+   WAL-203 preview data on 2026-10-03, window `[7d]`, scope `preview`: rate
+   `0.1` (1 `error` / 10 attempts), outcomes `ok` 6, `rejected` 3, `error` 1.
+   This shows the queries work, not that the dashboard was imported.
+2. p50/p95/p99 built (see "What WAL-216 built"). Grafana evidence pending
+   (checklist rows 12–13).
+3. Sync correctness and recovery tests:
+   - Backend (`convex/sync/convergence.test.ts`): applies after a
+     `cursor_mismatch` and drain; a batch re-sent after a lost ack converges
+     without duplicates; a bad batch fails the same way on every retry and
+     leaves nothing; a corrected batch applies at the same cursor.
+   - Native (`test/sync/sync_engine_convergence_test.dart`): drives the real
+     `SyncEngine` through `cursor_mismatch`, a returned `push_failed`, a
+     thrown push (`auth_failure`, `unknown`, `network`) and the 5-round
+     mismatch limit.
+   - **Finding, not fixed (needs a decision):** after 5 consecutive
+     `cursor_mismatch` rounds, `_runOnce` takes the success path. It
+     reports `synced`, writes the heartbeat and schedules no retry, while the
+     rows are still dirty. They are pushed on the next trigger (a local
+     write, a counter advance, a reconnect, a manual sync). The native test
+     pins this behaviour as it is.
+
 ## Related risks
 
 Touches existing entries in [`riesgos.md`](../riesgos.md): R-011 (unauth'd
@@ -534,4 +671,7 @@ above are deliberately small closed sets), and R-027 (which already names
 "registrar un contador interno" as the next step once health/traces metrics
 exist — `sync.errors.count`/`agent.tool.errors.count` are that next step).
 No new risk entry needed at the spike stage; revisit once something here is
-actually implemented.
+actually implemented. WAL-216 review: R-011 is unchanged, and percentiles
+only take authenticated samples so the anonymous path can't skew them.
+R-024 is unchanged: every new label is a closed set, and no user identifier
+is exported. R-026 is updated: web now has a `TelemetryClient`.

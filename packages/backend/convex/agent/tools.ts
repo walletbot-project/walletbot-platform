@@ -38,6 +38,7 @@ import {
     toolSchemas,
 } from '@wallet-bot/shared'
 import { v } from 'convex/values'
+import { ZodError } from 'zod'
 import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
@@ -47,6 +48,7 @@ import { nextSeq, writeTombstone } from '../sync/helpers'
 import { tagAggregateDetach } from '../tags/helpers'
 import {
     type AgentToolErrorReason,
+    recordAgentToolCall,
     recordAgentToolError,
     recordFinancialAccountCreated,
     recordMovementCreated,
@@ -66,6 +68,7 @@ import { DEFAULT_TAG_COLOR } from '../v1/tags/mutations'
 import { attachTags, detachTags } from '../v1/transactions/mutations'
 import { computeAccountBalance } from '../v1/transactions/queries'
 import { getDefaultCurrency } from '../v1/users/helpers'
+import { invalidToolArgsError } from './helpers'
 import { newEntityId } from './idempotency'
 import type { Resolution } from './resolve'
 import { resolveAccount, resolveCategory, resolveTag } from './resolve'
@@ -1863,10 +1866,11 @@ export const execute = internalMutation({
         writeKey: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<string> => {
-        // Records `agent.tool.errors.count` for a failed result, then strips
-        // the telemetry-only `reason` field before the envelope reaches the
-        // model.
+        // Records `agent.tool.calls.count`, plus `agent.tool.errors.count`
+        // for a failed result, then strips the telemetry-only `reason` field
+        // before the envelope reaches the model.
         const finish = async (result: ToolResult): Promise<string> => {
+            await recordAgentToolCall(ctx, { toolName: args.name })
             if (result.ok === false) {
                 await recordAgentToolError(ctx, {
                     toolName: args.name,
@@ -1898,7 +1902,18 @@ export const execute = internalMutation({
                 )
             }
         }
-        const raw: unknown = JSON.parse(args.argsJson)
+        // A throw (a malformed argument via zod's `.parse`, a failed aggregate
+        // write) rolls this whole transaction back — any telemetry written
+        // here included — so thrown errors are recorded by the caller,
+        // outside the transaction (`agent/runner.ts`). Malformed arguments are
+        // rethrown as a coded `ConvexError` so the caller can tell them from
+        // a bug; they still throw, so the rollback is unchanged.
+        let raw: unknown
+        try {
+            raw = JSON.parse(args.argsJson)
+        } catch (error) {
+            throw invalidToolArgsError(error)
+        }
         if (hasUnsupportedRecurrenceArguments(args.name, raw)) {
             return await finish(
                 fail(
@@ -1906,18 +1921,20 @@ export const execute = internalMutation({
                 ),
             )
         }
-        // A throw (a malformed argument via zod's `.parse`, a failed aggregate
-        // write) rolls this whole transaction back — any telemetry written
-        // here included — so thrown errors are recorded by the caller,
-        // outside the transaction (`agent/runner.ts`).
-        const result = await dispatch(
-            ctx,
-            args.userId,
-            args.name,
-            raw,
-            { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
-            args.writeKey,
-        )
-        return await finish(result)
+        try {
+            const result = await dispatch(
+                ctx,
+                args.userId,
+                args.name,
+                raw,
+                { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
+                args.writeKey,
+            )
+            return await finish(result)
+        } catch (error) {
+            throw error instanceof ZodError
+                ? invalidToolArgsError(error)
+                : error
+        }
     },
 })

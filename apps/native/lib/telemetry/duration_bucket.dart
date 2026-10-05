@@ -1,8 +1,10 @@
-/// Bucket labels for client-observed latency metrics (voice connect,
-/// time-to-first-response). Mirrors the shape of the backend's
-/// `costBucket`/`functionDurationBucket` helpers — a continuous value turned
-/// into a fixed label for a bar-chart-shaped distribution, not a true
-/// cumulative histogram (see docs/metrics/error-rate-and-latency.md).
+/// Bucket labels for client-observed latency metrics (voice connect).
+/// Time-to-first-response is no longer bucketed here: native sends the raw
+/// `agent.response.first_token_ms` and the backend buckets it. Mirrors the
+/// shape of the backend's `costBucket`/`functionDurationBucket` helpers — a
+/// continuous value turned into a fixed label for a bar-chart-shaped
+/// distribution, not a true cumulative histogram (see
+/// docs/metrics/error-rate-and-latency.md).
 String clientDurationBucket(int elapsedMs) {
   if (elapsedMs < 250) return '0-250';
   if (elapsedMs < 500) return '250-500';
