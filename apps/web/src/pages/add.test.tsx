@@ -150,8 +150,8 @@ it('welcomes with a start button and no status pill', () => {
     expect(
         byText('Tell me about an expense or ask about your accounts'),
     ).toBeDefined()
-    expect(button('Talk live')).toBeDefined()
-    expect(byText('Like a phone call (hands-free)')).toBeDefined()
+    expect(button('Start call')).toBeDefined()
+    expect(byText('Hands-free mode')).toBeDefined()
     expect(byText('Tap or hold to record a voice note')).toBeDefined()
     expect(byText('connecting')).toBeUndefined()
     expect(byText('idle')).toBeUndefined()
@@ -171,6 +171,7 @@ it('a tap starts a locked voice note', () => {
     setVoice({ isConnecting: true })
     expect(byLabel('Send')).toBeDefined()
     expect(button('Pause')?.disabled).toBe(true)
+    expect(byText('On a call')).toBeUndefined()
 })
 
 it('holding records and releasing sends through the long-press path', () => {
@@ -323,15 +324,15 @@ it('a held note that fills up waits for Send, then the composer comes back', asy
 })
 
 it('the welcome button and the composer button both enter live mode', () => {
-    act(() => button('Talk live')?.click())
+    act(() => button('Start call')?.click())
     expect(f.voice.enterLive).toHaveBeenCalledOnce()
-    act(() => byLabel('Talk live').click())
+    act(() => byLabel('Start call').click())
     expect(f.voice.enterLive).toHaveBeenCalledTimes(2)
     expect(f.voice.connect).not.toHaveBeenCalled()
 
     // No second session while one is still connecting.
     setVoice({ isConnecting: true })
-    expect(byLabel('Talk live').disabled).toBe(true)
+    expect(byLabel('Start call').disabled).toBe(true)
 })
 
 it('live mode mutes with Pause and leaves with X, keeping the chat', () => {
@@ -344,7 +345,8 @@ it('live mode mutes with Pause and leaves with X, keeping the chat', () => {
         isMicCaptureActive: true,
         isMicOn: true,
     })
-    expect(container.querySelector('button[aria-label="Talk live"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Start call"]')).toBeNull()
+    expect(byText('On a call')).toBeDefined()
     expect(
         container.querySelector('button[aria-label="Discard voice note"]'),
     ).toBeNull()
@@ -362,7 +364,7 @@ it('live mode mutes with Pause and leaves with X, keeping the chat', () => {
     act(() => button('Resume')?.click())
     expect(f.voice.openMic).toHaveBeenCalledWith({ turnOn: true })
 
-    act(() => byLabel('Exit live mode').click())
+    act(() => byLabel('End call').click())
     expect(f.voice.exitLive).toHaveBeenCalledOnce()
     expect(f.voice.disconnect).not.toHaveBeenCalled()
     expect(byText('hola')).toBeDefined()
@@ -392,7 +394,7 @@ it('agentRecordHint off hides the voice note hint', () => {
     f.flags.agentRecordHint = false
     render()
     expect(byText('Tap or hold to record a voice note')).toBeUndefined()
-    expect(button('Talk live')).toBeDefined()
+    expect(button('Start call')).toBeDefined()
 })
 
 it('shows tool cards only while debugToolCalls is on', () => {

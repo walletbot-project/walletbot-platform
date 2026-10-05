@@ -1759,13 +1759,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get voiceWelcome => 'Contame un gasto o preguntame por tus cuentas';
 
   @override
-  String get voiceStartTalking => 'Hablar en vivo';
+  String get voiceStartTalking => 'Iniciar llamada';
 
   @override
-  String get voiceLiveHint => 'Como una llamada (manos libres)';
+  String get voiceLiveHint => 'Modo manos libres';
 
   @override
-  String get voiceExitLive => 'Salir del modo en vivo';
+  String get voiceExitLive => 'Terminar llamada';
 
   @override
   String get voiceRecordVoiceNote => 'Grabar un audio';
@@ -1775,6 +1775,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get voiceNoteLimit => 'Límite de 5 minutos';
+
+  @override
+  String get voiceOnCall => 'En llamada';
 
   @override
   String get voiceRecordHint => 'Tocá o mantené apretado para grabar un audio';

@@ -854,11 +854,13 @@ function RecordingStrip({
     phase,
     level,
     full,
+    call,
 }: {
     variant: 'holding' | 'locked'
     phase: MicPhase
     level: number
     full: boolean
+    call: boolean
 }) {
     const t = useT()
     const listening = phase === 'listening'
@@ -906,6 +908,13 @@ function RecordingStrip({
             ) : full ? (
                 <span className="m3-body-medium ml-auto truncate text-on-surface-variant">
                     {t.voice.noteLimit}
+                </span>
+            ) : call ? (
+                <span className="ml-auto flex min-w-0 items-center gap-1.5 text-on-surface-variant">
+                    <Icon name="call" filled size={18} />
+                    <span className="m3-body-medium truncate">
+                        {t.voice.onCall}
+                    </span>
                 </span>
             ) : (
                 <Waveform level={level} running={listening} />
@@ -1495,6 +1504,7 @@ export function Add() {
                                     phase={phase}
                                     level={voice.micLevel}
                                     full={voice.isNoteFull}
+                                    call={barMode === 'live'}
                                 />
                             )}
                         </div>

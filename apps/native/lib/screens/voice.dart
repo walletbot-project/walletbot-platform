@@ -2629,6 +2629,27 @@ class _ControlBar extends StatelessWidget {
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       )
+                    : mode == _BarMode.live
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Icon(
+                            Icons.call_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              l10n.voiceOnCall,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
                     : _Waveform(level: level, running: listening),
               ),
               const SizedBox(width: 8),

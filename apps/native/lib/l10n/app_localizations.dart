@@ -3209,19 +3209,19 @@ abstract class AppLocalizations {
   /// No description provided for @voiceStartTalking.
   ///
   /// In en, this message translates to:
-  /// **'Talk live'**
+  /// **'Start call'**
   String get voiceStartTalking;
 
   /// No description provided for @voiceLiveHint.
   ///
   /// In en, this message translates to:
-  /// **'Like a phone call (hands-free)'**
+  /// **'Hands-free mode'**
   String get voiceLiveHint;
 
   /// No description provided for @voiceExitLive.
   ///
   /// In en, this message translates to:
-  /// **'Exit live mode'**
+  /// **'End call'**
   String get voiceExitLive;
 
   /// No description provided for @voiceRecordVoiceNote.
@@ -3241,6 +3241,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'5 minute limit'**
   String get voiceNoteLimit;
+
+  /// No description provided for @voiceOnCall.
+  ///
+  /// In en, this message translates to:
+  /// **'On a call'**
+  String get voiceOnCall;
 
   /// No description provided for @voiceRecordHint.
   ///

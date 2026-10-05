@@ -107,7 +107,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.text('Talk live'));
+    await tester.tap(find.text('Start call'));
     await tester.pump();
     await tester.pump();
     expect(captureCalls, ['listen']);
@@ -174,7 +174,7 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.text('Talk live'));
+      await tester.tap(find.text('Start call'));
       await tester.pump();
       binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -260,7 +260,7 @@ void main() {
         await chunk(tester, [1, 0]);
         switch (cancel) {
           case 'tap':
-            await tester.tap(find.byTooltip('Exit live mode'));
+            await tester.tap(find.byTooltip('End call'));
           case 'background':
             binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
           case 'error':

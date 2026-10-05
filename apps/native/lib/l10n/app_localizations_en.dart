@@ -1757,13 +1757,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Tell me about an expense or ask about your accounts';
 
   @override
-  String get voiceStartTalking => 'Talk live';
+  String get voiceStartTalking => 'Start call';
 
   @override
-  String get voiceLiveHint => 'Like a phone call (hands-free)';
+  String get voiceLiveHint => 'Hands-free mode';
 
   @override
-  String get voiceExitLive => 'Exit live mode';
+  String get voiceExitLive => 'End call';
 
   @override
   String get voiceRecordVoiceNote => 'Record a voice note';
@@ -1773,6 +1773,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceNoteLimit => '5 minute limit';
+
+  @override
+  String get voiceOnCall => 'On a call';
 
   @override
   String get voiceRecordHint => 'Tap or hold to record a voice note';

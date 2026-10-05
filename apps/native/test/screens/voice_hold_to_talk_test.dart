@@ -147,15 +147,15 @@ void main() {
       find.text('Tell me about an expense or ask about your accounts'),
       findsOneWidget,
     );
-    expect(find.text('Talk live'), findsOneWidget);
-    expect(find.text('Like a phone call (hands-free)'), findsOneWidget);
-    expect(find.byTooltip('Talk live'), findsOneWidget);
+    expect(find.text('Start call'), findsOneWidget);
+    expect(find.text('Hands-free mode'), findsOneWidget);
+    expect(find.byTooltip('Start call'), findsOneWidget);
     expect(find.text('Tap or hold to record a voice note'), findsOneWidget);
     expect(find.byType(ActionChip), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'café');
     await tester.pump();
-    expect(find.byTooltip('Talk live'), findsNothing);
+    expect(find.byTooltip('Start call'), findsNothing);
     expect(find.text('Tap or hold to record a voice note'), findsNothing);
   });
 
@@ -329,6 +329,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.byTooltip('Send'), findsOneWidget);
+      expect(find.text('On a call'), findsNothing);
 
       await tester.tap(find.byTooltip('Discard voice note'));
       await settleCapture(tester);
@@ -357,14 +358,15 @@ void main() {
       await settleCapture(tester);
       expect(captureCalls, ['listen', 'cancel']);
 
-      await tester.tap(find.byTooltip('Talk live'));
+      await tester.tap(find.byTooltip('Start call'));
       await tester.pump();
       await tester.pump();
       expect(command.modes, [VoiceConversationMode.live]);
       expect(captureCalls, ['listen', 'cancel', 'listen']);
-      expect(find.byTooltip('Exit live mode'), findsOneWidget);
+      expect(find.byTooltip('End call'), findsOneWidget);
       expect(find.byTooltip('Send'), findsNothing);
       expect(find.byTooltip('Discard voice note'), findsNothing);
+      expect(find.text('On a call'), findsOneWidget);
       expect(find.text("I'm listening"), findsOneWidget);
 
       await tester.tap(find.text('Pause'));
@@ -372,14 +374,14 @@ void main() {
       expect(find.text('Mic paused'), findsOneWidget);
       expect(find.text('Resume'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Exit live mode'));
+      await tester.tap(find.byTooltip('End call'));
       await settleCapture(tester);
       expect(command.modes, [
         VoiceConversationMode.live,
         VoiceConversationMode.chat,
       ]);
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.byTooltip('Exit live mode'), findsNothing);
+      expect(find.byTooltip('End call'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
@@ -391,7 +393,7 @@ void main() {
       final command = _Command();
       await tester.pumpWidget(app(command));
       await tester.pump();
-      await tester.tap(find.text('Talk live'));
+      await tester.tap(find.text('Start call'));
       await tester.pump();
       await tester.pump();
       command.ready();
@@ -421,7 +423,7 @@ void main() {
       final command = _Command();
       await tester.pumpWidget(app(command));
       await tester.pump();
-      await tester.tap(find.text('Talk live'));
+      await tester.tap(find.text('Start call'));
       await tester.pump();
       await tester.pump();
       command.ready();
@@ -437,7 +439,7 @@ void main() {
       await tester.pump();
       expect(find.text('Getting the mic ready'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Exit live mode'));
+      await tester.tap(find.byTooltip('End call'));
       await settleCapture(tester);
       permission.complete({7: 1});
       await settleCapture(tester);
@@ -561,7 +563,7 @@ void main() {
     );
     await tester.pump();
     expect(find.text('Tap or hold to record a voice note'), findsNothing);
-    expect(find.text('Talk live'), findsOneWidget);
+    expect(find.text('Start call'), findsOneWidget);
   });
 
   for (final debug in [false, true]) {
@@ -588,7 +590,7 @@ void main() {
           ),
         );
         await tester.pump();
-        await tester.tap(find.text('Talk live'));
+        await tester.tap(find.text('Start call'));
         await tester.pump();
         await tester.pump();
         command.ready();
