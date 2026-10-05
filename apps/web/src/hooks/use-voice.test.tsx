@@ -141,13 +141,22 @@ async function establish() {
         await opening
     })
 }
+const audioFrame = {
+    audio: expect.objectContaining({ data: expect.any(String) }),
+}
+const realtimeInputs = () =>
+    session.sendRealtimeInput.mock.calls.map(([input]) =>
+        'audio' in input ? 'audio' : Object.keys(input)[0],
+    )
 it('buffers speech before setup, sends it once, and advertises the new web version', async () => {
     await start()
     expect(voice.isMicOn).toBe(true)
     expect(voice.isConnecting).toBe(true)
+    expect(voice.mode).toBe('chat')
     expect(f.client.action).toHaveBeenCalledWith(expect.anything(), {
         platform: 'web',
         appVersion: '0.5.1',
+        turnDetection: 'manual',
     })
     await act(async () => {
         onAudio(new Float32Array([0.5, 0.1]))
@@ -155,21 +164,160 @@ it('buffers speech before setup, sends it once, and advertises the new web versi
     expect(session.sendRealtimeInput).not.toHaveBeenCalled()
     await establish()
     expect(voice.isConnected).toBe(true)
-    expect(session.sendRealtimeInput).toHaveBeenCalledOnce()
+    expect(realtimeInputs()).toEqual(['activityStart', 'audio'])
     await act(async () => {
         onAudio(new Float32Array([0.2]))
     })
-    expect(session.sendRealtimeInput).toHaveBeenCalledTimes(2)
+    expect(realtimeInputs()).toEqual(['activityStart', 'audio', 'audio'])
 })
-it('cancellation while connecting discards buffered speech and prevents restart', async () => {
+it('a chat note released while connecting is sent and closed once connected', async () => {
     await start()
     await act(async () => {
         onAudio(new Float32Array([0.5]))
         voice.setMicOn(false)
     })
+    expect(voice.isMicOn).toBe(false)
     await establish()
     expect(voice.isMicOn).toBe(false)
+    expect(realtimeInputs()).toEqual(['activityStart', 'audio', 'activityEnd'])
+    expect(session.sendRealtimeInput).toHaveBeenNthCalledWith(2, audioFrame)
+})
+it('live mode muted while connecting discards buffered speech', async () => {
+    await act(async () => {
+        opening = voice.enterLive()
+        await tick()
+    })
+    expect(voice.mode).toBe('live')
+    expect(f.client.action).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ turnDetection: 'auto' }),
+    )
+    await act(async () => {
+        onAudio(new Float32Array([0.5]))
+        voice.setMicOn(false)
+    })
+    await establish()
     expect(session.sendRealtimeInput).not.toHaveBeenCalled()
+})
+it('a chat note opens with activityStart, ends with activityEnd and never relies on the server to end it', async () => {
+    await start()
+    await establish()
+    await act(async () => {
+        onAudio(new Float32Array([0.2]))
+        onAudio(new Float32Array([0.3]))
+        voice.setMicOn(false)
+    })
+    expect(realtimeInputs()).toEqual([
+        'activityStart',
+        'audio',
+        'audio',
+        'activityEnd',
+    ])
+    await act(async () => {
+        await voice.openMic()
+        onAudio(new Float32Array([0.2]))
+    })
+    expect(realtimeInputs().slice(4)).toEqual(['activityStart', 'audio'])
+    expect(realtimeInputs()).not.toContain('audioStreamEnd')
+})
+it('pausing a chat note keeps its turn open until it is sent', async () => {
+    await start()
+    await establish()
+    await act(async () => {
+        onAudio(new Float32Array([0.2]))
+        voice.pauseMic()
+    })
+    expect(voice.isMicOn).toBe(false)
+    expect(voice.isMicCaptureActive).toBe(false)
+    expect(realtimeInputs()).toEqual(['activityStart', 'audio'])
+    await act(async () => {
+        await voice.openMic()
+        onAudio(new Float32Array([0.3]))
+        voice.setMicOn(false)
+    })
+    expect(realtimeInputs()).toEqual([
+        'activityStart',
+        'audio',
+        'audio',
+        'activityEnd',
+    ])
+})
+it('entering live replaces the chat socket quietly, seeded from the conversation', async () => {
+    await start('text')
+    await establish()
+    await act(async () => {
+        onmessage({
+            serverContent: { inputTranscription: { text: 'gasté 500' } },
+        })
+        onmessage({
+            serverContent: {
+                outputTranscription: { text: 'Anotado' },
+                turnComplete: true,
+            },
+        })
+    })
+    const notices = () => voice.messages.filter((m) => m.kind === 'system')
+    const before = notices().length
+    session.sendClientContent.mockClear()
+    await act(async () => {
+        opening = voice.enterLive()
+        await tick()
+    })
+    expect(session.close).toHaveBeenCalledOnce()
+    expect(voice.mode).toBe('live')
+    expect(voice.isConnecting).toBe(true)
+    expect(f.client.action).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ turnDetection: 'auto' }),
+    )
+    // Speech during the rotation waits for the new socket.
+    await act(async () => {
+        onAudio(new Float32Array([0.4]))
+    })
+    expect(session.sendRealtimeInput).not.toHaveBeenCalled()
+    await establish()
+    expect(voice.isConnected).toBe(true)
+    expect(session.sendClientContent).toHaveBeenCalledWith(
+        expect.objectContaining({ turnComplete: false }),
+    )
+    expect(realtimeInputs()).toEqual(['audio'])
+    expect(notices()).toHaveLength(before)
+    expect(voice.messages.filter((m) => m.kind !== 'system')).toHaveLength(2)
+    expect(f.recorder.record).toHaveBeenCalledWith(
+        'mode_changed',
+        'client',
+        { from: 'chat', to: 'live' },
+        undefined,
+    )
+
+    await act(async () => {
+        voice.exitLive()
+        await tick()
+    })
+    expect(realtimeInputs()).toEqual(['audio', 'audioStreamEnd'])
+    expect(voice.mode).toBe('chat')
+    expect(voice.isMicOn).toBe(false)
+    expect(session.close).toHaveBeenCalledTimes(2)
+    expect(f.client.action).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ turnDetection: 'manual' }),
+    )
+})
+it('the explicit End returns the next conversation to chat mode', async () => {
+    await act(async () => {
+        opening = voice.enterLive()
+        await tick()
+    })
+    await establish()
+    await act(async () => {
+        voice.disconnect()
+    })
+    expect(voice.mode).toBe('chat')
+    await start('text')
+    expect(f.client.action).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ turnDetection: 'manual' }),
+    )
 })
 it('silent text never acquires audio and preserves both usage and content in combined messages', async () => {
     await start('text')
@@ -436,7 +584,7 @@ it('times a turn typed before setup from its delayed send', async () => {
         mode: 'text',
     })
 })
-it('times a spoken turn from the audio stream end to the first audio chunk, even unplayed', async () => {
+it('times a spoken turn from the end of the turn to the first audio chunk, even unplayed', async () => {
     await start()
     await establish()
     await act(async () => {
@@ -444,7 +592,7 @@ it('times a spoken turn from the audio stream end to the first audio chunk, even
         voice.setMicOn(false)
     })
     expect(session.sendRealtimeInput).toHaveBeenLastCalledWith({
-        audioStreamEnd: true,
+        activityEnd: {},
     })
     await act(async () => {
         voice.detach()

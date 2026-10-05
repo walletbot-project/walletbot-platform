@@ -32,9 +32,31 @@ class _Command extends DebugVoiceExpenseCommand {
   @override
   Stream<VoiceEvent> get events => controller.stream;
   @override
-  Future<void> start({bool respondWithAudio = true}) => connecting.future;
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) => connecting.future;
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {}
+  int turnsEnded = 0;
+  @override
+  Future<void> endTurn() async {
+    if (connected) turnsEnded += 1;
+  }
+
+  final modes = <VoiceConversationMode>[];
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {
+    if (next == mode) return;
+    mode = next;
+    modes.add(next);
+    connected = false;
+    scheduleMicrotask(() {
+      connected = true;
+      controller.add(VoiceConnectedEvent());
+    });
+  }
+
   @override
   void recordClientEvent(
     String action, [
@@ -94,8 +116,7 @@ void main() {
     home: VoiceScreen(commandFactory: _Factory(command)),
   );
 
-  // The welcome view's start button carries a mic too; the composer's comes
-  // after it in the tree.
+  // Resume carries a mic too; the composer's comes after it in the tree.
   Finder composerMic() => find.byIcon(Icons.mic_rounded).last;
 
   Future<void> settleCapture(WidgetTester tester) async {
@@ -114,13 +135,16 @@ void main() {
       find.text('Tell me about an expense or ask about your accounts'),
       findsOneWidget,
     );
-    expect(find.text('Start talking'), findsOneWidget);
-    expect(find.text('Hold to talk'), findsOneWidget);
+    expect(find.text('Talk live'), findsOneWidget);
+    expect(find.text('Like a phone call (hands-free)'), findsOneWidget);
+    expect(find.byTooltip('Talk live'), findsOneWidget);
+    expect(find.text('Tap or hold to record a voice note'), findsOneWidget);
     expect(find.byType(ActionChip), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'café');
     await tester.pump();
-    expect(find.text('Hold to talk'), findsNothing);
+    expect(find.byTooltip('Talk live'), findsNothing);
+    expect(find.text('Tap or hold to record a voice note'), findsNothing);
   });
 
   testWidgets(
@@ -137,7 +161,7 @@ void main() {
       await tester.pump();
       expect(captureCalls, ['listen']);
       expect(find.text('Slide up to lock'), findsOneWidget);
-      expect(find.text('Hold to talk'), findsNothing);
+      expect(find.text('Tap or hold to record a voice note'), findsNothing);
       expect(find.byType(TextField), findsNothing);
 
       await gesture.up();
@@ -165,14 +189,14 @@ void main() {
       await tester.pump();
       expect(captureCalls, ['listen']);
       expect(find.text('Pause'), findsOneWidget);
-      expect(find.byTooltip('Switch to text'), findsOneWidget);
+      expect(find.byTooltip('Send'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
   testWidgets(
-    'sliding up locks the mic open until switching to text',
+    'sliding up locks the mic open until the note is sent',
     (tester) async {
       await tester.pumpWidget(app(_Command()));
       await tester.pump();
@@ -192,7 +216,7 @@ void main() {
       await settleCapture(tester);
       expect(captureCalls, ['listen']);
 
-      await tester.tap(find.byTooltip('Switch to text'));
+      await tester.tap(find.byTooltip('Send'));
       await settleCapture(tester);
       expect(captureCalls, ['listen', 'cancel']);
       expect(find.byType(TextField), findsOneWidget);
@@ -202,12 +226,90 @@ void main() {
   );
 
   testWidgets(
-    'pause closes the mic and resume reopens it',
+    'pausing a locked note keeps its turn open until Send',
     (tester) async {
       final command = _Command();
       await tester.pumpWidget(app(command));
       await tester.pump();
-      await tester.tap(find.text('Start talking'));
+      await tester.tap(composerMic());
+      await tester.pump();
+      await tester.pump();
+      command.ready();
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Pause'));
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel']);
+      expect(find.text('Resume'), findsOneWidget);
+      expect(command.turnsEnded, 0);
+
+      await tester.tap(find.text('Resume'));
+      await tester.pump();
+      await tester.pump();
+      expect(captureCalls, ['listen', 'cancel', 'listen']);
+      expect(command.turnsEnded, 0);
+
+      await tester.tap(find.byTooltip('Send'));
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel', 'listen', 'cancel']);
+      expect(command.turnsEnded, 1);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(command.modes, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'the composer enters live mode and X returns to the chat',
+    (tester) async {
+      final command = _Command();
+      await tester.pumpWidget(app(command));
+      await tester.pump();
+      await tester.tap(composerMic());
+      await tester.pump();
+      await tester.pump();
+      command.ready();
+      await tester.pump();
+      await tester.tap(find.byTooltip('Send'));
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel']);
+
+      await tester.tap(find.byTooltip('Talk live'));
+      await tester.pump();
+      await tester.pump();
+      expect(command.modes, [VoiceConversationMode.live]);
+      expect(captureCalls, ['listen', 'cancel', 'listen']);
+      expect(find.byTooltip('Exit live mode'), findsOneWidget);
+      expect(find.byTooltip('Send'), findsNothing);
+      expect(find.text("I'm listening"), findsOneWidget);
+
+      await tester.tap(find.text('Pause'));
+      await settleCapture(tester);
+      expect(find.text('Mic paused'), findsOneWidget);
+      expect(find.text('Resume'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Exit live mode'));
+      await settleCapture(tester);
+      expect(command.modes, [
+        VoiceConversationMode.live,
+        VoiceConversationMode.chat,
+      ]);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byTooltip('Exit live mode'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'in live mode, pause mutes and resume reopens the mic',
+    (tester) async {
+      final command = _Command();
+      await tester.pumpWidget(app(command));
+      await tester.pump();
+      await tester.tap(find.text('Talk live'));
       await tester.pump();
       await tester.pump();
       command.ready();
@@ -232,12 +334,12 @@ void main() {
   );
 
   testWidgets(
-    'switching to text while the mic is still opening closes it',
+    'leaving live mode while the mic is still opening closes it',
     (tester) async {
       final command = _Command();
       await tester.pumpWidget(app(command));
       await tester.pump();
-      await tester.tap(find.text('Start talking'));
+      await tester.tap(find.text('Talk live'));
       await tester.pump();
       await tester.pump();
       command.ready();
@@ -253,7 +355,7 @@ void main() {
       await tester.pump();
       expect(find.text('Getting the mic ready'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Switch to text'));
+      await tester.tap(find.byTooltip('Exit live mode'));
       await settleCapture(tester);
       permission.complete({7: 1});
       await settleCapture(tester);
@@ -356,6 +458,30 @@ void main() {
     );
   });
 
+  testWidgets('agentRecordHint off hides the voice note hint', (tester) async {
+    final config = AppConfigController(
+      httpClient: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'flags': {'agentRecordHint': false},
+          }),
+          200,
+        ),
+      ),
+    );
+    addTearDown(config.dispose);
+    await config.loadAccount(_localAccount);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppConfigController>.value(
+        value: config,
+        child: app(_Command()),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Tap or hold to record a voice note'), findsNothing);
+    expect(find.text('Talk live'), findsOneWidget);
+  });
+
   for (final debug in [false, true]) {
     testWidgets(
       'tool cards show only with debugToolCalls on (debug: $debug)',
@@ -380,7 +506,7 @@ void main() {
           ),
         );
         await tester.pump();
-        await tester.tap(find.text('Start talking'));
+        await tester.tap(find.text('Talk live'));
         await tester.pump();
         await tester.pump();
         command.ready();

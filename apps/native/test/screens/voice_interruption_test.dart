@@ -252,9 +252,15 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   Future<void> dispose() async {}
 
   @override
-  Future<void> endAudioStream() async {
+  Future<void> endTurn() async {
     audioStreamEnded = true;
   }
+
+  @override
+  VoiceConversationMode get mode => VoiceConversationMode.chat;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {}
 
   @override
   Future<void> interruptAgentResponse({required String reason}) async {
@@ -278,7 +284,10 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   }
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {}
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {}
 
   @override
   Future<VoiceExpenseCommandResult> stop() async =>

@@ -1759,10 +1759,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get voiceWelcome => 'Contame un gasto o preguntame por tus cuentas';
 
   @override
-  String get voiceStartTalking => 'Empezar a hablar';
+  String get voiceStartTalking => 'Hablar en vivo';
 
   @override
-  String get voiceHoldHint => 'Apretá una vez o mantené apretado para hablar';
+  String get voiceLiveHint => 'Como una llamada (manos libres)';
+
+  @override
+  String get voiceExitLive => 'Salir del modo en vivo';
+
+  @override
+  String get voiceRecordVoiceNote => 'Grabar un audio';
+
+  @override
+  String get voiceRecordHint => 'Tocá o mantené apretado para grabar un audio';
 
   @override
   String get voicePreparingMic => 'Preparando el micrófono';
@@ -1781,9 +1790,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get voiceResume => 'Continuar';
-
-  @override
-  String get voiceSwitchToText => 'Pasar a texto';
 
   @override
   String get voiceSend => 'Enviar';

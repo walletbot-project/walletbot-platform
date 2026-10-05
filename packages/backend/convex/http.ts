@@ -8,7 +8,7 @@ import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
 import { registerExchangeRateRoutes } from './exchangeRates/http'
 import { jsonResponse } from './httpHelpers'
-import { createLiveToken } from './live/createToken'
+import { createLiveToken, type LiveTurnDetection } from './live/createToken'
 import type { LiveTokenError } from './live/helpers'
 import { registerSupportRoutes } from './support/http'
 import { registerTelemetryRoutes } from './telemetry/http'
@@ -76,6 +76,7 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
         timezone?: string
         timezoneOffsetMinutes?: number
         context?: unknown
+        turnDetection?: LiveTurnDetection
     } = {}
     let deviceId: string | undefined
     try {
@@ -104,6 +105,11 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
                         ? record.timezoneOffsetMinutes
                         : undefined,
                 context: record.context,
+                turnDetection:
+                    record.turnDetection === 'manual' ||
+                    record.turnDetection === 'auto'
+                        ? record.turnDetection
+                        : undefined,
             }
             deviceId =
                 typeof record.deviceId === 'string'

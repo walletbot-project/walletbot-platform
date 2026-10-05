@@ -79,6 +79,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   static const _startupAudioLimit = MicCapture.sampleRate * 2 * 5;
   List<Uint8List>? _startupAudio;
   int _startupAudioBytes = 0;
+  // A chat note released before the socket was ready: sent and closed on
+  // connect instead of being dropped with the mic.
+  bool _startupAudioEnded = false;
   bool _resumeMicrophone = false;
   bool _foreground = true;
   int _lifecycleGeneration = 0;
@@ -90,7 +93,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _aiConsentAsked = false;
   double _level = 0;
 
-  bool _handsFree = false;
+  bool _locked = false;
+  // Hands-free conversation. The command's mode follows it, but this flag
+  // flips first so the bar never flashes the composer while it switches.
+  bool _live = false;
   bool _holding = false;
   bool _paused = false;
   final ValueNotifier<double> _holdDrag = ValueNotifier(0);
@@ -112,6 +118,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _command = active;
       _commandEventsSubscription = active.events.listen(_onVoiceEvent);
       _isConnected = active.isConnected;
+      _live = active.mode == VoiceConversationMode.live;
       _isReconnecting = !active.isConnected;
       active.recordClientEvent('screen_attached');
       // Don't sit out a pending backoff delay while the user is looking at
@@ -322,7 +329,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       ),
     });
     unawaited(_command?.interruptAgentResponse(reason: 'screen_detached'));
-    unawaited(_command?.endAudioStream());
+    unawaited(_command?.endTurn());
     unawaited(_audioSubscription?.cancel());
     unawaited(_amplitudeSubscription?.cancel());
     unawaited(_commandEventsSubscription?.cancel());
@@ -346,33 +353,43 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final startedComposing = isComposing && !_wasTextComposing;
     _wasTextComposing = isComposing;
     setState(() {});
-    if (startedComposing && _startupAudio != null) {
-      unawaited(_stopMicCapture());
+    if (startedComposing && _startupAudio != null && !_startupAudioEnded) {
+      // A chat note recorded while connecting is sent, not dropped.
+      unawaited(_stopMicCapture(keepStartupTurn: !_live));
     }
     if (startedComposing && _isConnected && _micActive) {
       // User started typing while the mic was open: we already stop
       // forwarding audio chunks via _isMicEffectivelyMuted, but the
-      // server still has buffered audio for this turn. Flush it so the
+      // server still has buffered audio for this turn. End it so the
       // next utterance starts clean once the user goes back to voice.
-      unawaited(_command?.endAudioStream());
+      unawaited(_command?.endTurn());
       _recordMuteEvent('text_composing');
     }
     if (startedComposing) _switchToTextOnTyping();
   }
 
   /// The hidden text field keeps the keyboard up while the mic is open, so
-  /// typing is the same as the switch-to-text button: the mic closes and the
-  /// composer comes back with what was typed.
+  /// typing is the same as the locked bar's trailing button: a chat note is
+  /// sent, live mode ends, and the composer comes back with what was typed.
   void _switchToTextOnTyping() {
-    if (!_handsFree && !_holding && !_paused && !_micActive && !_micStarting) {
+    if (_live) {
+      _onExitLivePressed();
       return;
     }
+    if (!_locked && !_holding && !_paused && !_micActive && !_micStarting) {
+      return;
+    }
+    final wasPaused = _paused;
     setState(() {
-      _handsFree = false;
+      _locked = false;
       _holding = false;
       _paused = false;
     });
-    if (_micActive || _micStarting) unawaited(_stopMicCapture());
+    if (_micActive || _micStarting) {
+      unawaited(_stopMicCapture(keepStartupTurn: true));
+    } else if (wasPaused) {
+      unawaited(_command?.endTurn());
+    }
   }
 
   // -- Voice button gestures ------------------------------------------------
@@ -380,12 +397,19 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   void _handleVoiceTap() {
     _resumeMicrophone = false;
     if (_isStarting) {
-      unawaited(_stopMicCapture());
+      unawaited(_stopMicCapture(keepStartupTurn: !_live));
       return;
     }
     if (_isTextComposing) return;
     if (!_isConnected) {
-      unawaited(_startSession(mode: _SessionMode.audio));
+      unawaited(
+        _startSession(
+          mode: _SessionMode.audio,
+          conversation: _live
+              ? VoiceConversationMode.live
+              : VoiceConversationMode.chat,
+        ),
+      );
       return;
     }
     if (!_micActive) {
@@ -428,7 +452,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     });
     _recordMuteEvent('long_press_end');
     if (wasOn || _micStarting) {
-      unawaited(_stopMicCapture());
+      unawaited(_stopMicCapture(keepStartupTurn: !_live));
     }
   }
 
@@ -439,7 +463,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     if (_isTextComposing) return;
     if (!_isStarting) {
       setState(() {
-        _handsFree = true;
+        _locked = true;
         _paused = false;
       });
     }
@@ -464,7 +488,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     unawaited(HapticFeedback.mediumImpact());
     setState(() {
       _holding = false;
-      _handsFree = true;
+      _locked = true;
     });
   }
 
@@ -474,9 +498,20 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _handleVoiceLongPressEnd();
   }
 
+  /// Live mode mutes, which ends the turn. A chat note only releases the
+  /// mic: its turn stays open so Resume continues it and Send ends it.
   void _onPausePressed() {
-    setState(() => _paused = true);
-    _handleVoiceTap();
+    if (_live) {
+      _handleVoiceTap();
+      return;
+    }
+    setState(() {
+      _paused = true;
+      _userMicOn = false;
+      _level = 0;
+    });
+    _recordMuteEvent('tap_pause');
+    unawaited(_stopMicCapture(endTurn: false));
   }
 
   void _onResumePressed() {
@@ -484,10 +519,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _handleVoiceTap();
   }
 
-  void _onStopPressed() {
+  void _onLockedSendPressed() {
     final micOn = _isStarting || (_micActive && _userMicOn);
+    final wasPaused = _paused;
     setState(() {
-      _handsFree = false;
+      _locked = false;
       _paused = false;
     });
     if (micOn) {
@@ -495,18 +531,67 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     } else if (_micStarting || _micActive) {
       // A tap here would open the mic again instead of closing it.
       _resumeMicrophone = false;
-      unawaited(_stopMicCapture());
+      unawaited(_stopMicCapture(keepStartupTurn: true));
+    } else if (wasPaused) {
+      unawaited(_command?.endTurn());
     }
   }
 
+  void _onEnterLivePressed() {
+    if (_isStarting || _isTextComposing) return;
+    setState(() {
+      _live = true;
+      _locked = false;
+      _holding = false;
+      _paused = false;
+    });
+    final command = _command;
+    if (command == null || !_isConnected) {
+      unawaited(
+        _startSession(
+          mode: _SessionMode.audio,
+          conversation: VoiceConversationMode.live,
+        ),
+      );
+      return;
+    }
+    // Speech during the switch waits for the new socket.
+    setState(() => _isConnected = false);
+    _startupAudio = [];
+    _startupAudioBytes = 0;
+    _startupAudioEnded = false;
+    _setAudioPlaybackEnabled(true);
+    unawaited(command.switchMode(VoiceConversationMode.live));
+    unawaited(_startMicCapture(turnOn: true));
+  }
+
+  void _onExitLivePressed() {
+    if (!_live) return;
+    _resumeMicrophone = false;
+    setState(() {
+      _live = false;
+      _userMicOn = false;
+      _level = 0;
+      if (_command?.isActive ?? false) _isConnected = false;
+    });
+    unawaited(_exitLive());
+  }
+
+  Future<void> _exitLive() async {
+    // Ends the live turn on the live socket before it is replaced.
+    await _stopMicCapture();
+    await _command?.switchMode(VoiceConversationMode.chat);
+  }
+
   void _onSendPressed() {
-    setState(() => _handsFree = false);
+    setState(() => _locked = false);
     _handleSendText();
   }
 
   void _onEndPressed() {
     setState(() {
-      _handsFree = false;
+      _locked = false;
+      _live = false;
       _holding = false;
       _paused = false;
     });
@@ -644,7 +729,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     Navigator.of(context).maybePop();
   }
 
-  Future<void> _startSession({required _SessionMode mode}) async {
+  Future<void> _startSession({
+    required _SessionMode mode,
+    VoiceConversationMode conversation = VoiceConversationMode.chat,
+  }) async {
     if (_isStarting || _isConnected) return;
     final l10n = context.l10n;
     final micGeneration = _micGeneration;
@@ -673,10 +761,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         setState(() => _isStarting = false);
         return;
       }
-      final connecting = command.start(respondWithAudio: respondWithAudio);
+      final connecting = command.start(
+        respondWithAudio: respondWithAudio,
+        mode: conversation,
+      );
       if (mode == _SessionMode.audio) {
         _startupAudio = [];
         _startupAudioBytes = 0;
+        _startupAudioEnded = false;
         await Future.wait([connecting, _startMicCapture(turnOn: true)]);
       } else {
         await connecting;
@@ -832,18 +924,33 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _stopMicCapture() {
+  /// Releases the mic. [keepStartupTurn] is a chat note released before the
+  /// socket is ready: its buffered speech stays, marked ended, for the
+  /// connect to send. [endTurn] false leaves the turn open (a paused note).
+  Future<void> _stopMicCapture({
+    bool keepStartupTurn = false,
+    bool endTurn = true,
+  }) {
     final existing = _micStopping;
     if (existing != null) return existing;
-    final operation = _stopMicCaptureOnce();
+    final operation = _stopMicCaptureOnce(
+      keepStartupTurn: keepStartupTurn,
+      endTurn: endTurn,
+    );
     _micStopping = operation;
     return operation.whenComplete(() {
       if (identical(_micStopping, operation)) _micStopping = null;
     });
   }
 
-  Future<void> _stopMicCaptureOnce() async {
-    _startupAudio = null;
+  Future<void> _stopMicCaptureOnce({
+    required bool keepStartupTurn,
+    required bool endTurn,
+  }) async {
+    final pending = _startupAudio;
+    final keep = keepStartupTurn && pending != null && pending.isNotEmpty;
+    _startupAudio = keep ? pending : null;
+    _startupAudioEnded = keep;
     ++_micGeneration;
     final audio = _audioSubscription;
     final amplitude = _amplitudeSubscription;
@@ -864,9 +971,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // best-effort cleanup
     }
 
-    // Mic is going away entirely — flush any buffered audio on the server.
+    // Mic is going away entirely, so end the turn the server is holding.
     try {
-      await _command?.endAudioStream();
+      if (endTurn) await _command?.endTurn();
       _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
     } catch (error) {
       debugPrint('[voice] audio stream cleanup failed: $error');
@@ -922,6 +1029,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _isConnected = false;
       _isStarting = false;
       _isReconnecting = false;
+      _live = false;
       _pendingTexts.clear();
       _clearConnectionNotice();
       _finalisePending();
@@ -985,11 +1093,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
           final pending = _startupAudio;
+          final ended = _startupAudioEnded;
           _startupAudio = null;
-          if (!_isMicEffectivelyMuted && _command?.isConnected == true) {
-            for (final chunk in pending ?? <Uint8List>[]) {
+          _startupAudioEnded = false;
+          if (pending != null &&
+              (ended || !_isMicEffectivelyMuted) &&
+              _command?.isConnected == true) {
+            for (final chunk in pending) {
               unawaited(_command?.addAudioChunk(chunk));
             }
+            if (ended) unawaited(_command?.endTurn());
           }
           _flushPendingTexts();
         case VoiceDisconnectedEvent():
@@ -1304,18 +1417,29 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final phase = _paused
+    // Live mode reads its phase from the mic and connection alone, so coming
+    // back to a live conversation whose mic was released shows it paused.
+    final phase = _live
+        ? _micActive && _userMicOn
+              ? _MicPhase.listening
+              : _micStarting || _isStarting || !_isConnected
+              ? _MicPhase.opening
+              : _MicPhase.paused
+        : _paused
         ? _MicPhase.paused
         : _micActive && _userMicOn
         ? _MicPhase.listening
-        : _micStarting || (_isStarting && (_handsFree || _holding))
+        : _micStarting || (_isStarting && (_locked || _holding))
         ? _MicPhase.opening
         : _MicPhase.idle;
-    final barMode = _holding
+    final barMode = _live
+        ? _BarMode.live
+        : _holding
         ? _BarMode.holding
-        : _paused || _micActive || _micStarting || (_handsFree && _isStarting)
+        : _paused || _micActive || _micStarting || (_locked && _isStarting)
         ? _BarMode.locked
         : _BarMode.composer;
+    final canEnterLive = !_isStarting && !_isReconnecting && !_isTextComposing;
 
     final suggestionsEnabled =
         context.watch<AppConfigController?>()?.isFlagEnabled(
@@ -1338,6 +1462,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final showReportButton =
         context.watch<AppConfigController?>()?.isFlagEnabled(
           'agentReportButton',
+          orElse: true,
+        ) ??
+        true;
+    final showRecordHint =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentRecordHint',
           orElse: true,
         ) ??
         true;
@@ -1392,7 +1522,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                     phase: phase,
                     suggestions: suggestions,
                     onSuggestion: _applySuggestion,
-                    onStart: _isTextComposing ? null : _onMicPressed,
+                    onStart: canEnterLive ? _onEnterLivePressed : null,
                   )
                 : NotificationListener<UserScrollNotification>(
                     onNotification: _handleUserScroll,
@@ -1427,7 +1557,8 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             mode: barMode,
             phase: phase,
             showSpinner: _isStarting && !_micActive && !_isTextComposing,
-            showHoldHint:
+            showRecordHint:
+                showRecordHint &&
                 _items.isEmpty &&
                 barMode == _BarMode.composer &&
                 phase == _MicPhase.idle &&
@@ -1442,12 +1573,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             holdDrag: _holdDrag,
             onSendText: _onSendPressed,
             onMicTap: _onMicPressed,
+            onEnterLive: canEnterLive ? _onEnterLivePressed : null,
             onHoldStart: _onHoldStart,
             onHoldMove: _onHoldMove,
             onHoldEnd: _onHoldEnd,
             onPause: _onPausePressed,
             onResume: _onResumePressed,
-            onStop: _onStopPressed,
+            onDone: _live ? _onExitLivePressed : _onLockedSendPressed,
           ),
         ],
       ),
@@ -1530,7 +1662,7 @@ enum _SystemKind { info, success, error }
 
 enum _MicPhase { idle, opening, listening, paused }
 
-enum _BarMode { composer, holding, locked }
+enum _BarMode { composer, holding, locked, live }
 
 // =============================================================================
 // Widgets
@@ -2260,14 +2392,23 @@ class _WelcomeView extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 28),
-              FilledButton.icon(
+              FilledButton.tonalIcon(
                 onPressed: onStart,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 56),
                   padding: const EdgeInsets.symmetric(horizontal: 28),
+                  // Keep the tonal look of the composer's live button; the
+                  // global filledButtonTheme turns solid buttons turquoise.
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  foregroundColor: theme.colorScheme.onSecondaryContainer,
                 ),
-                icon: const Icon(Icons.mic_rounded),
+                icon: const Icon(Icons.graphic_eq_rounded),
                 label: Text(l10n.voiceStartTalking),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.voiceLiveHint,
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
               ),
             ],
           )
@@ -2314,7 +2455,7 @@ class _ControlBar extends StatelessWidget {
     required this.mode,
     required this.phase,
     required this.showSpinner,
-    required this.showHoldHint,
+    required this.showRecordHint,
     required this.hasText,
     required this.level,
     required this.canPause,
@@ -2325,18 +2466,19 @@ class _ControlBar extends StatelessWidget {
     required this.holdDrag,
     required this.onSendText,
     required this.onMicTap,
+    required this.onEnterLive,
     required this.onHoldStart,
     required this.onHoldMove,
     required this.onHoldEnd,
     required this.onPause,
     required this.onResume,
-    required this.onStop,
+    required this.onDone,
   });
 
   final _BarMode mode;
   final _MicPhase phase;
   final bool showSpinner;
-  final bool showHoldHint;
+  final bool showRecordHint;
   final bool hasText;
   final double level;
   final bool canPause;
@@ -2347,12 +2489,13 @@ class _ControlBar extends StatelessWidget {
   final ValueListenable<double> holdDrag;
   final VoidCallback onSendText;
   final VoidCallback onMicTap;
+  final VoidCallback? onEnterLive;
   final VoidCallback onHoldStart;
   final ValueChanged<double> onHoldMove;
   final VoidCallback onHoldEnd;
   final VoidCallback onPause;
   final VoidCallback onResume;
-  final VoidCallback onStop;
+  final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
@@ -2368,10 +2511,11 @@ class _ControlBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Offstage(
-                offstage: mode == _BarMode.locked,
+                offstage: mode == _BarMode.locked || mode == _BarMode.live,
                 child: _buildComposer(context),
               ),
-              if (mode == _BarMode.locked) _buildLocked(context),
+              if (mode == _BarMode.locked || mode == _BarMode.live)
+                _buildLocked(context),
             ],
           ),
         ),
@@ -2384,7 +2528,7 @@ class _ControlBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _HoldHint(visible: showHoldHint && !holding),
+        _RecordHint(visible: showRecordHint && !holding),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -2408,6 +2552,15 @@ class _ControlBar extends StatelessWidget {
                 ],
               ),
             ),
+            if (!holding && !hasText) ...[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: onEnterLive,
+                tooltip: context.l10n.voiceStartTalking,
+                style: IconButton.styleFrom(minimumSize: const Size.square(48)),
+                icon: const Icon(Icons.graphic_eq_rounded),
+              ),
+            ],
             const SizedBox(width: 8),
             _MicButton(
               holding: holding,
@@ -2485,14 +2638,20 @@ class _ControlBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: onStop,
-              tooltip: l10n.voiceSwitchToText,
+              onPressed: onDone,
+              tooltip: mode == _BarMode.live
+                  ? l10n.voiceExitLive
+                  : l10n.voiceSend,
               style: IconButton.styleFrom(
                 minimumSize: const Size.square(48),
                 backgroundColor: theme.colorScheme.primaryContainer,
                 foregroundColor: theme.colorScheme.onPrimaryContainer,
               ),
-              icon: const Icon(Icons.chat_rounded),
+              icon: Icon(
+                mode == _BarMode.live
+                    ? Icons.close_rounded
+                    : Icons.arrow_upward_rounded,
+              ),
             ),
           ],
         ),
@@ -2501,9 +2660,9 @@ class _ControlBar extends StatelessWidget {
   }
 }
 
-/// Points at the composer's mic, so it is clear which mic can be held.
-class _HoldHint extends StatelessWidget {
-  const _HoldHint({required this.visible});
+/// Points at the composer's mic, so it reads apart from the live button.
+class _RecordHint extends StatelessWidget {
+  const _RecordHint({required this.visible});
 
   final bool visible;
 
@@ -2531,7 +2690,7 @@ class _HoldHint extends StatelessWidget {
                   vertical: 8,
                 ),
                 child: Text(
-                  context.l10n.voiceHoldHint,
+                  context.l10n.voiceRecordHint,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onInverseSurface,
                   ),
@@ -2990,7 +3149,7 @@ class _MicButtonState extends State<_MicButton> {
     final fg = scheme.onPrimaryContainer;
     return Semantics(
       button: true,
-      label: widget.hasText ? l10n.voiceSend : l10n.voiceStartTalking,
+      label: widget.hasText ? l10n.voiceSend : l10n.voiceRecordVoiceNote,
       onTap: widget.onTap,
       child: Listener(
         onPointerDown: _onDown,

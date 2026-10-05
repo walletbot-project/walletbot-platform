@@ -505,7 +505,7 @@ function MessageView({
 // Welcome view
 
 type MicPhase = 'idle' | 'opening' | 'listening' | 'paused'
-type BarMode = 'composer' | 'holding' | 'locked'
+type BarMode = 'composer' | 'holding' | 'locked' | 'live'
 
 /**
  * The empty conversation, porting `_WelcomeView`: one line, the prompt
@@ -569,15 +569,18 @@ function WelcomeView({
                     ))}
                 </div>
             )}
-            <Button
-                variant="filled"
-                onPress={onStart}
-                isDisabled={startDisabled}
-                className="mt-7 h-14 px-7"
+            <button
+                type="button"
+                onClick={onStart}
+                disabled={startDisabled}
+                className="m3-label-large m3-state-layer mt-7 flex h-14 cursor-pointer items-center gap-2 rounded-full bg-surface-container-high px-7 text-on-surface-variant disabled:cursor-default disabled:opacity-40"
             >
-                <Icon name="mic" filled size={20} />
+                <Icon name="graphic_eq" size={20} />
                 {t.voice.startTalking}
-            </Button>
+            </button>
+            <p className="m3-body-small mt-2 text-on-surface-variant">
+                {t.voice.liveHint}
+            </p>
         </div>
     )
 }
@@ -635,15 +638,15 @@ function Composer({
     )
 }
 
-// Hold hint
+// Record hint
 
-/** Points at the composer's mic, so it is clear which mic can be held. */
-function HoldHint() {
+/** Points at the composer's mic, so it reads apart from the live button. */
+function RecordHint() {
     const t = useT()
     return (
         <div className="flex flex-col items-end">
             <span className="m3-body-small rounded-lg bg-inverse-surface px-3 py-2 text-inverse-on-surface">
-                {t.voice.holdHint}
+                {t.voice.recordHint}
             </span>
             {/* Centres the caret on the 48px mic button below. */}
             <span
@@ -654,13 +657,39 @@ function HoldHint() {
     )
 }
 
+// Live button
+
+function LiveButton({
+    onPress,
+    disabled,
+}: {
+    onPress: () => void
+    disabled: boolean
+}) {
+    const t = useT()
+    return (
+        <button
+            type="button"
+            onClick={onPress}
+            disabled={disabled}
+            aria-label={t.voice.startTalking}
+            title={t.voice.startTalking}
+            // Entering live must not pull focus out of the composer.
+            onMouseDown={(event) => event.preventDefault()}
+            className="m3-state-layer grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-surface-container-high text-on-surface-variant disabled:cursor-default disabled:opacity-40"
+        >
+            <Icon name="graphic_eq" size={24} />
+        </button>
+    )
+}
+
 // Mic button
 
 /**
  * The composer's trailing button, porting `_MicButton`: a send arrow while
- * the composer holds text, otherwise the mic. Tap opens it hands-free, press
- * and hold talks, dragging up locks it. Pointer capture keeps the drag alive
- * once the finger leaves the button.
+ * the composer holds text, otherwise the mic. Tap starts a locked voice note,
+ * press and hold records one, dragging up locks it. Pointer capture keeps the
+ * drag alive once the finger leaves the button.
  */
 function MicButton({
     holding,
@@ -744,7 +773,7 @@ function MicButton({
 
     // A tap acts on `click`, not on pointer up: acting on pointer up swaps in
     // the locked bar first, and the browser's click then lands on whatever
-    // now sits under the finger, which is the switch-to-text button.
+    // now sits under the finger, which is the locked bar's send button.
     const handleClick = () => {
         if (suppressClickRef.current) {
             suppressClickRef.current = false
@@ -773,7 +802,7 @@ function MicButton({
             {holding && <LockPill drag={holdDrag} />}
             <button
                 type="button"
-                aria-label={t.voice.startTalking}
+                aria-label={t.voice.recordVoiceNote}
                 className={cn(
                     base,
                     'touch-none transition-transform duration-150 select-none',
@@ -944,21 +973,24 @@ function Waveform({ level, running }: { level: number; running: boolean }) {
 // Locked controls
 
 function LockedControls({
+    variant,
     paused,
     canPause,
     canResume,
     onPause,
     onResume,
-    onSwitchToText,
+    onDone,
 }: {
+    variant: 'chat' | 'live'
     paused: boolean
     canPause: boolean
     canResume: boolean
     onPause: () => void
     onResume: () => void
-    onSwitchToText: () => void
+    onDone: () => void
 }) {
     const t = useT()
+    const doneLabel = variant === 'chat' ? t.voice.send : t.voice.exitLive
     const pill =
         'm3-label-large m3-state-layer flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full disabled:cursor-default disabled:opacity-40'
     return (
@@ -989,12 +1021,16 @@ function LockedControls({
             )}
             <button
                 type="button"
-                onClick={onSwitchToText}
-                aria-label={t.voice.switchToText}
-                title={t.voice.switchToText}
+                onClick={onDone}
+                aria-label={doneLabel}
+                title={doneLabel}
                 className="m3-state-layer grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-primary-container text-on-primary-container"
             >
-                <Icon name="chat" filled size={24} />
+                <Icon
+                    name={variant === 'chat' ? 'arrow_upward' : 'close'}
+                    filled
+                    size={24}
+                />
             </button>
         </div>
     )
@@ -1016,6 +1052,7 @@ export function Add() {
      * trip must not be a window where the chat has no visible way to report.
      */
     const showReportButton = flags?.agentReportButton ?? true
+    const showRecordHint = flags?.agentRecordHint ?? true
     const suggestionsEnabled = flags?.agentPromptSuggestions ?? false
     const promptSuggestions = usePromptSuggestions(suggestionsEnabled)
     const formatLocale = useFormatLocale()
@@ -1029,7 +1066,7 @@ export function Add() {
     const isComposing = text.trim().length > 0
     const composerRef = useRef<HTMLTextAreaElement>(null)
 
-    const [handsFree, setHandsFree] = useState(false)
+    const [locked, setLocked] = useState(false)
     const [holding, setHolding] = useState(false)
     const [paused, setPaused] = useState(false)
     const [openingMic, setOpeningMic] = useState(false)
@@ -1047,23 +1084,35 @@ export function Add() {
 
     // Mirrors native's `_MicPhase` and `_BarMode`: derived from the session's
     // own mic state, so a failed open or a dropped capture hides the bar.
+    // Live mode reads it from the session alone, so coming back to a live
+    // conversation whose mic was released shows it paused.
+    const live = voice.mode === 'live'
     const isListening =
         voice.isMicCaptureActive && voice.isMicOn && !isComposing
-    const phase: MicPhase = paused
-        ? 'paused'
-        : isListening
-          ? 'listening'
-          : openingMic || (voice.isConnecting && (handsFree || holding))
-            ? 'opening'
-            : 'idle'
-    const barMode: BarMode = holding
-        ? 'holding'
-        : paused ||
-            voice.isMicCaptureActive ||
-            openingMic ||
-            (handsFree && voice.isConnecting)
-          ? 'locked'
-          : 'composer'
+    const micStarting = openingMic || voice.isMicOpening
+    const phase: MicPhase = live
+        ? isListening
+            ? 'listening'
+            : micStarting || voice.isConnecting
+              ? 'opening'
+              : 'paused'
+        : paused
+          ? 'paused'
+          : isListening
+            ? 'listening'
+            : openingMic || (voice.isConnecting && (locked || holding))
+              ? 'opening'
+              : 'idle'
+    const barMode: BarMode = live
+        ? 'live'
+        : holding
+          ? 'holding'
+          : paused ||
+              voice.isMicCaptureActive ||
+              openingMic ||
+              (locked && voice.isConnecting)
+            ? 'locked'
+            : 'composer'
 
     const bottomRef = useRef<HTMLDivElement>(null)
     useEffect(() => {
@@ -1100,6 +1149,17 @@ export function Add() {
      */
     const startVoiceSession = () => {
         void voice.connect('audio')
+    }
+
+    const handleEnterLive = () => {
+        setLocked(false)
+        setHolding(false)
+        setPaused(false)
+        void voice.enterLive()
+    }
+
+    const handleExitLive = () => {
+        voice.exitLive()
     }
 
     /**
@@ -1184,7 +1244,7 @@ export function Add() {
     const handleMicPress = () => {
         if (isComposing) return
         if (!voice.isConnecting) {
-            setHandsFree(true)
+            setLocked(true)
             setPaused(false)
         }
         handleTap()
@@ -1203,7 +1263,7 @@ export function Add() {
         setHoldDrag(Math.max(-LOCK_DISTANCE, Math.min(0, dy)))
         if (dy > -LOCK_DISTANCE) return
         setHolding(false)
-        setHandsFree(true)
+        setLocked(true)
     }
 
     const handleHoldEnd = () => {
@@ -1213,34 +1273,55 @@ export function Add() {
     }
 
     const handlePause = () => {
+        if (live) {
+            voice.setMicOn(false)
+            return
+        }
         setPaused(true)
-        handleTap()
+        voice.pauseMic()
     }
 
     const handleResume = () => {
         setPaused(false)
-        handleTap()
+        if (voice.isMicCaptureActive) {
+            voice.setMicOn(true)
+            return
+        }
+        openMic()
     }
 
     /**
      * Not `handleTap`: a tap would reopen a mic that is still opening, and it
      * does nothing once the composer holds text.
      */
-    const handleSwitchToText = () => {
-        setHandsFree(false)
+    const handleLockedSend = () => {
+        setLocked(false)
         setPaused(false)
-        if (voice.isConnecting || openingMic || voice.isMicCaptureActive) {
+        if (
+            voice.isConnecting ||
+            openingMic ||
+            voice.isMicCaptureActive ||
+            paused
+        ) {
             voice.setMicOn(false)
         }
     }
 
+    const handleSwitchToText = () => {
+        if (live) {
+            handleExitLive()
+            return
+        }
+        handleLockedSend()
+    }
+
     const handleComposerSend = () => {
-        setHandsFree(false)
+        setLocked(false)
         handleSend()
     }
 
     const handleEnd = () => {
-        setHandsFree(false)
+        setLocked(false)
         setHolding(false)
         setPaused(false)
         voice.disconnect()
@@ -1330,8 +1411,8 @@ export function Add() {
                         phase={phase}
                         suggestions={suggestions}
                         onSuggestion={handleSuggestion}
-                        onStart={handleMicPress}
-                        startDisabled={isComposing}
+                        onStart={handleEnterLive}
+                        startDisabled={isComposing || voice.isConnecting}
                     />
                 ) : (
                     voice.messages.map((m) => (
@@ -1349,10 +1430,11 @@ export function Add() {
 
             <div className="shrink-0 bg-surface px-3 py-2">
                 <div className="mx-auto flex max-w-2xl flex-col gap-2">
-                    {voice.messages.length === 0 &&
+                    {showRecordHint &&
+                        voice.messages.length === 0 &&
                         barMode === 'composer' &&
                         phase === 'idle' &&
-                        !isComposing && <HoldHint />}
+                        !isComposing && <RecordHint />}
                     <div className="flex items-end gap-2">
                         <div className="relative min-w-0 flex-1">
                             {/* Hidden, not unmounted, while the mic is open:
@@ -1383,7 +1465,13 @@ export function Add() {
                                 />
                             )}
                         </div>
-                        {barMode !== 'locked' && (
+                        {barMode === 'composer' && !isComposing && (
+                            <LiveButton
+                                onPress={handleEnterLive}
+                                disabled={voice.isConnecting}
+                            />
+                        )}
+                        {(barMode === 'composer' || barMode === 'holding') && (
                             <MicButton
                                 holding={barMode === 'holding'}
                                 showSpinner={
@@ -1400,18 +1488,23 @@ export function Add() {
                             />
                         )}
                     </div>
-                    {barMode === 'locked' && (
+                    {(barMode === 'locked' || barMode === 'live') && (
                         <LockedControls
+                            variant={barMode === 'live' ? 'live' : 'chat'}
                             paused={phase === 'paused'}
                             canPause={
                                 voice.isConnected &&
                                 voice.isMicCaptureActive &&
                                 voice.isMicOn
                             }
-                            canResume={!voice.isConnecting && !openingMic}
+                            canResume={!voice.isConnecting && !micStarting}
                             onPause={handlePause}
                             onResume={handleResume}
-                            onSwitchToText={handleSwitchToText}
+                            onDone={
+                                barMode === 'live'
+                                    ? handleExitLive
+                                    : handleLockedSend
+                            }
                         />
                     )}
                 </div>

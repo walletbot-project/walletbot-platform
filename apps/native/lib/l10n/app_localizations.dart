@@ -3209,14 +3209,32 @@ abstract class AppLocalizations {
   /// No description provided for @voiceStartTalking.
   ///
   /// In en, this message translates to:
-  /// **'Start talking'**
+  /// **'Talk live'**
   String get voiceStartTalking;
 
-  /// No description provided for @voiceHoldHint.
+  /// No description provided for @voiceLiveHint.
   ///
   /// In en, this message translates to:
-  /// **'Press once or hold to talk'**
-  String get voiceHoldHint;
+  /// **'Like a phone call (hands-free)'**
+  String get voiceLiveHint;
+
+  /// No description provided for @voiceExitLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit live mode'**
+  String get voiceExitLive;
+
+  /// No description provided for @voiceRecordVoiceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a voice note'**
+  String get voiceRecordVoiceNote;
+
+  /// No description provided for @voiceRecordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap or hold to record a voice note'**
+  String get voiceRecordHint;
 
   /// No description provided for @voicePreparingMic.
   ///
@@ -3253,12 +3271,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Resume'**
   String get voiceResume;
-
-  /// No description provided for @voiceSwitchToText.
-  ///
-  /// In en, this message translates to:
-  /// **'Switch to text'**
-  String get voiceSwitchToText;
 
   /// No description provided for @voiceSend.
   ///

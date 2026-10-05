@@ -140,7 +140,10 @@ class _RecordingCommand implements VoiceExpenseCommand {
   String get label => 'test';
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {
     if (failStarts) throw StateError('injected start failure');
     _active = true;
   }
@@ -155,9 +158,15 @@ class _RecordingCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {}
 
   @override
-  Future<void> endAudioStream() async {
+  Future<void> endTurn() async {
     if (failCleanup) throw StateError('injected cleanup failure');
   }
+
+  @override
+  VoiceConversationMode get mode => VoiceConversationMode.chat;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {}
 
   @override
   Future<void> sendText(String text) async {

@@ -6,13 +6,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ChatMessage } from '@/hooks/use-voice'
 
 const f = vi.hoisted(() => ({
-    flags: {} as { debugToolCalls?: boolean },
+    flags: {} as { debugToolCalls?: boolean; agentRecordHint?: boolean },
     state: {
         isConnected: false,
         isConnecting: false,
         isMicCaptureActive: false,
+        isMicOpening: false,
         isMicOn: false,
         micLevel: 0,
+        mode: 'chat' as 'chat' | 'live',
     },
     voice: {
         devices: [],
@@ -24,6 +26,9 @@ const f = vi.hoisted(() => ({
         disconnect: vi.fn(),
         openMic: vi.fn(async () => {}),
         setMicOn: vi.fn(),
+        pauseMic: vi.fn(),
+        enterLive: vi.fn(async () => {}),
+        exitLive: vi.fn(),
         sendText: vi.fn(),
         setComposing: vi.fn(),
         markReported: vi.fn(),
@@ -113,8 +118,10 @@ beforeEach(() => {
         isConnected: false,
         isConnecting: false,
         isMicCaptureActive: false,
+        isMicOpening: false,
         isMicOn: false,
         micLevel: 0,
+        mode: 'chat',
     })
     f.flags = {}
     f.voice.messages = []
@@ -140,14 +147,15 @@ it('welcomes with a start button and no status pill', () => {
     expect(
         byText('Tell me about an expense or ask about your accounts'),
     ).toBeDefined()
-    expect(button('Start talking')).toBeDefined()
-    expect(byText('Hold to talk')).toBeDefined()
+    expect(button('Talk live')).toBeDefined()
+    expect(byText('Like a phone call (hands-free)')).toBeDefined()
+    expect(byText('Tap or hold to record a voice note')).toBeDefined()
     expect(byText('connecting')).toBeUndefined()
     expect(byText('idle')).toBeUndefined()
 })
 
-it('a tap starts a hands-free session', () => {
-    const mic = byLabel('Start talking')
+it('a tap starts a locked voice note', () => {
+    const mic = byLabel('Record a voice note')
     pointer(mic, 'pointerdown')
     act(() => vi.advanceTimersByTime(100))
     pointer(mic, 'pointerup')
@@ -158,13 +166,13 @@ it('a tap starts a hands-free session', () => {
     expect(f.voice.connect).toHaveBeenCalledWith('audio')
 
     setVoice({ isConnecting: true })
-    expect(byLabel('Switch to text')).toBeDefined()
+    expect(byLabel('Send')).toBeDefined()
     expect(button('Pause')?.disabled).toBe(true)
 })
 
-it('holding talks and releasing mutes through the long-press path', () => {
+it('holding records and releasing sends through the long-press path', () => {
     setVoice({ isConnected: true })
-    const mic = byLabel('Start talking')
+    const mic = byLabel('Record a voice note')
     pointer(mic, 'pointerdown', 500)
     act(() => vi.advanceTimersByTime(300))
     expect(f.voice.openMic).toHaveBeenCalledWith({ turnOn: true })
@@ -182,9 +190,9 @@ it('holding talks and releasing mutes through the long-press path', () => {
     expect(f.voice.openMic).not.toHaveBeenCalled()
 })
 
-it('sliding up locks, then pause, resume and switch to text reuse the tap path', async () => {
+it('sliding up locks; pause keeps the note open and Send ends it', async () => {
     setVoice({ isConnected: true })
-    const mic = byLabel('Start talking')
+    const mic = byLabel('Record a voice note')
     pointer(mic, 'pointerdown', 500)
     act(() => vi.advanceTimersByTime(300))
     await flush()
@@ -196,7 +204,8 @@ it('sliding up locks, then pause, resume and switch to text reuse the tap path',
 
     button('Pause')?.click()
     render()
-    expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
+    expect(f.voice.pauseMic).toHaveBeenCalledOnce()
+    expect(f.voice.setMicOn).not.toHaveBeenCalled()
     setVoice({ isMicCaptureActive: false, isMicOn: false })
     expect(byText('Mic paused')).toBeDefined()
 
@@ -208,7 +217,7 @@ it('sliding up locks, then pause, resume and switch to text reuse the tap path',
     setVoice({ isMicCaptureActive: true, isMicOn: true })
 
     f.voice.setMicOn.mockClear()
-    byLabel('Switch to text').click()
+    byLabel('Send').click()
     render()
     expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
     setVoice({ isMicCaptureActive: false, isMicOn: false })
@@ -220,13 +229,13 @@ it('keeps the composer focused with the mic open and switches to text on typing'
     if (!textarea) throw new Error('no composer')
     act(() => textarea.focus())
 
-    const mic = byLabel('Start talking')
+    const mic = byLabel('Record a voice note')
     pointer(mic, 'pointerdown')
     pointer(mic, 'pointerup')
     act(() => mic.click())
     expect(f.voice.connect).toHaveBeenCalledWith('audio')
     setVoice({ isConnecting: true })
-    expect(byLabel('Switch to text')).toBeDefined()
+    expect(byLabel('Send')).toBeDefined()
     expect(container.querySelector('textarea')).toBe(textarea)
     expect(document.activeElement).toBe(textarea)
 
@@ -256,9 +265,9 @@ it('typing while the mic is still opening stops it and brings the composer back'
     const textarea = container.querySelector('textarea')
     if (!textarea) throw new Error('no composer')
 
-    act(() => byLabel('Start talking').click())
+    act(() => byLabel('Record a voice note').click())
     expect(f.voice.openMic).toHaveBeenCalledWith({ turnOn: true })
-    expect(byLabel('Switch to text')).toBeDefined()
+    expect(byLabel('Send')).toBeDefined()
 
     const setValue = Object.getOwnPropertyDescriptor(
         HTMLTextAreaElement.prototype,
@@ -272,6 +281,76 @@ it('typing while the mic is still opening stops it and brings the composer back'
     await act(async () => opened())
     expect(container.querySelector('.sr-only')).toBeNull()
     expect(textarea.value).toBe('café')
+})
+
+it('the welcome button and the composer button both enter live mode', () => {
+    act(() => button('Talk live')?.click())
+    expect(f.voice.enterLive).toHaveBeenCalledOnce()
+    act(() => byLabel('Talk live').click())
+    expect(f.voice.enterLive).toHaveBeenCalledTimes(2)
+    expect(f.voice.connect).not.toHaveBeenCalled()
+
+    // No second session while one is still connecting.
+    setVoice({ isConnecting: true })
+    expect(byLabel('Talk live').disabled).toBe(true)
+})
+
+it('live mode mutes with Pause and leaves with X, keeping the chat', () => {
+    f.voice.messages = [
+        { kind: 'user', id: 'u1', at: new Date(), text: 'hola', isFinal: true },
+    ]
+    setVoice({
+        mode: 'live',
+        isConnected: true,
+        isMicCaptureActive: true,
+        isMicOn: true,
+    })
+    expect(container.querySelector('button[aria-label="Talk live"]')).toBeNull()
+    expect(
+        container.querySelector('button[aria-label="Record a voice note"]'),
+    ).toBeNull()
+
+    button('Pause')?.click()
+    expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
+    expect(f.voice.pauseMic).not.toHaveBeenCalled()
+
+    // Coming back to a live conversation whose mic was released.
+    setVoice({ isMicCaptureActive: false, isMicOn: false })
+    expect(button('Resume')?.disabled).toBe(false)
+    act(() => button('Resume')?.click())
+    expect(f.voice.openMic).toHaveBeenCalledWith({ turnOn: true })
+
+    act(() => byLabel('Exit live mode').click())
+    expect(f.voice.exitLive).toHaveBeenCalledOnce()
+    expect(f.voice.disconnect).not.toHaveBeenCalled()
+    expect(byText('hola')).toBeDefined()
+})
+
+it('typing in live mode leaves it', () => {
+    setVoice({
+        mode: 'live',
+        isConnected: true,
+        isMicCaptureActive: true,
+        isMicOn: true,
+    })
+    const textarea = container.querySelector('textarea')
+    if (!textarea) throw new Error('no composer')
+    const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+    )?.set
+    act(() => {
+        setValue?.call(textarea, 'café')
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(f.voice.exitLive).toHaveBeenCalledOnce()
+})
+
+it('agentRecordHint off hides the voice note hint', () => {
+    f.flags.agentRecordHint = false
+    render()
+    expect(byText('Tap or hold to record a voice note')).toBeUndefined()
+    expect(button('Talk live')).toBeDefined()
 })
 
 it('shows tool cards only while debugToolCalls is on', () => {
