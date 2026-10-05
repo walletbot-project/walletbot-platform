@@ -2,7 +2,7 @@ import { api } from '@wallet-bot/backend/api'
 import { Button, IconButton, TextField } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import {
@@ -30,7 +30,10 @@ import { newId } from '@/lib/new-id'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
-import type { ActivityFilterSeed } from '@/pages/activity/helpers'
+import type {
+    ActivityFilterSeed,
+    TransactionFormSeed,
+} from '@/pages/activity/helpers'
 
 export type AccountSummary = {
     id: string
@@ -167,6 +170,15 @@ export function AccountDetail({
     const openAdjust = () => {
         setAdjustValue(cents !== null ? (cents / 100).toFixed(2) : '0.00')
         setAdjustOpen(true)
+    }
+
+    const location = useLocation()
+    const openTransactionForm = () => {
+        const seed: TransactionFormSeed = {
+            accountId: account.id,
+            returnTo: location.pathname,
+        }
+        navigate('/activity/new', { state: seed })
     }
 
     const viewAllTransactions = () => {
@@ -312,6 +324,16 @@ export function AccountDetail({
                         <Icon name="delete" />
                     </IconButton>
                 </div>
+
+                <Button
+                    variant="tonal"
+                    className="mt-2 w-full"
+                    onPress={openTransactionForm}
+                    isDisabled={saving}
+                >
+                    <Icon name="add" size={18} />
+                    {t.addManual.newTransaction}
+                </Button>
 
                 <EntityRecentTransactions
                     title={t.accounts.lastTransactions}

@@ -226,9 +226,17 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
 export function TransactionForm({
     onClose,
     onSaved,
+    initialAccountId = '',
+    initialCategoryId = '',
 }: {
     onClose: () => void
     onSaved: () => void
+    /**
+     * Prefills from an entity detail (an account's or category's sheet). A
+     * type change resets the form back to them.
+     */
+    initialAccountId?: string
+    initialCategoryId?: string
 }) {
     const t = useT()
 
@@ -295,9 +303,9 @@ export function TransactionForm({
     const [description, setDescription] = useState('')
     const [date, setDate] = useState(today)
     const [time, setTime] = useState('')
-    const [accountId, setAccountId] = useState('')
+    const [accountId, setAccountId] = useState(initialAccountId)
     const [destinationAccountId, setDestinationAccountId] = useState('')
-    const [categoryId, setCategoryId] = useState('')
+    const [categoryId, setCategoryId] = useState(initialCategoryId)
     const [tagInput, setTagInput] = useState('')
     const [tags, setTags] = useState<FormTag[]>([])
     const [pendingTagName, setPendingTagName] = useState<string | null>(null)
@@ -319,6 +327,8 @@ export function TransactionForm({
         type !== 'transfer' && flags?.recurringExpense === true
 
     useEffect(() => {
+        // Still loading: keep a preset id until the options can vouch for it.
+        if (accounts === undefined) return
         setAccountId((current) => {
             if (
                 current &&
@@ -328,7 +338,7 @@ export function TransactionForm({
             }
             return ''
         })
-    }, [accountOptions])
+    }, [accounts, accountOptions])
 
     useEffect(() => {
         setDestinationAccountId((current) => {
@@ -348,6 +358,7 @@ export function TransactionForm({
     }, [accountId, accountOptions])
 
     useEffect(() => {
+        if (categories === undefined) return
         setCategoryId((current) => {
             if (
                 current &&
@@ -357,7 +368,7 @@ export function TransactionForm({
             }
             return ''
         })
-    }, [categoryOptions])
+    }, [categories, categoryOptions])
 
     const selectedAccount = accountOptions.find(
         (account) => account.id === accountId,
@@ -367,7 +378,7 @@ export function TransactionForm({
     )
     const config = typeCopy(type, t)
 
-    const resetFields = () => {
+    const resetFields = (nextType: MovementType) => {
         setAmount('0')
         setDestinationAmount('0')
         setSourceAmountTouched(false)
@@ -376,9 +387,9 @@ export function TransactionForm({
         setDescription('')
         setDate(today())
         setTime('')
-        setAccountId('')
+        setAccountId(initialAccountId)
         setDestinationAccountId('')
-        setCategoryId('')
+        setCategoryId(nextType === 'transfer' ? '' : initialCategoryId)
         setTagInput('')
         setTags([])
         setPendingTagName(null)
@@ -391,7 +402,7 @@ export function TransactionForm({
 
     const changeType = (nextType: MovementType) => {
         setType(nextType)
-        resetFields()
+        resetFields(nextType)
     }
 
     const addResolvedTag = (tag: FormTag) => {

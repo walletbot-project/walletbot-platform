@@ -10,6 +10,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/create_account.dart';
+import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
@@ -507,6 +508,15 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     }
   }
 
+  /// Opens the manual form with this account preselected.
+  Future<void> _openTransactionForm() async {
+    await pushTransactionForm(
+      context,
+      repos: widget.repos,
+      accountId: _accountId,
+    );
+  }
+
   void _openAllTransactions() {
     _close(); // close the sheet before switching tabs
     widget.nav.openActivityForAccount(_accountId);
@@ -574,6 +584,13 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         _buildIdentityGroup(context),
         const SizedBox(height: 12),
         _buildActions(context),
+        const SizedBox(height: 8),
+        M3EFilledButton.tonalIcon(
+          onPressed: _saving ? null : _openTransactionForm,
+          size: M3EButtonSize.md,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(context.l10n.addTransaction),
+        ),
         const SizedBox(height: 28),
         _buildTransactionsHeader(context),
         const SizedBox(height: 8),

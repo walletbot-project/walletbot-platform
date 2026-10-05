@@ -112,10 +112,16 @@ export const createExpense = mutation({
         await assertNoExistingId(ctx, userId, args.id)
         assertPositiveAmount(args.amount, 'Amount')
 
+        // Archived accounts/categories are not valid targets for a new
+        // movement — same rule the native local write enforces.
         const account = await getAccount(ctx, userId, args.accountId)
-        if (!account) throw new Error('Account not found')
+        if (!account || account.isArchived) {
+            throw new Error('Account not found')
+        }
         const category = await getCategory(ctx, userId, args.categoryId)
-        if (!category) throw new Error('Category not found')
+        if (!category || category.isArchived) {
+            throw new Error('Category not found')
+        }
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
@@ -170,10 +176,16 @@ export const createIncome = mutation({
         await assertNoExistingId(ctx, userId, args.id)
         assertPositiveAmount(args.amount, 'Amount')
 
+        // Archived accounts/categories are not valid targets for a new
+        // movement — same rule the native local write enforces.
         const account = await getAccount(ctx, userId, args.accountId)
-        if (!account) throw new Error('Account not found')
+        if (!account || account.isArchived) {
+            throw new Error('Account not found')
+        }
         const category = await getCategory(ctx, userId, args.categoryId)
-        if (!category) throw new Error('Category not found')
+        if (!category || category.isArchived) {
+            throw new Error('Category not found')
+        }
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
@@ -238,13 +250,21 @@ export const createTransfer = mutation({
         if (args.accountId === args.toAccountId) {
             throw new Error('Source and destination accounts must differ')
         }
+        // Archived accounts/categories are not valid targets for a new
+        // movement — same rule the native local write enforces.
         const fromAcc = await getAccount(ctx, userId, args.accountId)
-        if (!fromAcc) throw new Error('Source account not found')
+        if (!fromAcc || fromAcc.isArchived) {
+            throw new Error('Source account not found')
+        }
         const toAcc = await getAccount(ctx, userId, args.toAccountId)
-        if (!toAcc) throw new Error('Destination account not found')
+        if (!toAcc || toAcc.isArchived) {
+            throw new Error('Destination account not found')
+        }
         if (args.categoryId) {
             const category = await getCategory(ctx, userId, args.categoryId)
-            if (!category) throw new Error('Category not found')
+            if (!category || category.isArchived) {
+                throw new Error('Category not found')
+            }
         }
 
         const sameCurrency = fromAcc.currency === toAcc.currency
