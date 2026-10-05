@@ -238,3 +238,33 @@ it('keeps the composer focused with the mic open and switches to text on typing'
     expect(container.querySelector('.sr-only')).toBeNull()
     expect(textarea.value).toBe('café')
 })
+
+it('typing while the mic is still opening stops it and brings the composer back', async () => {
+    setVoice({ isConnected: true })
+    let opened = () => {}
+    f.voice.openMic.mockImplementationOnce(
+        () =>
+            new Promise<void>((resolve) => {
+                opened = resolve
+            }),
+    )
+    const textarea = container.querySelector('textarea')
+    if (!textarea) throw new Error('no composer')
+
+    act(() => byLabel('Start talking').click())
+    expect(f.voice.openMic).toHaveBeenCalledWith({ turnOn: true })
+    expect(byLabel('Switch to text')).toBeDefined()
+
+    const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+    )?.set
+    act(() => {
+        setValue?.call(textarea, 'café')
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
+    await act(async () => opened())
+    expect(container.querySelector('.sr-only')).toBeNull()
+    expect(textarea.value).toBe('café')
+})

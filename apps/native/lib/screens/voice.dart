@@ -490,11 +490,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _handsFree = false;
       _paused = false;
     });
-    if (micOn) _handleVoiceTap();
+    if (micOn) {
+      _handleVoiceTap();
+    } else if (_micStarting || _micActive) {
+      // A tap here would open the mic again instead of closing it.
+      _resumeMicrophone = false;
+      unawaited(_stopMicCapture());
+    }
   }
 
   void _onSendPressed() {
-    _handsFree = false;
+    setState(() => _handsFree = false);
     _handleSendText();
   }
 
@@ -815,7 +821,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       );
       await _stopMicCapture();
     } finally {
-      _micStarting = false;
+      if (mounted) {
+        setState(() => _micStarting = false);
+      } else {
+        _micStarting = false;
+      }
       if (mounted && _foreground && _resumeMicrophone) {
         unawaited(_resumeAudioAfterBackground());
       }

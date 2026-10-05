@@ -232,6 +232,40 @@ void main() {
   );
 
   testWidgets(
+    'switching to text while the mic is still opening closes it',
+    (tester) async {
+      final command = _Command();
+      await tester.pumpWidget(app(command));
+      await tester.pump();
+      await tester.tap(find.text('Start talking'));
+      await tester.pump();
+      await tester.pump();
+      command.ready();
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('Pause'));
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel']);
+
+      final permission = Completer<Object?>();
+      messenger.setMockMethodCallHandler(_permission, (_) => permission.future);
+      await tester.tap(find.text('Resume'));
+      await tester.pump();
+      expect(find.text('Getting the mic ready'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Switch to text'));
+      await settleCapture(tester);
+      permission.complete({7: 1});
+      await settleCapture(tester);
+      expect(captureCalls.where((call) => call == 'listen'), hasLength(1));
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('Pause'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
     'the keyboard stays up with the mic open, and typing switches to text',
     (tester) async {
       await tester.pumpWidget(app(_Command()));

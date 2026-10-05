@@ -1221,12 +1221,16 @@ export function Add() {
         handleTap()
     }
 
+    /**
+     * Not `handleTap`: a tap would reopen a mic that is still opening, and it
+     * does nothing once the composer holds text.
+     */
     const handleSwitchToText = () => {
-        const micOn =
-            voice.isConnecting || (voice.isMicCaptureActive && voice.isMicOn)
         setHandsFree(false)
         setPaused(false)
-        if (micOn) handleTap()
+        if (voice.isConnecting || openingMic || voice.isMicCaptureActive) {
+            voice.setMicOn(false)
+        }
     }
 
     const handleComposerSend = () => {
