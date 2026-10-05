@@ -17,6 +17,7 @@ import {
     GRID_UNITS,
     insertInRow,
     insertRowAt,
+    isBalanceWidgetType,
     type LayoutCoord,
     type MoveDirection,
     normalizeLayout,
@@ -54,6 +55,7 @@ import {
 } from '@/pages/home/use-tile-drag'
 import {
     BalanceCardWidget,
+    BalanceComparisonWidget,
     BreakdownChartWidget,
     StatWidget,
     TransactionListWidget,
@@ -327,13 +329,12 @@ export function Dashboard({
         // Tapping a tile outside edit mode opens the activity list scoped to
         // what the tile counts — `_activityFilterFor`. A balance card has no
         // filter of its own, only its currency.
-        const config =
-            spec.type === 'balance'
-                ? filterConfigToJson({
-                      ...EMPTY_FILTER,
-                      currency: spec.options.currency || null,
-                  })
-                : spec.config
+        const config = isBalanceWidgetType(spec.type)
+            ? filterConfigToJson({
+                  ...EMPTY_FILTER,
+                  currency: spec.options.currency || null,
+              })
+            : spec.config
         navigate('/activity', { state: { filterConfig: config } })
     }
 
@@ -950,6 +951,8 @@ function previewIcon(type: string): string {
             return 'account_balance_wallet'
         case 'chart':
             return 'donut_large'
+        case 'balance_comparison':
+            return 'compare_arrows'
         default:
             return 'calculate'
     }
@@ -977,6 +980,8 @@ function WidgetBody({ spec }: { spec: WidgetSpec }) {
             return <TransactionListWidget spec={spec} />
         case 'chart':
             return <BreakdownChartWidget spec={spec} />
+        case 'balance_comparison':
+            return <BalanceComparisonWidget spec={spec} />
         default:
             // Forward-compatible: a type written by a newer client is skipped
             // rather than crashing the dashboard.

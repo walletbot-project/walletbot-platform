@@ -13,6 +13,7 @@ import {
     AGENT_SKILLS,
     AGENT_SKILLS_BY_SLUG,
     backgroundToJson,
+    balanceAsOfMs,
     collapseEmptyRows,
     convertAmount,
     DASHBOARD_WIDTHS,
@@ -20,6 +21,7 @@ import {
     filterConfigToJson,
     filterFromCanonical,
     fxAlternatives,
+    isBalanceWidgetType,
     isFilterEmpty,
     isFxQuoteStale,
     isValidCurrencyCode,
@@ -79,9 +81,15 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveAccount(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Account', r)
+            // With a date, the balance at the end of that day on this
+            // device's calendar; without one, the balance right now.
+            const asOfMs =
+                args.date === undefined
+                    ? pastCutoffBigInt()
+                    : balanceAsOfMs(args.date)
             const balance = await ctx.client.query(
                 api.v1.transactions.queries.balance,
-                { accountId: r.entity.id, asOfMs: pastCutoffBigInt() },
+                { accountId: r.entity.id, asOfMs },
             )
             if (!balance) return { ok: false, error: 'Account not found' }
             return {
@@ -90,6 +98,7 @@ export const toolExecutors = {
                 accountName: r.entity.name,
                 balance: Number(balance.balance) / 100,
                 currency: balance.currency,
+                ...(args.date !== undefined ? { date: args.date } : {}),
             }
         },
     ),
@@ -1630,6 +1639,7 @@ function defaultWidthFor(type: WidgetType): DashboardWidth {
         case 'stat':
             return 'third'
         case 'balance':
+        case 'balance_comparison':
             return 'half'
         default:
             return 'full'
@@ -1658,7 +1668,8 @@ function widgetOptionsFor(
                     ? Math.trunc(args.limit)
                     : existing.limit
             break
-        case 'balance': {
+        case 'balance':
+        case 'balance_comparison': {
             const currency = (args.currency ?? existing.currency).trim()
             if (!currency) {
                 return { error: 'Balance widgets require currency' }
@@ -1731,7 +1742,9 @@ async function createFilterForWidget(
     title: string,
     filterConfigJson: string | undefined,
 ): Promise<string | null> {
-    if (type === 'balance' || filterConfigJson === undefined) return null
+    if (isBalanceWidgetType(type) || filterConfigJson === undefined) {
+        return null
+    }
     const config = canonicalFilterConfig(filterConfigJson)
     if (isFilterEmpty(parseFilterConfig(config))) return null
     const id = newId()
@@ -1758,7 +1771,7 @@ async function filterIdForWidgetUpdate(
         titleChanged: boolean
     },
 ): Promise<string | null> {
-    if (args.type === 'balance') return null
+    if (isBalanceWidgetType(args.type)) return null
 
     if (args.filterConfigJson !== undefined) {
         const config = canonicalFilterConfig(args.filterConfigJson)

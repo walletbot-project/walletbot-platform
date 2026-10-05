@@ -69,6 +69,16 @@ export const transactions = defineTable({
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
     .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])
+    // An account's live balance adjustments in calendar order: where a write
+    // finds the first adjustment after it, the one whose derived amount it
+    // changes (see `reconcileAfterLedgerChange` in transactions/helpers.ts).
+    .index('by_user_account_type_archived_date', [
+        'userId',
+        'accountId',
+        'type',
+        'isArchived',
+        'date',
+    ])
     // The series in calendar order: what "this and the ones after it" walks,
     // and where "the last one" is read from when a series is topped up.
     .index('by_user_recurrence_date', ['userId', 'recurrenceId', 'date'])

@@ -175,6 +175,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get balanceUnavailable => 'Saldo no disponible';
 
   @override
+  String get declaredBalance => 'Saldo declarado';
+
+  @override
+  String get platformBalance => 'Saldo calculado';
+
+  @override
   String get sameAccounts => 'La cuenta origen y destino deben ser distintas';
 
   @override
@@ -1645,6 +1651,18 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get widgetTypeBalance => 'Saldo';
+
+  @override
+  String get widgetTypeBalanceComparison => 'Comparación de saldo';
+
+  @override
+  String get dashboardLastMonthBalance => 'Saldo del mes pasado';
+
+  @override
+  String get dashboardCurrentBalance => 'Saldo actual';
+
+  @override
+  String get dashboardBalanceDifference => 'Diferencia';
 
   @override
   String get widgetTypeChart => 'Gráfico';

@@ -101,6 +101,21 @@ dots may appear as underscores.
 - `agent_interactions_completed_count`
 - `agent_session_cost_bucket_count`
 
+Operational metrics (WAL-203 / WAL-216, see
+[`metrics/error-rate-and-latency.md`](./metrics/error-rate-and-latency.md)).
+Counters gain `_total`; the `ms`-unit names are not yet confirmed in Mimir:
+
+- `sync_errors_count_total`
+- `sync_push_client_failures_count_total`
+- `agent_tool_errors_count_total`
+- `agent_tool_calls_count_total`
+- `system_function_duration_bucket_count_total`
+- `voice_connect_setup_complete_bucket_count_total`
+- `agent_response_first_token_bucket_count_total`
+- `agent_response_first_token_ms` (expected `..._milliseconds`, unconfirmed)
+- `system_latency_quantile_ms` (expected `..._milliseconds`, unconfirmed)
+- `system_latency_samples_count`
+
 Useful labels:
 
 - `created_by`
@@ -117,6 +132,8 @@ Useful labels:
 - `interaction_type`
 - `start_kind`
 - `cost_bucket`
+- `direction`, `reason`, `platform`, `tool_name`, `function`, `bucket`, `status`
+- `operation`, `batch_size`, `quantile`, `window`
 - `deployment_environment`
 - `service_namespace`
 - `service_name`
@@ -262,6 +279,15 @@ gauge with the latest total registered accounts.
 `record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
 and exports one gauge for each of the top 20 `user_hash + month + model + mode`
 rows by monthly estimated cost.
+
+`system.latency.quantile_ms` and `system.latency.samples_count` are emitted
+every hour by the Convex cron `record latency percentiles`: p50/p95/p99 and
+the sample count over a rolling 24h window (`telemetry/latency.ts`). To force
+a snapshot:
+
+```sh
+pnpm -C packages/backend exec convex run telemetry/mutations:recordLatencyPercentiles
+```
 
 To force a refresh while testing, run the internal action from the Convex CLI:
 

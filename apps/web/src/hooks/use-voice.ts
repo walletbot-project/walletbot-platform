@@ -4,6 +4,7 @@ import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveTokenMintArgs } from '@/lib/agent-context'
+import { recordFirstResponse, recordSetupComplete } from '@/lib/agent-metrics'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
 import {
@@ -187,6 +188,15 @@ export function useVoice(opts: UseVoiceOpts) {
     const discardOutputRef = useRef(false)
     const audioStreamOpenRef = useRef(false)
     const pendingTextRef = useRef<string[]>([])
+    /**
+     * The turn waiting for its first reply chunk — native's
+     * `_firstResponseStopwatch` / `_firstResponseMode`. One per turn: the
+     * first transcript delta or audio chunk reports it and clears it.
+     */
+    const firstResponseRef = useRef<{
+        startedAt: number
+        mode: 'text' | 'voice'
+    } | null>(null)
 
     // Reconnection state, porting native's design
     // (apps/native/lib/voice/gemini_voice_expense_command.dart):
@@ -540,7 +550,22 @@ export function useVoice(opts: UseVoiceOpts) {
     const endAudioStream = useCallback(() => {
         if (!audioStreamOpenRef.current) return
         audioStreamOpenRef.current = false
+        firstResponseRef.current = {
+            startedAt: performance.now(),
+            mode: 'voice',
+        }
         sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true })
+    }, [])
+
+    /** Native's `_reportFirstResponseIfPending`: once per turn. */
+    const reportFirstResponse = useCallback(() => {
+        const pending = firstResponseRef.current
+        if (!pending) return
+        firstResponseRef.current = null
+        recordFirstResponse({
+            elapsedMs: performance.now() - pending.startedAt,
+            mode: pending.mode,
+        })
     }, [])
 
     // Stop mic capture
@@ -707,6 +732,12 @@ export function useVoice(opts: UseVoiceOpts) {
         if (!session || queued.length === 0) return
         // These are typed turns, so they follow the text reply rule.
         audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
+        // Native sends each queued turn through `sendText`, which restarts
+        // the timer every time; in one synchronous loop the last one wins.
+        firstResponseRef.current = {
+            startedAt: performance.now(),
+            mode: 'text',
+        }
         for (const text of queued) {
             session.sendClientContent({
                 turns: [{ role: 'user', parts: [{ text }] }],
@@ -757,6 +788,9 @@ export function useVoice(opts: UseVoiceOpts) {
     const connectAttempt = useCallback(async () => {
         if (!sessionActiveRef.current) return
         const generation = ++generationRef.current
+        // Native's `connectStopwatch`: from the attempt's start (token mint
+        // included) to the session being ready.
+        const attemptStartedAt = performance.now()
         connectAbortRef.current?.abort()
         const controller = new AbortController()
         connectAbortRef.current = controller
@@ -974,7 +1008,10 @@ export function useVoice(opts: UseVoiceOpts) {
                         }
 
                         const outputText = sc.outputTranscription?.text
-                        if (outputText) appendAgent(outputText)
+                        if (outputText) {
+                            reportFirstResponse()
+                            appendAgent(outputText)
+                        }
 
                         if (sc.interrupted) {
                             conversationLogRef.current.push({
@@ -995,17 +1032,21 @@ export function useVoice(opts: UseVoiceOpts) {
                                 !discardOutputRef.current
                             for (const part of parts) {
                                 if (part.thought) continue
-                                if (
-                                    playable &&
+                                const audio =
                                     part.inlineData?.data &&
                                     /^audio\/pcm(?:;|$)/.test(
                                         part.inlineData.mimeType ?? '',
                                     )
-                                ) {
+                                        ? part.inlineData.data
+                                        : undefined
+                                // Native counts every audio chunk, played or
+                                // not — the reply arrived either way.
+                                if (audio) reportFirstResponse()
+                                if (playable && audio) {
                                     try {
                                         playbackRef.current.enqueue(
-                                            part.inlineData.data,
-                                            part.inlineData.mimeType ?? '',
+                                            audio,
+                                            part.inlineData?.mimeType ?? '',
                                         )
                                     } catch (error) {
                                         recordHistory('error', 'local', {
@@ -1090,6 +1131,12 @@ export function useVoice(opts: UseVoiceOpts) {
                 return
             }
             sessionRef.current = session
+            // Native's `LiveConnection._open`: `resumed` is "this attempt
+            // followed a failed one", read before the counter resets.
+            recordSetupComplete({
+                elapsedMs: performance.now() - attemptStartedAt,
+                resumed: reconnectAttemptRef.current > 0,
+            })
             reconnectAttemptRef.current = 0
             applyStatus('connected')
             historyRef.current?.markStatus('active')
@@ -1166,6 +1213,7 @@ export function useVoice(opts: UseVoiceOpts) {
         stopPlayback,
         stopMicCapture,
         flushPendingText,
+        reportFirstResponse,
         addSystem,
         addToolCall,
         completeToolCall,
@@ -1249,6 +1297,12 @@ export function useVoice(opts: UseVoiceOpts) {
                 recordSendMessage(text)
                 audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
                 endAudioStream()
+                // Overrides the voice timer `endAudioStream` may have just
+                // started, exactly like native's `sendText`.
+                firstResponseRef.current = {
+                    startedAt: performance.now(),
+                    mode: 'text',
+                }
                 sessionRef.current?.sendClientContent({
                     turns: [{ role: 'user', parts: [{ text }] }],
                     turnComplete: true,
@@ -1317,6 +1371,9 @@ export function useVoice(opts: UseVoiceOpts) {
         generationRef.current += 1
         connectAbortRef.current?.abort()
         endAudioStream()
+        // Native drops the whole command (and its timer) at the End; the next
+        // conversation must not report this turn.
+        firstResponseRef.current = null
         stopMicCapture()
         stopPlayback()
         sessionRef.current?.close()

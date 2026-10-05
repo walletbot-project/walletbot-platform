@@ -1,4 +1,8 @@
-import { type FilterGroup, isFilterGroup } from '@wallet-bot/shared'
+import {
+    type FilterGroup,
+    isFilterGroup,
+    ledgerDelta,
+} from '@wallet-bot/shared'
 import type { PaginationOptions, PaginationResult } from 'convex/server'
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
@@ -13,6 +17,7 @@ import {
 } from '../../aggregates'
 import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import schema from '../../schema'
+import { balanceBeforeInLedger } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
     boundByDate,
@@ -653,37 +658,11 @@ export const balance = query({
     },
 })
 
-// Signed effect of a transaction on `accountId`'s running balance. Mirrors the
-// native ledger replay (`_accountDelta`) and the aggregate sum contracts: a
-// transaction touches the account either as source (`accountId`) or, for
-// transfers, as destination (`toAccountId`) — never both. Archived rows are 0.
-function accountDelta(txn: Doc<'transactions'>, accountId: string): bigint {
-    if (txn.isArchived) return 0n
-    let delta = 0n
-    if (txn.accountId === accountId) {
-        switch (txn.type) {
-            case 'expense':
-            case 'transfer':
-                delta -= txn.amount
-                break
-            case 'income':
-            case 'balance_adjustment':
-                delta += txn.amount
-                break
-        }
-    }
-    if (txn.type === 'transfer' && txn.toAccountId === accountId) {
-        delta += txn.toAmount ?? txn.amount
-    }
-    return delta
-}
-
 // Running balance of `accountId` immediately before and after the given
-// transaction, matching the native ledger ordering (date, then createdAt, then
-// client id). The bulk (everything strictly before the transaction's date) is
-// an O(log n) aggregate sum; only rows sharing the exact same `date` are read
-// to break ties around the target — that set is bounded to one millisecond on
-// one account, so it stays tiny and index-backed.
+// transaction, in ledger order (`compareLedgerOrder` in @wallet-bot/shared) —
+// the same measurement a balance adjustment's amount is derived from, so the
+// "before" shown next to an adjustment is exactly what it was reconciled
+// against.
 export const balanceAroundTransaction = query({
     args: { transactionId: v.string(), accountId: v.string() },
     handler: async (ctx, args) => {
@@ -705,66 +684,20 @@ export const balanceAroundTransaction = query({
             .unique()
         if (!account) return null
 
-        const date = target.date
-        const namespace = accountNamespace(userId, args.accountId)
-
-        // Everything on this account strictly before the target's date.
-        const [outflows, inflows] = await Promise.all([
-            outflowsByAccount.sum(ctx, {
-                namespace,
-                bounds: { upper: { key: date, inclusive: false } },
-            }),
-            inflowsByAccount.sum(ctx, {
-                namespace,
-                bounds: { upper: { key: date, inclusive: false } },
-            }),
-        ])
-        let before = BigInt(Math.round(outflows + inflows))
-
-        // Same-date rows touching the account, as source or transfer target.
-        const [sourceRows, destRows] = await Promise.all([
-            ctx.db
-                .query('transactions')
-                .withIndex('by_user_account_date', (q) =>
-                    q
-                        .eq('userId', userId)
-                        .eq('accountId', args.accountId)
-                        .eq('date', date),
-                )
-                .collect(),
-            ctx.db
-                .query('transactions')
-                .withIndex('by_user_to_account_date', (q) =>
-                    q
-                        .eq('userId', userId)
-                        .eq('toAccountId', args.accountId)
-                        .eq('date', date),
-                )
-                .collect(),
-        ])
-
-        const sameDate = new Map<string, Doc<'transactions'>>()
-        for (const row of [...sourceRows, ...destRows]) {
-            if (!row.isArchived) sameDate.set(row.id, row)
-        }
-        const ordered = [...sameDate.values()].sort((a, b) => {
-            if (a.createdAt !== b.createdAt)
-                return a.createdAt < b.createdAt ? -1 : 1
-            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-        })
-
-        let found = false
-        for (const row of ordered) {
-            if (row.id === target.id) {
-                found = true
-                break
-            }
-            before += accountDelta(row, args.accountId)
-        }
         // The account doesn't participate in this transaction — nothing to show.
-        if (!found) return null
+        const touches =
+            target.accountId === args.accountId ||
+            (target.type === 'transfer' &&
+                target.toAccountId === args.accountId)
+        if (!touches) return null
 
-        const after = before + accountDelta(target, args.accountId)
+        const before = await balanceBeforeInLedger(
+            ctx,
+            userId,
+            args.accountId,
+            target,
+        )
+        const after = before + ledgerDelta(target, args.accountId)
         return { before, after, currency: account.currency }
     },
 })

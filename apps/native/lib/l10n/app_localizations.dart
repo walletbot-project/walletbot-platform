@@ -422,6 +422,18 @@ abstract class AppLocalizations {
   /// **'Balance unavailable'**
   String get balanceUnavailable;
 
+  /// No description provided for @declaredBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Declared balance'**
+  String get declaredBalance;
+
+  /// No description provided for @platformBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculated balance'**
+  String get platformBalance;
+
   /// No description provided for @sameAccounts.
   ///
   /// In en, this message translates to:
@@ -2983,6 +2995,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Balance'**
   String get widgetTypeBalance;
+
+  /// No description provided for @widgetTypeBalanceComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance comparison'**
+  String get widgetTypeBalanceComparison;
+
+  /// No description provided for @dashboardLastMonthBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Last month\'s balance'**
+  String get dashboardLastMonthBalance;
+
+  /// No description provided for @dashboardCurrentBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Current balance'**
+  String get dashboardCurrentBalance;
+
+  /// No description provided for @dashboardBalanceDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference'**
+  String get dashboardBalanceDifference;
 
   /// No description provided for @widgetTypeChart.
   ///

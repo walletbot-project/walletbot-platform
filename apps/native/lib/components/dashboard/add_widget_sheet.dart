@@ -76,6 +76,7 @@ const _defaultWidthFor = {
   WidgetType.list: DashboardWidth.full,
   WidgetType.balance: DashboardWidth.half,
   WidgetType.chart: DashboardWidth.full,
+  WidgetType.balanceComparison: DashboardWidth.half,
 };
 
 class _WidgetSheet extends StatefulWidget {
@@ -196,7 +197,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   /// Drives the confirm button's enabled state.
   bool get _canSubmit {
     if (_titleController.text.trim().isEmpty) return false;
-    if (_type == WidgetType.balance && _currency == null) return false;
+    if (_type.readsBalances && _currency == null) return false;
     if (_filterMissing) return false;
     return true;
   }
@@ -285,14 +286,14 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   bool get _filterExempt {
     final existing = widget.existing;
     return existing != null &&
-        WidgetType.fromWire(existing.type) != WidgetType.balance &&
+        WidgetType.fromWire(existing.type)?.readsBalances != true &&
         widget.initialFilter.isEmpty;
   }
 
   /// Every type that reads transactions needs a filter: a "no filter" tile
   /// reads as the whole ledger and was never meant to be creatable.
   bool get _filterMissing =>
-      _type != WidgetType.balance && !_filterExempt && !_filterConfigured;
+      !_type.readsBalances && !_filterExempt && !_filterConfigured;
 
   Future<void> _configureFilter() async {
     final result = await showFilterSheet(
@@ -317,7 +318,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       );
       return;
     }
-    if (_type == WidgetType.balance && _currency == null) {
+    if (_type.readsBalances && _currency == null) {
       messenger.showSnackBar(
         SnackBar(content: Text(context.l10n.selectWidgetCurrency)),
       );
@@ -339,7 +340,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
             'title': title,
             'limit': int.tryParse(_limitController.text.trim()) ?? 5,
           },
-          WidgetType.balance => {
+          WidgetType.balance || WidgetType.balanceComparison => {
             'title': title,
             'currency': _currency,
             'accountIds': _scopedAccountIds,
@@ -418,7 +419,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     }
 
     String? filterId;
-    if (_type != WidgetType.balance && _filterConfigured) {
+    if (!_type.readsBalances && _filterConfigured) {
       filterId = await widget.repos.savedFilters.create(
         name: title,
         config: jsonEncode(_filter.toCanonicalJson()),
@@ -443,7 +444,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     // filter was emptied. Position stays owned by the tile controls; width is
     // editable here as well as from the tile menu (web does the same).
     String? filterId;
-    if (_type != WidgetType.balance && _filterConfigured) {
+    if (!_type.readsBalances && _filterConfigured) {
       final config = jsonEncode(_filter.toCanonicalJson());
       if (existing.filterId != null) {
         await widget.repos.savedFilters.update(
@@ -770,6 +771,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           _filterButton(),
         ];
       case WidgetType.balance:
+      case WidgetType.balanceComparison:
         final scopeAccounts = _scopeAccounts;
         final selected = _scopedAccountIds;
         return [

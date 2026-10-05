@@ -1,35 +1,21 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../balance_adjustments.dart';
 import '../occurrence.dart';
 import 'stream_utils.dart';
 
-/// Per-transaction balance arithmetic. MUST stay identical to the replay in
-/// `lib/sync/sync_recompute.dart` — if the two diverge, every sync cycle
-/// "corrects" freshly created balance adjustments and amounts visibly jump
-/// (guarded by test/sync/balance_recompute_test.dart).
+/// An account's balance: the sum of every row's [ledgerDelta]. The same
+/// arithmetic the balance-adjustment reconciliation replays
+/// (`lib/data/balance_adjustments.dart`) — if the two diverged, every write
+/// would "correct" freshly created balance adjustments and amounts would
+/// visibly jump (guarded by test/sync/balance_recompute_test.dart).
 ///
-/// Own side: expense/transfer subtract `amount`; income/balance_adjustment
-/// add `amount`. Incoming transfers add `toAmount ?? amount`. Archived rows
-/// are excluded by the queries below.
+/// Archived rows are excluded by the queries below.
 BigInt accountBalanceFromRows(List<Transaction> rows, String accountId) {
-  BigInt sum = BigInt.zero;
+  var sum = BigInt.zero;
   for (final t in rows) {
-    if (t.accountId == accountId) {
-      switch (t.type) {
-        case 'expense':
-        case 'transfer':
-          sum -= t.amount;
-          break;
-        case 'income':
-        case 'balance_adjustment':
-          sum += t.amount;
-          break;
-      }
-    }
-    if (t.type == 'transfer' && t.toAccountId == accountId) {
-      sum += t.toAmount ?? t.amount;
-    }
+    sum += ledgerDelta(LedgerEntry.fromTransaction(t), accountId);
   }
   return sum;
 }
@@ -38,13 +24,23 @@ Expression<bool> _touchesAccount($TransactionsTable t, String accountId) =>
     t.accountId.equals(accountId) |
     (t.type.equals('transfer') & t.toAccountId.equals(accountId));
 
-/// A balance is always "as of" a moment, and the moment is the occurrence
-/// cutoff: a movement scheduled for next month is not money the user has.
-Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
+/// A balance is always "as of" a moment, and by default the moment is the
+/// occurrence cutoff: a movement scheduled for next month is not money the
+/// user has. [asOfMs] reads it at another moment instead — an exclusive upper
+/// bound, like the backend's `computeAccountBalance`.
+Future<BigInt> computeAccountBalance(
+  AppDatabase db,
+  String accountId, {
+  BigInt? asOfMs,
+}) async {
   final rows =
       await (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
-            ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
+            ..where(
+              (t) => asOfMs == null
+                  ? t.date.isSmallerThan(pastCutoffExpression())
+                  : t.date.isSmallerThanValue(asOfMs),
+            )
             ..where((t) => _touchesAccount(t, accountId)))
           .get();
   return accountBalanceFromRows(rows, accountId);
@@ -70,12 +66,17 @@ Stream<BigInt> watchAccountBalance(AppDatabase db, String accountId) {
 /// stale id — an account since archived, deleted, or re-denominated — drops out
 /// of the sum instead of being counted.
 ///
+/// [asOfMs] reads the balance at another moment instead of now — an exclusive
+/// upper bound, like [computeAccountBalance] (the balance comparison's "last
+/// month" uses it).
+///
 /// Reuses [accountBalanceFromRows] per account so the arithmetic can never
 /// diverge from the per-account balance or the sync recompute.
 Stream<BigInt> watchTotalBalanceForCurrency(
   AppDatabase db,
   String currency, {
   List<String> accountIds = const [],
+  BigInt? asOfMs,
 }) {
   final scope = accountIds.toSet();
   final accountsStream =
@@ -86,7 +87,11 @@ Stream<BigInt> watchTotalBalanceForCurrency(
   final txnsStream =
       (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
-            ..where((t) => t.date.isSmallerThan(pastCutoffExpression())))
+            ..where(
+              (t) => asOfMs == null
+                  ? t.date.isSmallerThan(pastCutoffExpression())
+                  : t.date.isSmallerThanValue(asOfMs),
+            ))
           .watch();
   return combineLatest2(accountsStream, txnsStream, (accounts, txns) {
     var total = BigInt.zero;

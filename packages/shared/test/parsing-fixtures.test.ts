@@ -6,7 +6,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { pastCutoffMs } from '../src/occurrence'
 import {
+    balanceAsOfMs,
     parseAmountToCents,
     parseNaturalDate,
     parseTransactionDate,
@@ -32,6 +34,12 @@ type Fixtures = {
         timeStatus: TransactionTimeStatus
         time?: string
         expect?: LocalDate
+        throws?: boolean
+    }[]
+    balanceAsOf: {
+        input: string
+        expect?: LocalDate
+        cutoff?: boolean
         throws?: boolean
     }[]
 }
@@ -93,6 +101,29 @@ describe('parseTransactionDate fixtures', () => {
             expect(
                 parseTransactionDate(c.date, c.timeStatus, c.time, now),
             ).toBe(BigInt(toDate(c.expect).getTime()))
+        })
+    }
+})
+
+describe('balanceAsOfMs fixtures', () => {
+    for (const c of fixtures.balanceAsOf) {
+        it(c.input, () => {
+            if (c.throws) {
+                expect(() => balanceAsOfMs(c.input, now)).toThrow()
+                return
+            }
+            if (c.cutoff) {
+                expect(balanceAsOfMs(c.input, now)).toBe(
+                    BigInt(pastCutoffMs(now)),
+                )
+                return
+            }
+            if (!c.expect) {
+                throw new Error('fixture needs expect, cutoff or throws')
+            }
+            expect(balanceAsOfMs(c.input, now)).toBe(
+                BigInt(toDate(c.expect).getTime()),
+            )
         })
     }
 })
