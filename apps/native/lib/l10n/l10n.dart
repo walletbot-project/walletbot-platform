@@ -57,6 +57,7 @@ extension LocalizedModelLabels on AppLocalizations {
     WidgetType.list => widgetTypeList,
     WidgetType.balance => widgetTypeBalance,
     WidgetType.chart => widgetTypeChart,
+    WidgetType.balanceComparison => widgetTypeBalanceComparison,
   };
 
   String statAggregation(StatAggregation value) => switch (value) {
@@ -82,6 +83,7 @@ extension LocalizedModelLabels on AppLocalizations {
     WidgetType.list => listWidget,
     WidgetType.balance => balanceWidget,
     WidgetType.chart => chartWidget,
+    WidgetType.balanceComparison => widgetTypeBalanceComparison,
     null => widget,
   };
 

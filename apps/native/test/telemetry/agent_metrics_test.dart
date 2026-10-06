@@ -8,6 +8,92 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'local session metrics retain account identity and never borrow a remote token',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final sent = <Map<String, dynamic>>[];
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        accessTokenProvider: () async => 'another-account-token',
+        httpClient: MockClient((request) async {
+          expect(request.headers.containsKey('Authorization'), isFalse);
+          sent.addAll(
+            ((jsonDecode(request.body) as Map)['metrics'] as List)
+                .cast<Map<String, dynamic>>(),
+          );
+          return http.Response('{}', 200);
+        }),
+      );
+      final base = AgentMetrics(telemetry);
+      final accountA = base.forLocalAccount(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      );
+      base.forLocalAccount('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      await accountA.recordInteractionCostFromUsage(
+        sessionId: 'session-a',
+        sampleId: 'sample-a',
+        model: 'gemini-3.8-live',
+        mode: 'text',
+        interactionType: 'text',
+        usage: {'promptTokenCount': 1000, 'responseTokenCount': 1000},
+      );
+      expect(sent, hasLength(2));
+      expect(
+        sent.every(
+          (m) => m['appUserId'] == 'local:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+        isTrue,
+      );
+      expect(sent.every((m) => !m.containsKey('userId')), isTrue);
+      telemetry.dispose();
+    },
+  );
+
+  for (final model in ['gemini-3.8-live', 'gemini-3.1-flash-live-preview']) {
+    test('HTTP metric payloads preserve selected model $model', () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final sent = <Map<String, dynamic>>[];
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map;
+          sent.addAll((body['metrics'] as List).cast<Map<String, dynamic>>());
+          return http.Response('{"accepted":1}', 200);
+        }),
+      );
+      final metrics = AgentMetrics(telemetry);
+      const usage = <String, Object?>{
+        'promptTokenCount': 100,
+        'responseTokenCount': 50,
+      };
+      await metrics.recordInteractionCostFromUsage(
+        sessionId: 'voice-test',
+        sampleId: 'voice-test:1',
+        model: model,
+        mode: 'voice',
+        interactionType: 'voice',
+        usage: usage,
+      );
+      await metrics.recordSessionCostFromUsage(
+        sessionId: 'voice-test',
+        model: model,
+        mode: 'voice',
+        usage: usage,
+      );
+      expect(sent.map((metric) => metric['name']), [
+        'agent.interaction.cost_usd',
+        'agent.interactions.completed_count',
+        'agent.session.cost_usd',
+      ]);
+      for (final metric in sent) {
+        expect(metric['attributes']['model'], model);
+        expect(metric['sessionId'], 'voice-test');
+      }
+      telemetry.dispose();
+    });
+  }
+
   test('estimates and sends session cost from usage metadata', () async {
     FlutterSecureStorage.setMockInitialValues({});
 
@@ -64,6 +150,110 @@ void main() {
 
     telemetry.dispose();
   });
+
+  test('counts an opened session apart from a resumed one', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+
+    final bodies = <String>[];
+    final telemetry = TelemetryClient(
+      convexSiteUrl: 'https://example.convex.site',
+      sessionId: 'app-session-2',
+      httpClient: MockClient((request) async {
+        bodies.add(request.body);
+        return http.Response('{"ok":true,"accepted":1}', 200);
+      }),
+    );
+    final metrics = AgentMetrics(telemetry);
+
+    await metrics.recordSessionStarted(
+      sessionId: 'voice-session-4',
+      model: 'gemini-3.1-flash-live-preview',
+      resumed: false,
+    );
+    await metrics.recordSessionStarted(
+      sessionId: 'voice-session-4',
+      model: 'gemini-3.1-flash-live-preview',
+      resumed: true,
+    );
+
+    expect(bodies, hasLength(2));
+
+    Map<String, Object?> onlyMetric(String body) {
+      final sent =
+          (jsonDecode(body) as Map<String, Object?>)['metrics']
+              as List<Object?>;
+      expect(sent, hasLength(1));
+      return sent.single as Map<String, Object?>;
+    }
+
+    final started = onlyMetric(bodies[0]);
+    expect(started['name'], 'agent.sessions.started_count');
+    expect(started['type'], 'counter');
+    expect(started['unit'], 'count');
+    expect(started['value'], 1);
+    expect(started['sessionId'], 'voice-session-4');
+    expect(started['attributes'], {
+      'model': 'gemini-3.1-flash-live-preview',
+      'start_kind': 'new',
+    });
+
+    expect(onlyMetric(bodies[1])['attributes'], {
+      'model': 'gemini-3.1-flash-live-preview',
+      'start_kind': 'resumed',
+    });
+
+    telemetry.dispose();
+  });
+
+  test(
+    'sends time to first response as raw milliseconds, not a bucket',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+
+      final bodies = <String>[];
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        httpClient: MockClient((request) async {
+          bodies.add(request.body);
+          return http.Response('{"ok":true,"accepted":1}', 200);
+        }),
+      );
+      final metrics = AgentMetrics(telemetry);
+
+      await metrics.recordFirstResponse(elapsedMs: 1830, mode: 'text');
+      await metrics.recordFirstResponse(elapsedMs: 420, mode: 'voice');
+      // Anything that is not 'text' is a voice turn.
+      await metrics.recordFirstResponse(elapsedMs: 7, mode: 'other');
+
+      final sent = [
+        for (final body in bodies)
+          ...((jsonDecode(body) as Map<String, Object?>)['metrics']
+                  as List<Object?>)
+              .cast<Map<String, Object?>>(),
+      ];
+      expect(sent, hasLength(3));
+      for (final metric in sent) {
+        expect(metric['name'], 'agent.response.first_token_ms');
+        expect(metric['type'], 'gauge');
+        expect(metric['unit'], 'ms');
+      }
+      expect(sent.map((m) => m['value']), [1830, 420, 7]);
+      expect(sent.map((m) => m['attributes']), [
+        {'mode': 'text', 'platform': currentPlatform},
+        {'mode': 'voice', 'platform': currentPlatform},
+        {'mode': 'voice', 'platform': currentPlatform},
+      ]);
+      expect(
+        sent.where(
+          (m) => m['name'] == 'agent.response.first_token_bucket_count',
+        ),
+        isEmpty,
+        reason: 'the backend derives the bucket counter from the gauge',
+      );
+
+      telemetry.dispose();
+    },
+  );
 
   test('estimates final session cost from total token count only', () {
     final metrics = AgentMetrics(null);

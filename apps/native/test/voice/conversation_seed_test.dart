@@ -2,6 +2,24 @@ import 'package:app/voice/voice_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'reconnect context preserves completed tool arguments and persisted IDs',
+    () {
+      final seed = buildConversationSeed([
+        VoiceUserTranscriptDelta('coffee 3000'),
+        VoiceToolCallEvent(id: 'a', name: 'addExpense', args: {'amount': 3000}),
+        VoiceToolResultEvent(
+          id: 'a',
+          name: 'addExpense',
+          result: {'ok': true, 'id': 'saved-id'},
+        ),
+      ]);
+      expect(seed, contains('Recorded tool outcome:'));
+      expect(seed, contains('"amount":3000'));
+      expect(seed, contains('"id":"saved-id"'));
+      expect(seed, contains('do not repeat a successful write'));
+    },
+  );
   test('builds User/Assistant transcript from deltas and turn boundaries', () {
     final seed = buildConversationSeed([
       VoiceUserTranscriptDelta('¿Qué eventos '),

@@ -1,18 +1,69 @@
 import 'dart:async';
 
+import 'duration_bucket.dart';
 import 'telemetry_client.dart';
 
 class AgentMetrics {
-  const AgentMetrics(this._telemetry);
+  const AgentMetrics(this._telemetry, {String? localAppUserId})
+    : _localAppUserId = localAppUserId;
 
-  // Local estimate only used for client-side delta detection. Backend pricing
+  // Capture the account in the voice factory, not from the active account at
+  // send time: a late sample must keep its owner after an account switch.
+  final String? _localAppUserId;
+  AgentMetrics forLocalAccount(String? accountId) => AgentMetrics(
+    _telemetry,
+    localAppUserId: accountId == null ? null : 'local:$accountId',
+  );
+
+  // Local estimate for generation/session samples. Backend pricing
   // recalculates USD from token attributes before storing/exporting metrics.
-  static const _gemini31FlashLiveInputTextUsdPerMillion = 0.75;
-  static const _gemini31FlashLiveInputAudioUsdPerMillion = 3.00;
-  static const _gemini31FlashLiveInputMediaUsdPerMillion = 1.00;
-  static const _gemini31FlashLiveOutputTextUsdPerMillion = 4.50;
-  static const _gemini31FlashLiveOutputAudioUsdPerMillion = 12.00;
+  static const _geminiLiveInputTextUsdPerMillion = 0.75;
+  static const _geminiLiveInputAudioUsdPerMillion = 3.00;
+  static const _geminiLiveInputMediaUsdPerMillion = 1.00;
+  static const _geminiLiveOutputTextUsdPerMillion = 4.50;
+  static const _geminiLiveOutputAudioUsdPerMillion = 12.00;
   final TelemetryClient? _telemetry;
+
+  /// One live session opened, counted at the session boundary rather than at
+  /// the token mint: a mint also happens on every reconnect and on the voice
+  /// screen's speculative prefetch, so it would never be a session count.
+  ///
+  /// [resumed] is what the mint could not tell apart — false is a session that
+  /// did not exist a moment ago, true is the same conversation picked up again
+  /// through a live resume handle.
+  Future<void> recordSessionStarted({
+    required String sessionId,
+    required String model,
+    required bool resumed,
+  }) async {
+    await _telemetry?.sendMetricBatch([
+      TelemetryMetric(
+        appUserId: _localAppUserId,
+        name: 'agent.sessions.started_count',
+        timestamp: DateTime.now(),
+        source: 'native',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {'model': model, 'start_kind': resumed ? 'resumed' : 'new'},
+        sessionId: sessionId,
+      ),
+    ]);
+  }
+
+  void recordSessionStartedBestEffort({
+    required String sessionId,
+    required String model,
+    required bool resumed,
+  }) {
+    unawaited(
+      recordSessionStarted(
+        sessionId: sessionId,
+        model: model,
+        resumed: resumed,
+      ),
+    );
+  }
 
   Future<double?> recordSessionCostFromUsage({
     required String sessionId,
@@ -82,6 +133,7 @@ class AgentMetrics {
         tokenAttributes: tokenAttributes,
       ),
       TelemetryMetric(
+        appUserId: _localAppUserId,
         name: 'agent.interactions.completed_count',
         timestamp: DateTime.now(),
         source: 'native',
@@ -96,6 +148,27 @@ class AgentMetrics {
         sessionId: sessionId,
       ),
     ]);
+  }
+
+  void recordSessionCostBestEffort({
+    required String sessionId,
+    required String model,
+    required String mode,
+    required double costUsd,
+    required Map<String, int> tokenAttributes,
+  }) {
+    unawaited(
+      _telemetry?.sendMetricBatch([
+        _costGaugeMetric(
+          name: 'agent.session.cost_usd',
+          sessionId: sessionId,
+          model: model,
+          mode: _normalizeMode(mode),
+          costUsd: costUsd,
+          tokenAttributes: tokenAttributes,
+        ),
+      ]),
+    );
   }
 
   void recordSessionCostFromUsageBestEffort({
@@ -132,6 +205,63 @@ class AgentMetrics {
         usage: usage,
       ),
     );
+  }
+
+  /// Redirects the connect-phase `Stopwatch` timing
+  /// `GeminiVoiceExpenseCommand` already computes
+  /// (`_logConnectionPhase('setup_complete', ...)`) into telemetry, bucketed
+  /// like every other latency metric here (see
+  /// docs/metrics/error-rate-and-latency.md).
+  void recordSetupCompleteBucket({
+    required int elapsedMs,
+    required bool resumed,
+  }) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'voice.connect.setup_complete_bucket_count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'bucket': clientDurationBucket(elapsedMs),
+          'platform': currentPlatform,
+          'resumed': resumed,
+        },
+      ),
+    );
+  }
+
+  /// Time from the user's turn being sent (voice: audio stream end; text:
+  /// `sendText`) to the model's first transcript delta or audio chunk.
+  ///
+  /// Sent as the raw elapsed milliseconds (`agent.response.first_token_ms`,
+  /// a gauge), not as a bucket: the backend derives the bucketed
+  /// `agent.response.first_token_bucket_count` counter from it — the same way
+  /// `agent.session.cost_bucket_count` is derived from
+  /// `agent.session.cost_usd` — and also feeds its percentile source. Sending
+  /// the bucket counter from here too would count every response twice
+  /// (single emitter per event, docs/metrics/error-rate-and-latency.md).
+  Future<void> recordFirstResponse({
+    required int elapsedMs,
+    required String mode,
+  }) async {
+    await _telemetry?.trackMetric(
+      'agent.response.first_token_ms',
+      type: 'gauge',
+      value: elapsedMs.toDouble(),
+      unit: 'ms',
+      attributes: {
+        'mode': mode == 'text' ? 'text' : 'voice',
+        'platform': currentPlatform,
+      },
+    );
+  }
+
+  void recordFirstResponseBestEffort({
+    required int elapsedMs,
+    required String mode,
+  }) {
+    unawaited(recordFirstResponse(elapsedMs: elapsedMs, mode: mode));
   }
 
   void recordInteractionCostBestEffort({
@@ -223,10 +353,7 @@ class AgentMetrics {
 
     if (estimatedInputUsd == null && estimatedOutputUsd == null) {
       if (totalTokens == null) return null;
-      return _tokensToUsd(
-        totalTokens,
-        _gemini31FlashLiveOutputTextUsdPerMillion,
-      );
+      return _tokensToUsd(totalTokens, _geminiLiveOutputTextUsdPerMillion);
     }
     return (estimatedInputUsd ?? 0) + (estimatedOutputUsd ?? 0);
   }
@@ -240,6 +367,7 @@ class AgentMetrics {
     required double costUsd,
     required Map<String, int> tokenAttributes,
   }) => TelemetryMetric(
+    appUserId: _localAppUserId,
     name: name,
     timestamp: DateTime.now(),
     source: 'native',
@@ -262,9 +390,9 @@ class AgentMetrics {
   }) => _estimateCost(
     totalTokens: totalTokens,
     details: details,
-    textUsdPerMillion: _gemini31FlashLiveInputTextUsdPerMillion,
-    audioUsdPerMillion: _gemini31FlashLiveInputAudioUsdPerMillion,
-    mediaUsdPerMillion: _gemini31FlashLiveInputMediaUsdPerMillion,
+    textUsdPerMillion: _geminiLiveInputTextUsdPerMillion,
+    audioUsdPerMillion: _geminiLiveInputAudioUsdPerMillion,
+    mediaUsdPerMillion: _geminiLiveInputMediaUsdPerMillion,
   );
 
   double? _estimateOutputCost({
@@ -273,9 +401,9 @@ class AgentMetrics {
   }) => _estimateCost(
     totalTokens: totalTokens,
     details: details,
-    textUsdPerMillion: _gemini31FlashLiveOutputTextUsdPerMillion,
-    audioUsdPerMillion: _gemini31FlashLiveOutputAudioUsdPerMillion,
-    mediaUsdPerMillion: _gemini31FlashLiveOutputTextUsdPerMillion,
+    textUsdPerMillion: _geminiLiveOutputTextUsdPerMillion,
+    audioUsdPerMillion: _geminiLiveOutputAudioUsdPerMillion,
+    mediaUsdPerMillion: _geminiLiveOutputTextUsdPerMillion,
   );
 
   double? _estimateCost({

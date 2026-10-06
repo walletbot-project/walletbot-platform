@@ -1,5 +1,7 @@
 import { Icon } from '@/components/m3/icon'
+import { foregroundOn, readableAccent } from '@/lib/entity-colors'
 import { useT } from '@/lib/i18n'
+import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 type ColorSwatchesProps = {
@@ -14,6 +16,12 @@ type ColorSwatchesProps = {
      * `_ColorSwatches` previews. Selection still compares the stored option.
      */
     previewColor?: (option: string) => string
+    /**
+     * Previews each option as accounts and categories paint it in the current
+     * theme (`readableAccent`), like native's `ColorPicker(themed: true)`.
+     * Tags paint their raw color, so their pickers leave it off.
+     */
+    themed?: boolean
 }
 
 /** Inline grid of selectable color swatches, mirroring the native ColorPicker. */
@@ -22,13 +30,21 @@ export function ColorSwatches({
     onChange,
     options,
     previewColor,
+    themed = false,
 }: ColorSwatchesProps) {
     const t = useT()
+    const { brightness } = useTheme()
     const selectedColor = value.toUpperCase()
     return (
         <div className="flex flex-wrap gap-2">
             {options.map((option) => {
                 const isSelected = option.toUpperCase() === selectedColor
+                const fill = previewColor
+                    ? previewColor(option)
+                    : themed
+                      ? readableAccent(option, brightness)
+                      : option
+                const darkAccent = themed && brightness === 'dark'
                 return (
                     <button
                         type="button"
@@ -40,11 +56,7 @@ export function ColorSwatches({
                                 ? 'border-foreground'
                                 : 'border-transparent hover:scale-105',
                         )}
-                        style={{
-                            backgroundColor: previewColor
-                                ? previewColor(option)
-                                : option,
-                        }}
+                        style={{ backgroundColor: fill }}
                         aria-label={t.common.colorSwatch({ color: option })}
                         aria-pressed={isSelected}
                     >
@@ -52,14 +64,22 @@ export function ColorSwatches({
                             <Icon
                                 name="check"
                                 size={16}
-                                // A previewed fill is theme-adapted, so the
-                                // theme's own on-surface is what reads against
-                                // it; a raw entity accent is saturated enough
-                                // that white reads best.
+                                // A widget background preview is adapted so the
+                                // theme's own on-surface reads against it. A raw
+                                // accent is saturated enough that white reads
+                                // best; a themed one in dark is softened and
+                                // lightened, so the check contrasts with it.
                                 className={
                                     previewColor
                                         ? 'text-on-surface'
-                                        : 'text-white drop-shadow-sm'
+                                        : darkAccent
+                                          ? undefined
+                                          : 'text-white drop-shadow-sm'
+                                }
+                                style={
+                                    !previewColor && darkAccent
+                                        ? { color: foregroundOn(fill) }
+                                        : undefined
                                 }
                             />
                         ) : null}

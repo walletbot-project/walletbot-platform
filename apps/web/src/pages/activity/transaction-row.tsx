@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
 import { Icon } from '@/components/m3/icon'
+import { useReadableAccent } from '@/lib/entity-colors'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
@@ -128,6 +129,7 @@ export function TransactionRow({
 }
 
 function IdentityIcon({ identity }: { identity: TransactionRowIdentity }) {
+    const paint = useReadableAccent()
     let icon: ReactNode
     if (identity.type === 'account') {
         icon = (
@@ -151,7 +153,7 @@ function IdentityIcon({ identity }: { identity: TransactionRowIdentity }) {
         <span
             role="img"
             className="flex size-6 shrink-0 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${identity.color}29` }}
+            style={{ backgroundColor: `${paint(identity.color)}29` }}
             title={identity.label}
             aria-label={identity.label}
         >

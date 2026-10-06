@@ -37,6 +37,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   // on the placeholder value while the real default is still loading.
   String? _currency;
   Color _color = accountDefaultColor;
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   IconData _icon = accountDefaultIcon;
   bool _saving = false;
 
@@ -192,11 +197,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       width: 56,
                       height: 56,
                       decoration: BoxDecoration(
-                        color: _color.withValues(alpha: 0.28),
+                        color: _paintedColor.withValues(alpha: 0.28),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       alignment: Alignment.center,
-                      child: Icon(_icon, size: 28, color: _color),
+                      child: Icon(_icon, size: 28, color: _paintedColor),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -205,6 +210,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     child: ColorPicker(
                       selected: _color,
                       options: colorOptions,
+                      themed: true,
                       onChanged: (color) => setState(() => _color = color),
                     ),
                   ),

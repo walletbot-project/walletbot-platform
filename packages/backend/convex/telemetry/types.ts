@@ -33,12 +33,23 @@ export type MetricName =
     | 'business.transfers.created_count'
     | 'business.users.registered_total'
     | 'business.user_accounts.signed_in_count'
+    | 'agent.sessions.started_count'
     | 'agent.session.cost_usd'
     | 'agent.interaction.cost_usd'
     | 'agent.user.monthly_cost_usd'
     | 'agent.interactions.completed_count'
     | 'agent.session.cost_bucket_count'
     | 'agent.reports.submitted_count'
+    | 'sync.errors.count'
+    | 'agent.tool.errors.count'
+    | 'system.function.duration_bucket_count'
+    | 'voice.connect.setup_complete_bucket_count'
+    | 'agent.response.first_token_bucket_count'
+    | 'agent.response.first_token_ms'
+    | 'sync.push.client_failures.count'
+    | 'agent.tool.calls.count'
+    | 'system.latency.quantile_ms'
+    | 'system.latency.samples_count'
 
 export type MetricSource = 'web' | 'native' | 'backend'
 
@@ -60,6 +71,7 @@ export type MetricInput = {
     sessionId?: string
     sampleId?: string
     userId?: string
+    appUserId?: string
     appVersion?: string
     platform?: TelemetryPlatform
 }

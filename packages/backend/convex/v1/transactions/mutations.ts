@@ -1,9 +1,8 @@
-import { computeExchangeRate } from '@wallet-bot/shared'
+import { adjustmentAmount, computeExchangeRate } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
-import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
 import { tagAggregateAttach, tagAggregateDetach } from '../../tags/helpers'
 import {
@@ -14,9 +13,9 @@ import {
     aggregateInsert,
     aggregateReplace,
     archiveTransactionRow,
+    balanceBeforeInLedger,
 } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
-import { computeAccountBalance } from './queries'
 
 // ───── Helpers ─────
 
@@ -113,10 +112,16 @@ export const createExpense = mutation({
         await assertNoExistingId(ctx, userId, args.id)
         assertPositiveAmount(args.amount, 'Amount')
 
+        // Archived accounts/categories are not valid targets for a new
+        // movement — same rule the native local write enforces.
         const account = await getAccount(ctx, userId, args.accountId)
-        if (!account) throw new Error('Account not found')
+        if (!account || account.isArchived) {
+            throw new Error('Account not found')
+        }
         const category = await getCategory(ctx, userId, args.categoryId)
-        if (!category) throw new Error('Category not found')
+        if (!category || category.isArchived) {
+            throw new Error('Category not found')
+        }
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
@@ -171,10 +176,16 @@ export const createIncome = mutation({
         await assertNoExistingId(ctx, userId, args.id)
         assertPositiveAmount(args.amount, 'Amount')
 
+        // Archived accounts/categories are not valid targets for a new
+        // movement — same rule the native local write enforces.
         const account = await getAccount(ctx, userId, args.accountId)
-        if (!account) throw new Error('Account not found')
+        if (!account || account.isArchived) {
+            throw new Error('Account not found')
+        }
         const category = await getCategory(ctx, userId, args.categoryId)
-        if (!category) throw new Error('Category not found')
+        if (!category || category.isArchived) {
+            throw new Error('Category not found')
+        }
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
@@ -239,13 +250,21 @@ export const createTransfer = mutation({
         if (args.accountId === args.toAccountId) {
             throw new Error('Source and destination accounts must differ')
         }
+        // Archived accounts/categories are not valid targets for a new
+        // movement — same rule the native local write enforces.
         const fromAcc = await getAccount(ctx, userId, args.accountId)
-        if (!fromAcc) throw new Error('Source account not found')
+        if (!fromAcc || fromAcc.isArchived) {
+            throw new Error('Source account not found')
+        }
         const toAcc = await getAccount(ctx, userId, args.toAccountId)
-        if (!toAcc) throw new Error('Destination account not found')
+        if (!toAcc || toAcc.isArchived) {
+            throw new Error('Destination account not found')
+        }
         if (args.categoryId) {
             const category = await getCategory(ctx, userId, args.categoryId)
-            if (!category) throw new Error('Category not found')
+            if (!category || category.isArchived) {
+                throw new Error('Category not found')
+            }
         }
 
         const sameCurrency = fromAcc.currency === toAcc.currency
@@ -307,35 +326,43 @@ export const createBalanceAdjustment = mutation({
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
         createdBy: createdByArg,
+        // Retired: the declaration is measured against the ledger before the
+        // adjustment's own date, not against a cutoff. Still accepted so
+        // clients that send it keep working.
         asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         await assertNoExistingId(ctx, userId, args.id)
 
         const account = await getAccount(ctx, userId, args.accountId)
         if (!account) throw new Error('Account not found')
 
-        // Server-side reconciliation: amount = balanceAfter − currentBalance.
-        // balanceAfter is the user's observed truth; amount is just the delta
-        // the engine needs to make the books match. computeAccountBalance now
-        // reads from the aggregate so this is O(log n).
-        //
-        // The balance being reconciled against is the one the user can see, so
-        // it stops at the occurrence cutoff: a movement scheduled for next
-        // month must not change what "my balance is X right now" means.
-        const currentBalance = await computeAccountBalance(
-            ctx,
-            userId,
-            args.accountId,
-            asOfMs,
-        )
-        const amount = args.balanceAfter - currentBalance
-
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
         const timeStatus = resolveTimeStatus(args.timeStatus, args.date)
+        const date = args.date ?? now
+
+        // balanceAfter is the user's declaration and is stored verbatim; the
+        // amount is only the difference from what the ledger held just before
+        // the adjustment. Later writes before it re-derive the amount (see
+        // `reconcileAfterLedgerChange`), so the declaration keeps holding.
+        const previousBalance = await balanceBeforeInLedger(
+            ctx,
+            userId,
+            args.accountId,
+            {
+                id: args.id,
+                type: 'balance_adjustment',
+                accountId: args.accountId,
+                amount: 0n,
+                balanceAfter: args.balanceAfter,
+                date,
+                createdAt: now,
+                isArchived: false,
+            },
+        )
+        const amount = adjustmentAmount(args.balanceAfter, previousBalance)
 
         const inserted = await ctx.db.insert('transactions', {
             userId,
@@ -344,7 +371,7 @@ export const createBalanceAdjustment = mutation({
             name: args.name ?? 'Ajuste de saldo',
             description: args.description,
             status: 'cleared',
-            date: args.date ?? now,
+            date,
             dateConfirmed: args.dateConfirmed,
             timeStatus,
             accountId: args.accountId,
@@ -410,8 +437,22 @@ export const update = mutation({
                 'Destination account and amount can only be changed on transfers',
             )
         }
-        if (row.type === 'balance_adjustment' && args.accountId !== undefined) {
-            throw new Error('Balance adjustment account cannot be changed')
+        if (row.type === 'balance_adjustment') {
+            if (args.accountId !== undefined) {
+                throw new Error('Balance adjustment account cannot be changed')
+            }
+            // The amount is derived from the ledger and the date is the moment
+            // the declaration was made; neither is the user's to edit.
+            if (args.amount !== undefined) {
+                throw new Error('Balance adjustment amount cannot be changed')
+            }
+            if (
+                args.date !== undefined ||
+                args.dateConfirmed !== undefined ||
+                args.timeStatus !== undefined
+            ) {
+                throw new Error('Balance adjustment date cannot be changed')
+            }
         }
 
         const nextAccountId = args.accountId ?? row.accountId

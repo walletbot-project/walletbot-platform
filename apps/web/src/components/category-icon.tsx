@@ -1,5 +1,6 @@
 import { Icon } from '@/components/m3/icon'
 import { categoryIcon } from '@/lib/category-icons'
+import { useReadableAccent } from '@/lib/entity-colors'
 
 /** Renders a category's glyph by its stored name, falling back to the default. */
 export function CategoryIcon({
@@ -13,6 +14,7 @@ export function CategoryIcon({
     color?: string
     className?: string
 }) {
+    const paint = useReadableAccent()
     const option = categoryIcon(name)
     return (
         <Icon
@@ -20,7 +22,7 @@ export function CategoryIcon({
             filled={option.filled}
             size={size}
             className={className}
-            style={color ? { color } : undefined}
+            style={color ? { color: paint(color) } : undefined}
         />
     )
 }

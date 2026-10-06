@@ -8,6 +8,10 @@ export const tags = defineTable({
     description: v.optional(v.string()),
     parentId: v.optional(v.string()), // uuid of parent tag
     color: v.string(), // hex; always set (default applied on write)
+    // User-chosen order among its siblings (same `parentId`); absent until
+    // the user reorders that level, and cleared when the tag changes parent.
+    // See `compareByPositionThenName` in @wallet-bot/shared.
+    position: v.optional(v.number()),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),

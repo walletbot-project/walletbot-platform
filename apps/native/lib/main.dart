@@ -481,13 +481,20 @@ class _AuthGate extends StatelessWidget {
                 remoteSync: active.type == AccountType.remote
                     ? ctx.read<VoiceSessionRemoteSync>()
                     : null,
-                agentMetrics: ctx.read<AgentMetrics?>(),
+                agentMetrics: ctx.read<AgentMetrics?>()?.forLocalAccount(
+                  active.type == AccountType.local
+                      ? active.localAccountId
+                      : null,
+                ),
                 useAuthenticatedTokenAction: active.type == AccountType.remote,
                 sessionToken: active.sessionToken,
                 // A local account has no session, so the device id is its only
                 // identity at the mint. Sent for remote accounts too; the
                 // server lets the validated session win.
                 deviceId: clientInfo.deviceId,
+                localAccountId: active.type == AccountType.local
+                    ? active.localAccountId
+                    : null,
                 convexClient: ctx.read<ConvexClient?>(),
                 convexSiteUrl: AppConfig.convexSiteUrl,
                 // The updateSettings tool writes through these controllers.
@@ -528,6 +535,7 @@ class _AuthGate extends StatelessWidget {
               db: ctx.read<AppDatabase>(),
               client: ctx.read<ConvexClient?>(),
               clientInfo: ctx.read<ClientInfo>(),
+              telemetryClient: ctx.read<TelemetryClient?>(),
               // Backstop for the client-side gate: if the server rejects this
               // client as outdated, reflect it so the hard update banner shows
               // and sync stays gated off.

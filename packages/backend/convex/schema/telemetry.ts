@@ -53,6 +53,7 @@ export const telemetryMetrics = defineTable({
         v.literal('business.transfers.created_count'),
         v.literal('business.users.registered_total'),
         v.literal('business.user_accounts.signed_in_count'),
+        v.literal('agent.sessions.started_count'),
         v.literal('agent.session.cost_usd'),
         v.literal('agent.interaction.cost_usd'),
         v.literal('agent.user.monthly_cost_usd'),
@@ -62,6 +63,16 @@ export const telemetryMetrics = defineTable({
         v.literal('agent.session.cost_outlier_count'),
         v.literal('agent.session.cost_bucket_count'),
         v.literal('agent.reports.submitted_count'),
+        v.literal('sync.errors.count'),
+        v.literal('agent.tool.errors.count'),
+        v.literal('system.function.duration_bucket_count'),
+        v.literal('voice.connect.setup_complete_bucket_count'),
+        v.literal('agent.response.first_token_bucket_count'),
+        v.literal('agent.response.first_token_ms'),
+        v.literal('sync.push.client_failures.count'),
+        v.literal('agent.tool.calls.count'),
+        v.literal('system.latency.quantile_ms'),
+        v.literal('system.latency.samples_count'),
     ),
     timestamp: v.number(),
     receivedAt: v.number(),
@@ -84,6 +95,7 @@ export const telemetryMetrics = defineTable({
     sessionId: v.optional(v.string()),
     sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
+    appUserId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(
         v.union(
@@ -110,3 +122,15 @@ export const telemetryMetrics = defineTable({
     .index('by_name_and_receivedAt', ['name', 'receivedAt'])
     .index('by_userId_and_receivedAt', ['userId', 'receivedAt'])
     .index('by_exportStatus_and_receivedAt', ['exportStatus', 'receivedAt'])
+
+// Raw durations behind the latency percentiles (`telemetry/latency.ts`). Kept
+// only for the rolling window; the `latencyByOperation` aggregate mirrors it.
+export const latencySamples = defineTable({
+    operation: v.union(
+        v.literal('sync_push'),
+        v.literal('agent_first_response'),
+    ),
+    segment: v.string(),
+    durationMs: v.number(),
+    recordedAt: v.number(),
+}).index('by_recordedAt', ['recordedAt'])

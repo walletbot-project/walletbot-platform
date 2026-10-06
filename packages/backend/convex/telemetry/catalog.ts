@@ -1,4 +1,10 @@
+import { AGENT_TOOL_NAMES } from '../agent/toolset'
 import { agentPricingAttributeSpec } from './agentPricing'
+import {
+    BATCH_SIZE_BUCKETS,
+    FIRST_RESPONSE_MODES,
+    LATENCY_OPERATIONS,
+} from './latency'
 import type {
     MetricAttributeValue,
     MetricName,
@@ -7,6 +13,34 @@ import type {
     MetricUnit,
 } from './types'
 
+const DURATION_BUCKETS = [
+    '0-100',
+    '100-250',
+    '250-500',
+    '500-1000',
+    '1000-2500',
+    '2500-5000',
+    '5000+',
+] as const
+
+const CLIENT_DURATION_BUCKETS = [
+    '0-250',
+    '250-500',
+    '500-1000',
+    '1000-2500',
+    '2500-5000',
+    '5000+',
+] as const
+
+const TELEMETRY_PLATFORMS = [
+    'ios',
+    'android',
+    'web',
+    'macos',
+    'windows',
+    'linux',
+] as const
+
 export const metricNames = new Set<MetricName>([
     'business.user_accounts.created_count',
     'business.financial_accounts.created_count',
@@ -14,12 +48,23 @@ export const metricNames = new Set<MetricName>([
     'business.transfers.created_count',
     'business.users.registered_total',
     'business.user_accounts.signed_in_count',
+    'agent.sessions.started_count',
     'agent.session.cost_usd',
     'agent.interaction.cost_usd',
     'agent.user.monthly_cost_usd',
     'agent.interactions.completed_count',
     'agent.session.cost_bucket_count',
     'agent.reports.submitted_count',
+    'sync.errors.count',
+    'agent.tool.errors.count',
+    'system.function.duration_bucket_count',
+    'voice.connect.setup_complete_bucket_count',
+    'agent.response.first_token_bucket_count',
+    'agent.response.first_token_ms',
+    'sync.push.client_failures.count',
+    'agent.tool.calls.count',
+    'system.latency.quantile_ms',
+    'system.latency.samples_count',
 ])
 
 export const metricSources = new Set<MetricSource>(['web', 'native', 'backend'])
@@ -91,6 +136,23 @@ export const metricCatalog: Record<
             client_platform: new Set(['native', 'web']),
         },
     },
+    // One live session opened on a client, counted where the session actually
+    // begins (the client's session repository) rather than where its token is
+    // minted: a mint happens on every reconnect and on the screen's speculative
+    // prefetch, so minting is not a session.
+    //
+    // `start_kind` is the difference the mint could never report: `new` is a
+    // session that did not exist a moment ago, `resumed` is the same
+    // conversation picked up again through a live resume handle. Sessions
+    // created = `new`; re-opened = `resumed`.
+    'agent.sessions.started_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            model: 'string',
+            start_kind: new Set(['new', 'resumed']),
+        },
+    },
     'agent.session.cost_usd': {
         type: 'gauge',
         unit: 'usd',
@@ -116,6 +178,8 @@ export const metricCatalog: Record<
         unit: 'usd',
         attributes: {
             user_hash: 'string',
+            parent_hash: 'string',
+            account_scope: new Set(['local', 'remote']),
             rank: 'string',
             month: 'string',
             model: 'string',
@@ -165,6 +229,117 @@ export const metricCatalog: Record<
             ]),
             scope: new Set(['response', 'session']),
             client_platform: 'string',
+        },
+    },
+    'sync.errors.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            direction: new Set(['push', 'pull']),
+            reason: new Set([
+                'client_outdated',
+                'cursor_mismatch',
+                'auth_failure',
+                'validation',
+                'unknown',
+            ]),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    'agent.tool.errors.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            tool_name: new Set(AGENT_TOOL_NAMES),
+            reason: new Set([
+                'invalid_args',
+                'not_found',
+                'provider_error',
+                'unknown',
+            ]),
+        },
+    },
+    'system.function.duration_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            function: new Set(['sync_push', 'sync_pull', 'agent_turn']),
+            bucket: new Set(DURATION_BUCKETS),
+            status: new Set(['ok', 'rejected', 'error']),
+        },
+    },
+    'voice.connect.setup_complete_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            bucket: new Set(CLIENT_DURATION_BUCKETS),
+            platform: new Set(TELEMETRY_PLATFORMS),
+            resumed: new Set([true, false]),
+        },
+    },
+    'agent.response.first_token_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            bucket: new Set(CLIENT_DURATION_BUCKETS),
+            mode: new Set(['voice', 'text']),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    // The raw time to first response. Ingest derives
+    // `agent.response.first_token_bucket_count` from it and, for an
+    // authenticated request, a percentile sample (`telemetry/metrics.ts`).
+    'agent.response.first_token_ms': {
+        type: 'gauge',
+        unit: 'ms',
+        attributes: {
+            mode: new Set(FIRST_RESPONSE_MODES),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    // Push calls that threw on the client before the backend could record an
+    // outcome: unauthenticated (`requireAuth` throws first), or a request
+    // that never landed. Client-only, so `sync.errors.count{direction="push"}`
+    // keeps the backend as its single emitter.
+    'sync.push.client_failures.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            reason: new Set(['auth_failure', 'network', 'unknown']),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    // Denominator for `agent.tool.errors.count`.
+    'agent.tool.calls.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            tool_name: new Set(AGENT_TOOL_NAMES),
+        },
+    },
+    // Backend-only gauges, exported hourly from the rolling window in
+    // `telemetry/latency.ts`. `batch_size` segments `sync_push`, `mode`
+    // segments `agent_first_response`; `batch_size="all"` is every push
+    // together. Text and voice are never combined (voice timing is approximate).
+    'system.latency.quantile_ms': {
+        type: 'gauge',
+        unit: 'ms',
+        attributes: {
+            operation: new Set(LATENCY_OPERATIONS),
+            batch_size: new Set(['all', ...BATCH_SIZE_BUCKETS]),
+            mode: new Set(FIRST_RESPONSE_MODES),
+            quantile: new Set(['0.5', '0.95', '0.99']),
+            window: new Set(['24h']),
+        },
+    },
+    'system.latency.samples_count': {
+        type: 'gauge',
+        unit: 'count',
+        attributes: {
+            operation: new Set(LATENCY_OPERATIONS),
+            batch_size: new Set(['all', ...BATCH_SIZE_BUCKETS]),
+            mode: new Set(FIRST_RESPONSE_MODES),
+            window: new Set(['24h']),
         },
     },
 }

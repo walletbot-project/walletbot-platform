@@ -113,6 +113,23 @@ crons.interval(
     {},
 )
 
+// The latency percentiles cover a rolling 24h window (telemetry/latency.ts):
+// samples older than that are dropped every 15 minutes, so a snapshot can
+// include up to 15 extra minutes, and the snapshot is exported hourly.
+crons.interval(
+    'delete expired latency samples',
+    { minutes: 15 },
+    internal.telemetry.mutations.deleteExpiredLatencySamples,
+    { limit: 200 },
+)
+
+crons.interval(
+    'record latency percentiles',
+    { hours: 1 },
+    internal.telemetry.mutations.recordLatencyPercentiles,
+    {},
+)
+
 // Market exchange rates for the agent's getExchangeRate tool. The Argentine
 // markets move through the day; the central-bank reference rates behind the
 // international set publish about once a day, so they are polled far less.

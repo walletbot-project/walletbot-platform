@@ -1,3 +1,11 @@
+import {
+    hexToOklab,
+    inSrgbGamut,
+    linearRgbToHex,
+    oklabToLinearRgb,
+} from '@/lib/color-oklab'
+import { type Brightness, useTheme } from '@/lib/theme'
+
 // Single accent palette shared by every entity picker (accounts, categories,
 // tags). Mirrors the native `colorOptions` in
 // apps/native/lib/components/color_utils.dart so colors stay identical across
@@ -37,4 +45,73 @@ export function normalizeColor(
 ): string {
     if (!color) return fallback
     return color.toUpperCase()
+}
+
+/** OKLCH lightness every dark-mode accent gains (see `readableAccent`). */
+const DARK_ACCENT_LIFT = 0.06
+
+/** Share of its OKLCH chroma a dark-mode accent keeps (see `readableAccent`). */
+const DARK_ACCENT_CHROMA = 0.8
+
+/**
+ * Adapts a stored account or category accent to how it is painted in the
+ * current theme (tags are not adapted: they keep their raw color) — the web
+ * port of the native `readableAccent`
+ * (apps/native/lib/components/color_utils.dart). Saturated accents suit light
+ * surfaces but glare on dark ones, so light returns the stored color as-is and
+ * dark lifts and softens it in OKLCH, a perceptual space: every accent gains
+ * the same lightness and keeps the same share of its chroma, with the hue
+ * untouched. Shifting them all alike keeps the gaps between palette colors, so
+ * the dark palette stays as varied as the light one. Not idempotent: adapt the
+ * stored color exactly once. Always `#RRGGBB` so callers can keep appending hex
+ * alpha suffixes; anything that is not a hex color passes through unchanged.
+ * The stored value never changes — only what gets painted.
+ */
+export function readableAccent(hex: string, brightness: Brightness): string {
+    if (brightness === 'light') return hex
+    const lab = hexToOklab(hex)
+    if (!lab) return hex
+    const hue = Math.atan2(lab.b, lab.a)
+    const lightness = Math.min(lab.l + DARK_ACCENT_LIFT, 1)
+    let chroma = Math.hypot(lab.a, lab.b) * DARK_ACCENT_CHROMA
+    const toRgb = () =>
+        oklabToLinearRgb({
+            l: lightness,
+            a: chroma * Math.cos(hue),
+            b: chroma * Math.sin(hue),
+        })
+    let rgb = toRgb()
+    // Out-of-gamut tones lose chroma until they fit in sRGB, keeping the hue.
+    for (let i = 0; i < 60 && !inSrgbGamut(rgb); i++) {
+        chroma *= 0.97
+        rgb = toRgb()
+    }
+    return linearRgbToHex(rgb)
+}
+
+/** [readableAccent] bound to the current theme. */
+export function useReadableAccent(): (hex: string) => string {
+    const { brightness } = useTheme()
+    return (hex) => readableAccent(hex, brightness)
+}
+
+/**
+ * Whether black or white reads better on `color` — a port of the native
+ * `foregroundOn` helper (apps/native/lib/components/color_utils.dart): picks
+ * whichever yields the higher WCAG contrast ratio.
+ */
+export function foregroundOn(color: string): string {
+    const hex = color.replace('#', '')
+    if (hex.length !== 6) return '#000000'
+    // Relative luminance of linearized sRGB, as Flutter's
+    // `Color.computeLuminance` computes it.
+    const channel = (offset: number) => {
+        const c = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    }
+    const luminance =
+        0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+    const contrastWithWhite = 1.05 / (luminance + 0.05)
+    const contrastWithBlack = (luminance + 0.05) / 0.05
+    return contrastWithWhite >= contrastWithBlack ? '#ffffff' : '#000000'
 }

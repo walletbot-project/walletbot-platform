@@ -4,11 +4,13 @@ import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/components/icon_picker.dart';
+import 'package:app/components/reorderable_grouped_list.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/create_account.dart';
+import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
@@ -165,19 +167,19 @@ class _AccountsScreenState extends State<AccountsScreen> {
               if (accounts.isEmpty) {
                 return _EmptyBody(onCreateTap: () => _openCreate(context));
               }
-              return ListView.separated(
+              // Long-press a row to drag it into a new place (WAL-199).
+              return ReorderableGroupedList<Account>(
                 padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
-                itemCount: accounts.length,
-                separatorBuilder: (_, _) =>
-                    const SizedBox(height: kGroupSpacing),
-                itemBuilder: (context, index) {
-                  final account = accounts[index];
-                  return _AccountTile(
-                    account: account,
-                    borderRadius: groupedRadius(index, accounts.length),
-                    onTap: () => _openAccountDetails(account),
-                  );
-                },
+                items: accounts,
+                idOf: (account) => account.id,
+                reorderFailedMessage: context.l10n.accountsReorderFailed,
+                onReorder: (ordered) =>
+                    repos.accounts.reorder([for (final a in ordered) a.id]),
+                itemBuilder: (context, account, radius) => _AccountTile(
+                  account: account,
+                  borderRadius: radius,
+                  onTap: () => _openAccountDetails(account),
+                ),
               );
             },
           ),
@@ -330,6 +332,11 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     widget.account.color,
     fallback: accountDefaultColor,
   );
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   late IconData _icon = accountIconFromName(widget.account.icon);
   late final TextEditingController _nameController = TextEditingController(
     text: widget.account.name,
@@ -352,6 +359,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       context,
       selected: _color,
       options: colorOptions,
+      themed: true,
     );
     if (picked != null) setState(() => _color = picked);
   }
@@ -504,6 +512,15 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     }
   }
 
+  /// Opens the manual form with this account preselected.
+  Future<void> _openTransactionForm() async {
+    await pushTransactionForm(
+      context,
+      repos: widget.repos,
+      accountId: _accountId,
+    );
+  }
+
   void _openAllTransactions() {
     _close(); // close the sheet before switching tabs
     widget.nav.openActivityForAccount(_accountId);
@@ -571,6 +588,13 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         _buildIdentityGroup(context),
         const SizedBox(height: 12),
         _buildActions(context),
+        const SizedBox(height: 8),
+        M3EFilledButton.tonalIcon(
+          onPressed: _saving ? null : _openTransactionForm,
+          size: M3EButtonSize.md,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(context.l10n.addTransaction),
+        ),
         const SizedBox(height: 28),
         _buildTransactionsHeader(context),
         const SizedBox(height: 8),
@@ -616,7 +640,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         // carries the account color. Holds the icon, name, plus a discrete
         // color swatch as a trailing accent.
         Material(
-          color: _color.withValues(alpha: 0.14),
+          color: _paintedColor.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(kGroupOuterRadius),
             bottom: Radius.circular(kGroupInnerRadius),
@@ -635,11 +659,11 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: _color.withValues(alpha: 0.28),
+                      color: _paintedColor.withValues(alpha: 0.28),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(_icon, size: 30, color: _color),
+                    child: Icon(_icon, size: 30, color: _paintedColor),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -655,7 +679,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: _color,
+                        color: _paintedColor,
                         borderRadius: BorderRadius.circular(9),
                         border: Border.all(
                           color: colors.outlineVariant.withValues(alpha: 0.5),

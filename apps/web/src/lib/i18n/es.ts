@@ -364,6 +364,11 @@ export const es = {
         typeList: 'Movimientos',
         typeBalance: 'Saldo',
         typeChart: 'Gráfico',
+        typeBalanceComparison: 'Comparación de saldo',
+        // Balance comparison rows: last month's close, now, and the change.
+        lastMonthBalance: 'Saldo del mes pasado',
+        currentBalance: 'Saldo actual',
+        balanceDifference: 'Diferencia',
 
         aggregation: 'Agregación',
         aggregationSum: 'Suma',
@@ -515,6 +520,27 @@ export const es = {
             'Esta sesión ya no es válida. Te llevamos a iniciar sesión de nuevo.',
     },
 
+    reorder: {
+        roleDescription: 'elemento reordenable',
+        reorderAccounts: 'Ordenar cuentas',
+        reorderCategories: 'Ordenar categorías',
+        accountsFailed: 'No se pudo guardar el nuevo orden de tus cuentas',
+        categoriesFailed: 'No se pudo guardar el nuevo orden de tus categorías',
+        reorderTags: 'Ordenar etiquetas',
+        tagsFailed: 'No se pudo guardar el nuevo orden de tus etiquetas',
+        dragHandle: (p: { name: string }) => `Mover ${p.name}`,
+        instructions:
+            'Para mover un elemento, presioná espacio o enter, movelo con las flechas y presioná espacio o enter de nuevo para soltarlo. Escape cancela.',
+        picked: (p: { name: string; position: number; total: number }) =>
+            `Agarraste ${p.name}, en la posición ${p.position} de ${p.total}.`,
+        moved: (p: { name: string; position: number; total: number }) =>
+            `${p.name} está en la posición ${p.position} de ${p.total}.`,
+        dropped: (p: { name: string; position: number; total: number }) =>
+            `Soltaste ${p.name} en la posición ${p.position} de ${p.total}.`,
+        cancelled: (p: { name: string }) =>
+            `Movimiento cancelado. ${p.name} volvió a su lugar.`,
+    },
+
     accounts: {
         accountDetails: 'Detalle de cuenta',
         newAccount: 'Nueva cuenta',
@@ -615,6 +641,10 @@ export const es = {
         tags: 'Etiquetas',
         noTags: 'Sin etiquetas',
         balanceUnavailable: 'Saldo no disponible',
+        // A balance adjustment: what the user declared, and what the app had
+        // computed for the account just before it (it moves as the past does).
+        declaredBalance: 'Saldo declarado',
+        platformBalance: 'Saldo calculado',
         chooseAccount: 'Elegí una cuenta',
         sameAccounts: 'La cuenta origen y destino deben ser distintas',
         amountGreaterThanZero: 'Ingresá un monto mayor a cero',
@@ -698,9 +728,6 @@ export const es = {
 
     voice: {
         title: 'Habla con Gaston',
-        statusIdle: 'inactivo',
-        statusConnecting: 'conectando',
-        statusConnected: 'conectado',
         speaking: 'Hablando',
         you: 'Vos',
         agent: 'Gaston',
@@ -709,17 +736,61 @@ export const es = {
         toolRunning: 'Ejecutando',
         toolDone: 'Listo',
         toolCancelled: 'Cancelado',
-        connectingEllipsis: 'Conectando…',
-        tapToStart: 'Tocá el micrófono o escribí un mensaje para empezar',
         microphone: 'Micrófono',
-        mute: 'Silenciar',
-        unmute: 'Activar micrófono',
         connect: 'Conectar',
         disconnect: 'Desconectar',
-        startConversation: 'Iniciar una conversación',
         endSession: 'Finalizar sesión',
         typeMessage: 'Escribí un mensaje…',
         send: 'Enviar',
+        welcomeTitle: '¿En qué te ayudo?',
+        welcome: 'Contame un gasto o preguntame por tus cuentas',
+        startTalking: 'Iniciar llamada',
+        liveHint: 'Modo manos libres',
+        exitLive: 'Terminar llamada',
+        recordVoiceNote: 'Grabar un audio',
+        discardVoiceNote: 'Descartar audio',
+        noteLimit: 'Límite de 5 minutos',
+        onCall: 'En llamada',
+        recordHint: 'Tocá o mantené apretado para grabar un audio',
+        preparingMic: 'Preparando el micrófono',
+        listening: 'Te escucho',
+        micPaused: 'Micrófono en pausa',
+        slideToLock: 'Deslizá para bloquear',
+        pause: 'Pausar',
+        resume: 'Continuar',
+        suggestions: {
+            logExpense: (p: { amount: string; category: string }) =>
+                `Gasté ${p.amount} en ${p.category}`,
+            logExpenseWithAccount: (p: {
+                amount: string
+                category: string
+                account: string
+            }) => `Gasté ${p.amount} en ${p.category} con ${p.account}`,
+            spentInCategoryThisMonth: (p: { category: string }) =>
+                `¿Cuánto gasté en ${p.category} este mes?`,
+            accountBalance: (p: { account: string }) =>
+                `¿Cuánto tengo en ${p.account}?`,
+            topSpendingThisMonth: '¿En qué gasté más este mes?',
+            compareCategoryLastMonth: (p: { category: string }) =>
+                `¿Gasté más en ${p.category} que el mes pasado?`,
+            transfer: (p: {
+                amount: string
+                account: string
+                toAccount: string
+            }) => `Pasé ${p.amount} de ${p.account} a ${p.toAccount}`,
+            logIncome: (p: { amount: string; account: string }) =>
+                `Cobré ${p.amount} en ${p.account}`,
+            spentWithTag: (p: { tag: string }) =>
+                `¿Cuánto gasté con la etiqueta ${p.tag}?`,
+            recentExpenses: '¿Cuáles fueron mis últimos gastos?',
+            whatCanYouDo: '¿Qué podés hacer?',
+            createCashAccount: 'Creá una cuenta de efectivo',
+            setupCategories: 'Ayudame a armar mis categorías',
+            howToLogExpense: '¿Cómo anoto un gasto?',
+            homeWidget: 'Agregá un widget en Inicio con mis gastos del mes',
+            homeWidgetForCategory: (p: { category: string }) =>
+                `Agregá un widget en Inicio con mis gastos en ${p.category}`,
+        },
         systemConnecting: 'Conectando…',
         systemTokenReceived: (p: { model: string }) =>
             `Token recibido para ${p.model}`,
@@ -727,6 +798,8 @@ export const es = {
         systemDisconnected: 'Desconectado',
         systemConnected: 'Conectado. Podés hablar.',
         systemConnectedTyping: 'Conectado. Enviando tu mensaje…',
+        startupAudioTimeout:
+            'La conexión tardó demasiado. Tocá el micrófono para volver a intentar.',
         systemConnectionFailed: (p: { error: string }) =>
             `Falló la conexión: ${p.error}`,
         systemUnavailable:

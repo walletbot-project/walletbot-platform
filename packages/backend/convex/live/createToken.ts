@@ -15,11 +15,34 @@ import { supportsRecurrences } from '../sync/compatibility'
 // Deliberately NOT 'use node': minting is one HTTPS call, kept in Convex's
 // default runtime so token requests never pay a Node cold start.
 //
-// Model + voice come from packages/shared/src/tools/constants.ts — the same
-// source the native setup frame derives from (via the generated
-// apps/native/lib/voice/agent_generated.dart), so a bump here can never
-// silently desync the two sides.
-const MODEL = AGENT_MODEL
+// The token response is authoritative for model-aware native clients.
+// Older binaries still require the model compiled into their setup frame.
+export function liveModelFor(
+    platform?: string,
+    appVersion?: string,
+    flags?: Partial<Record<FlagKey, boolean>>,
+): string {
+    const native =
+        platform === 'android' || platform === 'ios' || platform === 'macos'
+    if (
+        platform === 'web' &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.1') >= 0
+    ) {
+        return flags?.agentGemini31
+            ? 'gemini-3.1-flash-live-preview'
+            : AGENT_MODEL
+    }
+    if (!native || compareVersions(appVersion ?? '0.0.0', '0.5.0') < 0) {
+        return 'gemini-3.1-flash-live-preview'
+    }
+    if (
+        flags?.agentGemini31 === true &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.1') >= 0
+    ) {
+        return 'gemini-3.1-flash-live-preview'
+    }
+    return AGENT_MODEL
+}
 // The clients open the Live constrained WebSocket against v1alpha; mint the
 // token against the same API version.
 const AUTH_TOKENS_URL =
@@ -63,7 +86,17 @@ export type CreateLiveTokenOptions = {
      * off.
      */
     flags?: Partial<Record<FlagKey, boolean>>
+    /**
+     * Who ends a user turn. 'auto' (the default, and every build that predates
+     * the field) leaves Gemini's voice activity detection on, which only closes
+     * a turn after it hears silence. 'manual' turns it off: the client brackets
+     * each turn with `activityStart`/`activityEnd`, which is what a voice note
+     * released mid-word needs.
+     */
+    turnDetection?: LiveTurnDetection
 }
+
+export type LiveTurnDetection = 'manual' | 'auto'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Compatibility gating (versioning, not an experiment switch): the mint must
@@ -168,7 +201,7 @@ You manage four kinds of movements:
 - Expense — money leaving an account (e.g. coffee at Starbucks).
 - Income — money entering an account (e.g. salary).
 - Transfer — moving money between two accounts. If the accounts hold different currencies, ask for the exchange rate or the amount received on the other side. A category is optional on transfers.
-- Balance adjustment — when the user counted cash or saw the actual balance on a statement. Record that final number; the system computes the difference.
+- Balance adjustment — when the user counted cash or saw the actual balance on a statement. Record that final number; the system computes the difference and keeps it up to date as earlier movements change.
 
 You can also list, search, update, archive, or delete movements; manage accounts, categories, and tags (including attaching/detaching tags through updateTransaction); produce summaries by category or account over a date range (summarizeTransactions); and manage the home dashboard's saved filters and widgets.
 
@@ -187,7 +220,7 @@ const DASHBOARD_GUIDE = `# Home dashboard and filters
 - Account filters need direction: "source", "destination", or "either". Tag filters can include "match": "any"|"all" and "includeSubtags": true.
 - Numeric widgets should usually include a currency condition in their filter unless they are count-only.
 - Units: amounts in tool arguments (and value-based background thresholds) are display units (e.g. 125.50); amount values stored inside filter JSON are cents (12550). Convert accordingly.
-- When creating or updating a widget, include only the relevant display options: stat aggregation, list limit, balance currency/accountIds, or chart groupBy/chartKind. Use background mode "none", "fixed", or "value" only when the user asks for it.`
+- When creating or updating a widget, include only the relevant display options: stat aggregation, list limit, balance or balance_comparison currency/accountIds, or chart groupBy/chartKind. Use background mode "none", "fixed", or "value" only when the user asks for it.`
 
 const CORE_RULES = `# Core rules
 - Refer to entities by the user's chosen name. Never read out UUIDs.
@@ -196,7 +229,7 @@ const CORE_RULES = `# Core rules
 - Color and icon are optional cosmetics on accounts, categories, and tags. They always have sensible defaults. NEVER ask the user what color or icon to use when creating one. Only set them if the user volunteers a specific color or icon themselves (e.g. "create a red 'Food' category").
 - Currency is immutable. If the user wants to "change" an account's currency, suggest creating a new account.
 - Cross-currency transfers are explicit. Ask for both amounts (or one amount + a rate) when source and destination currencies differ.
-- Balance adjustment is sacred. Record balanceAfter exactly as stated — don't compute a "spent" amount yourself.
+- Balance adjustment is sacred. Record balanceAfter exactly as stated — don't compute a "spent" amount yourself. It is a declaration of the balance at that moment: the system keeps its difference current when movements before it are recorded, edited or deleted, and its amount and date cannot be edited — to correct it, record a new balance adjustment.
 - Dates are flexible. "Today", "hoy", "yesterday", "ayer", deterministic relative weekdays such as "last Thursday"/"el jueves pasado", N days ago, and ISO 8601 dates work. Preserve deterministic relative expressions in \`date\`; the executor resolves them. If the user gives no day, omit \`date\` entirely so the executor defaults to today.
 - Date confidence and time confidence are independent. \`dateConfirmed\` says whether the calendar day is certain; \`timeStatus\` says how the hour was obtained.
 - On transaction creates, set \`dateConfirmed: true\` whenever the user stated an unambiguous calendar day, including explicit dates, today/ayer, "el jueves pasado", "last Thursday", or "hace tres días". Set it to \`false\` when no day was stated. The executor also enforces this from whether \`date\` is present, so never send a defaulted-today \`date\`.
@@ -458,6 +491,7 @@ type GoogleSchema = {
 }
 
 type FunctionDeclaration = {
+    behavior: 'BLOCKING' | 'NON_BLOCKING'
     name: string
     description: string
     parameters: GoogleSchema
@@ -492,6 +526,10 @@ function toFunctionDeclarations(
     }[],
 ): FunctionDeclaration[] {
     return defs.map((d) => ({
+        // Keep local financial operations ordered and wait for committed
+        // results before confirming them. Opt reads into async separately
+        // once the conversation UX represents outstanding work explicitly.
+        behavior: 'BLOCKING',
         name: d.name,
         description: d.description,
         parameters: toGoogleSchema(d.parameters),
@@ -521,6 +559,11 @@ export async function createLiveToken(
     timings: { googleMs: number; mintMs: number; moduleAgeMs: number }
 }> {
     const startedAt = Date.now()
+    const model = liveModelFor(
+        options.platform,
+        options.appVersion,
+        options.flags,
+    )
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not set')
@@ -541,7 +584,7 @@ export async function createLiveToken(
             Date.now() + NEW_SESSION_WINDOW_MS,
         ).toISOString(),
         bidiGenerateContentSetup: {
-            model: `models/${MODEL}`,
+            model: `models/${model}`,
             generationConfig: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
@@ -560,9 +603,20 @@ export async function createLiveToken(
                         options.platform,
                         options.appVersion,
                         options.flags,
-                    ),
+                    ).map((declaration) => {
+                        if (model === AGENT_MODEL) return declaration
+                        const { behavior: _behavior, ...legacy } = declaration
+                        return legacy
+                    }),
                 },
             ],
+            ...(options.turnDetection === 'manual'
+                ? {
+                      realtimeInputConfig: {
+                          automaticActivityDetection: { disabled: true },
+                      },
+                  }
+                : {}),
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             sessionResumption: {},
@@ -603,7 +657,7 @@ export async function createLiveToken(
     return {
         token: token.name,
         expireTime,
-        model: MODEL,
+        model,
         timings,
     }
 }

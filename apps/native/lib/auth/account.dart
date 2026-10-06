@@ -10,6 +10,7 @@ class UserAccount {
     this.sessionToken,
     this.requiresReauth = false,
     this.serverDeleted = false,
+    this.localAccountId,
   });
 
   final String id;
@@ -35,6 +36,14 @@ class UserAccount {
   /// which is an ordinary expired session.
   final bool serverDeleted;
 
+  /// LOCAL accounts only: a random v4 UUID that names the account to the
+  /// backend's `appUsers` (as `local:<UUID>`), so accounts on one device
+  /// can be told apart without sending anything about them. Separate from [id],
+  /// which names the account's on-device database and must never change.
+  /// Null on accounts created before it existed until [AuthController.load]
+  /// assigns one.
+  final String? localAccountId;
+
   UserAccount copyWith({
     String? name,
     String? email,
@@ -42,6 +51,7 @@ class UserAccount {
     String? sessionToken,
     bool? requiresReauth,
     bool? serverDeleted,
+    String? localAccountId,
   }) {
     return UserAccount(
       id: id,
@@ -52,6 +62,7 @@ class UserAccount {
       sessionToken: sessionToken ?? this.sessionToken,
       requiresReauth: requiresReauth ?? this.requiresReauth,
       serverDeleted: serverDeleted ?? this.serverDeleted,
+      localAccountId: localAccountId ?? this.localAccountId,
     );
   }
 
@@ -64,6 +75,7 @@ class UserAccount {
     'sessionToken': sessionToken,
     'requiresReauth': requiresReauth,
     'serverDeleted': serverDeleted,
+    'localAccountId': localAccountId,
   };
 
   factory UserAccount.fromJson(Map<String, Object?> json) {
@@ -77,6 +89,7 @@ class UserAccount {
       sessionToken: (json['sessionToken'] ?? json['refreshToken']) as String?,
       requiresReauth: json['requiresReauth'] as bool? ?? false,
       serverDeleted: json['serverDeleted'] as bool? ?? false,
+      localAccountId: json['localAccountId'] as String?,
     );
   }
 }

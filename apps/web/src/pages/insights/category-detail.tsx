@@ -1,7 +1,8 @@
 import { api } from '@wallet-bot/backend/api'
+import { Button } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/category-icon'
 import {
@@ -13,16 +14,25 @@ import {
 import { EntityRecentTransactions } from '@/components/entity-recent-transactions'
 import { IconPicker } from '@/components/icon-picker'
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
+import { Icon } from '@/components/m3/icon'
 import { Input } from '@/components/ui/input'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import {
+    CATEGORY_DEFAULT_COLOR,
+    normalizeColor,
+    readableAccent,
+} from '@/lib/entity-colors'
 import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { currentMonthWindow } from '@/lib/month-window'
-import type { ActivityFilterSeed } from '@/pages/activity/helpers'
+import { useTheme } from '@/lib/theme'
+import type {
+    ActivityFilterSeed,
+    TransactionFormSeed,
+} from '@/pages/activity/helpers'
 
 export type CategorySummary = {
     id: string
@@ -75,9 +85,14 @@ export function CategoryDetail({
     const { pending: saving, run } = useToastMutation()
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const accent = editing
+    const { brightness } = useTheme()
+    const color = editing
         ? fields.color
         : normalizeColor(category.color, CATEGORY_DEFAULT_COLOR)
+    // The hero paints the accent as it reads in this theme; the stored color
+    // (and what the pickers select) stays the raw pick. `CategoryIcon` adapts on
+    // its own, so it gets the stored color: adapting twice shifts it again.
+    const accent = readableAccent(color, brightness)
 
     const handleToggleEditing = () => {
         if (!editing) {
@@ -120,6 +135,15 @@ export function CategoryDetail({
         )
     }
 
+    const location = useLocation()
+    const openTransactionForm = () => {
+        const seed: TransactionFormSeed = {
+            categoryId: category.id,
+            returnTo: location.pathname,
+        }
+        navigate('/activity/new', { state: seed })
+    }
+
     const viewAllTransactions = () => {
         onClose()
         const seed: ActivityFilterSeed = { categoryIds: [category.id] }
@@ -158,7 +182,7 @@ export function CategoryDetail({
                             <CategoryIcon
                                 name={category.icon}
                                 size={30}
-                                color={accent}
+                                color={color}
                             />
                         </span>
                     )}
@@ -194,6 +218,7 @@ export function CategoryDetail({
                     onChange={(color) =>
                         setFields((current) => ({ ...current, color }))
                     }
+                    themed
                 />
 
                 <MonthlySpendHero
@@ -207,6 +232,16 @@ export function CategoryDetail({
                     onToggleEditing={handleToggleEditing}
                     onDelete={() => setDeleteOpen(true)}
                 />
+
+                <Button
+                    variant="tonal"
+                    className="mt-2 w-full"
+                    onPress={openTransactionForm}
+                    isDisabled={saving}
+                >
+                    <Icon name="add" size={18} />
+                    {t.addManual.newTransaction}
+                </Button>
 
                 <EntityRecentTransactions
                     title={t.insights.lastMovements}

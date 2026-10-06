@@ -25,6 +25,7 @@ import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 import { internalAction } from '../_generated/server'
 import type { FlagKey } from '../featureFlags/utils'
+import { agentToolErrorOf } from './helpers'
 import { writeKeyFor } from './idempotency'
 import { buildTextSystemInstruction } from './prompt'
 import { toFunctionDeclarations } from './schema'
@@ -273,10 +274,32 @@ export const runAgent = async (
                 )
                 result = parseToolResult(json)
             } catch (error) {
+                const coded = agentToolErrorOf(error)
                 const message =
-                    error instanceof Error ? error.message : String(error)
+                    coded?.message ??
+                    (error instanceof Error ? error.message : String(error))
                 console.error(`agent tool ${name} threw: ${message}`)
                 result = { ok: false, error: message }
+                // `execute` can't record its own throw: the rollback would
+                // take the metric with it. Best effort — telemetry must never
+                // turn a recoverable tool failure into a failed turn.
+                try {
+                    await ctx.runMutation(
+                        internal.telemetry.mutations.recordThrownAgentToolCall,
+                        {
+                            toolName: name,
+                            reason: coded?.reason ?? 'unknown',
+                        },
+                    )
+                } catch (telemetryError) {
+                    console.warn('telemetry metric failed', {
+                        metric: 'agent.tool.errors.count',
+                        error:
+                            telemetryError instanceof Error
+                                ? telemetryError.message
+                                : String(telemetryError),
+                    })
+                }
             }
 
             responseParts.push({

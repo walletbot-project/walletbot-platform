@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agent_helpers from "../agent/helpers.js";
 import type * as agent_idempotency from "../agent/idempotency.js";
 import type * as agent_internal from "../agent/internal.js";
 import type * as agent_prompt from "../agent/prompt.js";
@@ -22,6 +23,8 @@ import type * as agentReports_rateLimits from "../agentReports/rateLimits.js";
 import type * as agentReports_utils from "../agentReports/utils.js";
 import type * as agentUsage_queries from "../agentUsage/queries.js";
 import type * as aggregates from "../aggregates.js";
+import type * as appUsers_helpers from "../appUsers/helpers.js";
+import type * as appUsers_internal from "../appUsers/internal.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
 import type * as authNative_mutations from "../authNative/mutations.js";
@@ -63,6 +66,7 @@ import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_agentMemories from "../schema/agentMemories.js";
 import type * as schema_agentReports from "../schema/agentReports.js";
 import type * as schema_agentUsage from "../schema/agentUsage.js";
+import type * as schema_appUsers from "../schema/appUsers.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
 import type * as schema_exchangeRates from "../schema/exchangeRates.js";
@@ -94,11 +98,14 @@ import type * as telemetry_actions from "../telemetry/actions.js";
 import type * as telemetry_agentPricing from "../telemetry/agentPricing.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
 import type * as telemetry_http from "../telemetry/http.js";
+import type * as telemetry_latency from "../telemetry/latency.js";
 import type * as telemetry_metrics from "../telemetry/metrics.js";
 import type * as telemetry_mutations from "../telemetry/mutations.js";
 import type * as telemetry_queries from "../telemetry/queries.js";
 import type * as telemetry_types from "../telemetry/types.js";
+import type * as telemetry_usageActor from "../telemetry/usageActor.js";
 import type * as telemetry_validators from "../telemetry/validators.js";
+import type * as transactions_adjustmentBackfill from "../transactions/adjustmentBackfill.js";
 import type * as transactions_backfill from "../transactions/backfill.js";
 import type * as transactions_helpers from "../transactions/helpers.js";
 import type * as userDeletion_helpers from "../userDeletion/helpers.js";
@@ -128,8 +135,10 @@ import type * as v1_memories_queries from "../v1/memories/queries.js";
 import type * as v1_recurrences_mutations from "../v1/recurrences/mutations.js";
 import type * as v1_recurrences_queries from "../v1/recurrences/queries.js";
 import type * as v1_support_queries from "../v1/support/queries.js";
+import type * as v1_sync_internal from "../v1/sync/internal.js";
 import type * as v1_sync_mutations from "../v1/sync/mutations.js";
 import type * as v1_sync_queries from "../v1/sync/queries.js";
+import type * as v1_sync_validators from "../v1/sync/validators.js";
 import type * as v1_tags_mutations from "../v1/tags/mutations.js";
 import type * as v1_tags_queries from "../v1/tags/queries.js";
 import type * as v1_transactions_mutations from "../v1/transactions/mutations.js";
@@ -139,6 +148,7 @@ import type * as v1_users_internal from "../v1/users/internal.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
 import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_users_utils from "../v1/users/utils.js";
+import type * as v1_voice_metrics from "../v1/voice/metrics.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 import type * as v1_voice_utils from "../v1/voice/utils.js";
 import type * as v1_whatsapp_mutations from "../v1/whatsapp/mutations.js";
@@ -159,6 +169,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agent/helpers": typeof agent_helpers;
   "agent/idempotency": typeof agent_idempotency;
   "agent/internal": typeof agent_internal;
   "agent/prompt": typeof agent_prompt;
@@ -173,6 +184,8 @@ declare const fullApi: ApiFromModules<{
   "agentReports/utils": typeof agentReports_utils;
   "agentUsage/queries": typeof agentUsage_queries;
   aggregates: typeof aggregates;
+  "appUsers/helpers": typeof appUsers_helpers;
+  "appUsers/internal": typeof appUsers_internal;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
   "authNative/mutations": typeof authNative_mutations;
@@ -214,6 +227,7 @@ declare const fullApi: ApiFromModules<{
   "schema/agentMemories": typeof schema_agentMemories;
   "schema/agentReports": typeof schema_agentReports;
   "schema/agentUsage": typeof schema_agentUsage;
+  "schema/appUsers": typeof schema_appUsers;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
   "schema/exchangeRates": typeof schema_exchangeRates;
@@ -245,11 +259,14 @@ declare const fullApi: ApiFromModules<{
   "telemetry/agentPricing": typeof telemetry_agentPricing;
   "telemetry/catalog": typeof telemetry_catalog;
   "telemetry/http": typeof telemetry_http;
+  "telemetry/latency": typeof telemetry_latency;
   "telemetry/metrics": typeof telemetry_metrics;
   "telemetry/mutations": typeof telemetry_mutations;
   "telemetry/queries": typeof telemetry_queries;
   "telemetry/types": typeof telemetry_types;
+  "telemetry/usageActor": typeof telemetry_usageActor;
   "telemetry/validators": typeof telemetry_validators;
+  "transactions/adjustmentBackfill": typeof transactions_adjustmentBackfill;
   "transactions/backfill": typeof transactions_backfill;
   "transactions/helpers": typeof transactions_helpers;
   "userDeletion/helpers": typeof userDeletion_helpers;
@@ -279,8 +296,10 @@ declare const fullApi: ApiFromModules<{
   "v1/recurrences/mutations": typeof v1_recurrences_mutations;
   "v1/recurrences/queries": typeof v1_recurrences_queries;
   "v1/support/queries": typeof v1_support_queries;
+  "v1/sync/internal": typeof v1_sync_internal;
   "v1/sync/mutations": typeof v1_sync_mutations;
   "v1/sync/queries": typeof v1_sync_queries;
+  "v1/sync/validators": typeof v1_sync_validators;
   "v1/tags/mutations": typeof v1_tags_mutations;
   "v1/tags/queries": typeof v1_tags_queries;
   "v1/transactions/mutations": typeof v1_transactions_mutations;
@@ -290,6 +309,7 @@ declare const fullApi: ApiFromModules<{
   "v1/users/mutations": typeof v1_users_mutations;
   "v1/users/queries": typeof v1_users_queries;
   "v1/users/utils": typeof v1_users_utils;
+  "v1/voice/metrics": typeof v1_voice_metrics;
   "v1/voice/sessions": typeof v1_voice_sessions;
   "v1/voice/utils": typeof v1_voice_utils;
   "v1/whatsapp/mutations": typeof v1_whatsapp_mutations;
@@ -339,4 +359,5 @@ export declare const components: {
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
   transactionsByTag: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"transactionsByTag">;
+  latencyByOperation: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"latencyByOperation">;
 };

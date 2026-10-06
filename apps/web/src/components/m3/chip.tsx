@@ -43,6 +43,31 @@ export function ChoiceChip({
 }
 
 /**
+ * M3 assist chip, matching Flutter's `ActionChip`: an outlined shell that runs
+ * one action.
+ */
+export function AssistChip({
+    label,
+    onPress,
+}: {
+    label: string
+    onPress: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onPress}
+            className={cn(
+                CHIP_BASE,
+                'max-w-full cursor-pointer border border-outline text-on-surface',
+            )}
+        >
+            <span className="truncate">{label}</span>
+        </button>
+    )
+}
+
+/**
  * M3 input chip — a committed filter with a trailing remove affordance,
  * matching Flutter's `InputChip(onDeleted: …)`.
  */

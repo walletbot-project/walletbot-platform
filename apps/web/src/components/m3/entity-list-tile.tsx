@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { useReadableAccent } from '@/lib/entity-colors'
 import { cn } from '@/lib/utils'
 import { GroupedCard } from './grouped-card'
 import { Icon } from './icon'
@@ -16,6 +17,8 @@ type EntityListTileProps = {
      */
     trailing?: ReactNode
     chevron?: boolean
+    /** A drag handle shown last, while the list is being reordered. */
+    dragHandle?: ReactNode
     onClick?: () => void
 }
 
@@ -31,6 +34,7 @@ export function EntityListTile({
     subtitle,
     trailing,
     chevron = false,
+    dragHandle,
     onClick,
 }: EntityListTileProps) {
     return (
@@ -55,6 +59,7 @@ export function EntityListTile({
                         className="text-on-surface-variant"
                     />
                 ) : null}
+                {dragHandle ?? null}
             </div>
         </GroupedCard>
     )
@@ -75,6 +80,7 @@ export function EntityAvatar({
     size?: number
     className?: string
 }) {
+    const paint = useReadableAccent()
     return (
         <span
             className={cn(
@@ -82,7 +88,7 @@ export function EntityAvatar({
                 className,
             )}
             style={{
-                backgroundColor: `${color}2E`,
+                backgroundColor: `${paint(color)}2E`,
                 width: size,
                 height: size,
             }}

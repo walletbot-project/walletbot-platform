@@ -175,6 +175,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get balanceUnavailable => 'Balance unavailable';
 
   @override
+  String get declaredBalance => 'Declared balance';
+
+  @override
+  String get platformBalance => 'Calculated balance';
+
+  @override
   String get sameAccounts =>
       'The source and destination accounts must be different';
 
@@ -743,6 +749,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountSaveFailed => 'Could not save the account';
 
   @override
+  String get accountsReorderFailed =>
+      'Could not save the new order of your accounts';
+
+  @override
   String get adjustBalance => 'Adjust balance';
 
   @override
@@ -846,6 +856,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get categorySaveFailed => 'Could not save the category';
+
+  @override
+  String get categoriesReorderFailed =>
+      'Could not save the new order of your categories';
 
   @override
   String get latestMovements => 'Latest movements';
@@ -1636,6 +1650,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get widgetTypeBalance => 'Balance';
 
   @override
+  String get widgetTypeBalanceComparison => 'Balance comparison';
+
+  @override
+  String get dashboardLastMonthBalance => 'Last month\'s balance';
+
+  @override
+  String get dashboardCurrentBalance => 'Current balance';
+
+  @override
+  String get dashboardBalanceDifference => 'Difference';
+
+  @override
   String get widgetTypeChart => 'Chart';
 
   @override
@@ -1717,26 +1743,135 @@ class AppLocalizationsEn extends AppLocalizations {
   String get result => 'result';
 
   @override
-  String get connected => 'connected';
-
-  @override
-  String get connecting => 'connecting';
-
-  @override
-  String get idle => 'idle';
-
-  @override
   String get connectionLostReconnecting =>
       'Connection lost. Reconnecting automatically…';
 
   @override
-  String get connectingPrompt => 'Connecting…';
-
-  @override
-  String get voiceStartPrompt => 'Tap the mic to start a conversation';
-
-  @override
   String get typeMessage => 'Type a message…';
+
+  @override
+  String get voiceWelcomeTitle => 'How can I help?';
+
+  @override
+  String get voiceWelcome =>
+      'Tell me about an expense or ask about your accounts';
+
+  @override
+  String get voiceStartTalking => 'Start call';
+
+  @override
+  String get voiceLiveHint => 'Hands-free mode';
+
+  @override
+  String get voiceExitLive => 'End call';
+
+  @override
+  String get voiceRecordVoiceNote => 'Record a voice note';
+
+  @override
+  String get voiceDiscardVoiceNote => 'Discard voice note';
+
+  @override
+  String get voiceNoteLimit => '5 minute limit';
+
+  @override
+  String get voiceOnCall => 'On a call';
+
+  @override
+  String get voiceRecordHint => 'Tap or hold to record a voice note';
+
+  @override
+  String get voicePreparingMic => 'Getting the mic ready';
+
+  @override
+  String get voiceListening => 'I\'m listening';
+
+  @override
+  String get voiceMicPaused => 'Mic paused';
+
+  @override
+  String get voiceSlideToLock => 'Slide up to lock';
+
+  @override
+  String get voicePause => 'Pause';
+
+  @override
+  String get voiceResume => 'Resume';
+
+  @override
+  String get voiceSend => 'Send';
+
+  @override
+  String suggestionLogExpense(String amount, String category) {
+    return 'I spent $amount on $category';
+  }
+
+  @override
+  String suggestionLogExpenseWithAccount(
+    String amount,
+    String category,
+    String account,
+  ) {
+    return 'I spent $amount on $category with $account';
+  }
+
+  @override
+  String suggestionSpentInCategoryThisMonth(String category) {
+    return 'How much did I spend on $category this month?';
+  }
+
+  @override
+  String suggestionAccountBalance(String account) {
+    return 'How much do I have in $account?';
+  }
+
+  @override
+  String get suggestionTopSpendingThisMonth =>
+      'What did I spend the most on this month?';
+
+  @override
+  String suggestionCompareCategoryLastMonth(String category) {
+    return 'Did I spend more on $category than last month?';
+  }
+
+  @override
+  String suggestionTransfer(String amount, String account, String toAccount) {
+    return 'I moved $amount from $account to $toAccount';
+  }
+
+  @override
+  String suggestionLogIncome(String amount, String account) {
+    return 'I got paid $amount into $account';
+  }
+
+  @override
+  String suggestionSpentWithTag(String tag) {
+    return 'How much did I spend tagged $tag?';
+  }
+
+  @override
+  String get suggestionRecentExpenses => 'What were my latest expenses?';
+
+  @override
+  String get suggestionWhatCanYouDo => 'What can you do?';
+
+  @override
+  String get suggestionCreateCashAccount => 'Create a cash account';
+
+  @override
+  String get suggestionSetupCategories => 'Help me set up my categories';
+
+  @override
+  String get suggestionHowToLogExpense => 'How do I record an expense?';
+
+  @override
+  String get suggestionHomeWidget =>
+      'Add a Home widget with this month\'s spending';
+
+  @override
+  String suggestionHomeWidgetForCategory(String category) {
+    return 'Add a Home widget with my spending on $category';
+  }
 
   @override
   String get microphonePermissionDenied => 'Microphone permission denied';
@@ -1833,6 +1968,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tagSaveFailed => 'Could not save the tag';
+
+  @override
+  String get tagsReorderFailed => 'Could not save the new order of your tags';
 
   @override
   String get legalFirstTitle => 'Before you start';

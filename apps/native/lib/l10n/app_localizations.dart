@@ -422,6 +422,18 @@ abstract class AppLocalizations {
   /// **'Balance unavailable'**
   String get balanceUnavailable;
 
+  /// No description provided for @declaredBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Declared balance'**
+  String get declaredBalance;
+
+  /// No description provided for @platformBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculated balance'**
+  String get platformBalance;
+
   /// No description provided for @sameAccounts.
   ///
   /// In en, this message translates to:
@@ -1430,6 +1442,12 @@ abstract class AppLocalizations {
   /// **'Could not save the account'**
   String get accountSaveFailed;
 
+  /// No description provided for @accountsReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your accounts'**
+  String get accountsReorderFailed;
+
   /// No description provided for @adjustBalance.
   ///
   /// In en, this message translates to:
@@ -1627,6 +1645,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the category'**
   String get categorySaveFailed;
+
+  /// No description provided for @categoriesReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your categories'**
+  String get categoriesReorderFailed;
 
   /// No description provided for @latestMovements.
   ///
@@ -2972,6 +2996,30 @@ abstract class AppLocalizations {
   /// **'Balance'**
   String get widgetTypeBalance;
 
+  /// No description provided for @widgetTypeBalanceComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance comparison'**
+  String get widgetTypeBalanceComparison;
+
+  /// No description provided for @dashboardLastMonthBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Last month\'s balance'**
+  String get dashboardLastMonthBalance;
+
+  /// No description provided for @dashboardCurrentBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Current balance'**
+  String get dashboardCurrentBalance;
+
+  /// No description provided for @dashboardBalanceDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference'**
+  String get dashboardBalanceDifference;
+
   /// No description provided for @widgetTypeChart.
   ///
   /// In en, this message translates to:
@@ -3134,47 +3182,219 @@ abstract class AppLocalizations {
   /// **'result'**
   String get result;
 
-  /// No description provided for @connected.
-  ///
-  /// In en, this message translates to:
-  /// **'connected'**
-  String get connected;
-
-  /// No description provided for @connecting.
-  ///
-  /// In en, this message translates to:
-  /// **'connecting'**
-  String get connecting;
-
-  /// No description provided for @idle.
-  ///
-  /// In en, this message translates to:
-  /// **'idle'**
-  String get idle;
-
   /// No description provided for @connectionLostReconnecting.
   ///
   /// In en, this message translates to:
   /// **'Connection lost. Reconnecting automatically…'**
   String get connectionLostReconnecting;
 
-  /// No description provided for @connectingPrompt.
-  ///
-  /// In en, this message translates to:
-  /// **'Connecting…'**
-  String get connectingPrompt;
-
-  /// No description provided for @voiceStartPrompt.
-  ///
-  /// In en, this message translates to:
-  /// **'Tap the mic to start a conversation'**
-  String get voiceStartPrompt;
-
   /// No description provided for @typeMessage.
   ///
   /// In en, this message translates to:
   /// **'Type a message…'**
   String get typeMessage;
+
+  /// No description provided for @voiceWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How can I help?'**
+  String get voiceWelcomeTitle;
+
+  /// No description provided for @voiceWelcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell me about an expense or ask about your accounts'**
+  String get voiceWelcome;
+
+  /// No description provided for @voiceStartTalking.
+  ///
+  /// In en, this message translates to:
+  /// **'Start call'**
+  String get voiceStartTalking;
+
+  /// No description provided for @voiceLiveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Hands-free mode'**
+  String get voiceLiveHint;
+
+  /// No description provided for @voiceExitLive.
+  ///
+  /// In en, this message translates to:
+  /// **'End call'**
+  String get voiceExitLive;
+
+  /// No description provided for @voiceRecordVoiceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a voice note'**
+  String get voiceRecordVoiceNote;
+
+  /// No description provided for @voiceDiscardVoiceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard voice note'**
+  String get voiceDiscardVoiceNote;
+
+  /// No description provided for @voiceNoteLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'5 minute limit'**
+  String get voiceNoteLimit;
+
+  /// No description provided for @voiceOnCall.
+  ///
+  /// In en, this message translates to:
+  /// **'On a call'**
+  String get voiceOnCall;
+
+  /// No description provided for @voiceRecordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap or hold to record a voice note'**
+  String get voiceRecordHint;
+
+  /// No description provided for @voicePreparingMic.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting the mic ready'**
+  String get voicePreparingMic;
+
+  /// No description provided for @voiceListening.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m listening'**
+  String get voiceListening;
+
+  /// No description provided for @voiceMicPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Mic paused'**
+  String get voiceMicPaused;
+
+  /// No description provided for @voiceSlideToLock.
+  ///
+  /// In en, this message translates to:
+  /// **'Slide up to lock'**
+  String get voiceSlideToLock;
+
+  /// No description provided for @voicePause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get voicePause;
+
+  /// No description provided for @voiceResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get voiceResume;
+
+  /// No description provided for @voiceSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get voiceSend;
+
+  /// No description provided for @suggestionLogExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'I spent {amount} on {category}'**
+  String suggestionLogExpense(String amount, String category);
+
+  /// No description provided for @suggestionLogExpenseWithAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'I spent {amount} on {category} with {account}'**
+  String suggestionLogExpenseWithAccount(
+    String amount,
+    String category,
+    String account,
+  );
+
+  /// No description provided for @suggestionSpentInCategoryThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'How much did I spend on {category} this month?'**
+  String suggestionSpentInCategoryThisMonth(String category);
+
+  /// No description provided for @suggestionAccountBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'How much do I have in {account}?'**
+  String suggestionAccountBalance(String account);
+
+  /// No description provided for @suggestionTopSpendingThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'What did I spend the most on this month?'**
+  String get suggestionTopSpendingThisMonth;
+
+  /// No description provided for @suggestionCompareCategoryLastMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Did I spend more on {category} than last month?'**
+  String suggestionCompareCategoryLastMonth(String category);
+
+  /// No description provided for @suggestionTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'I moved {amount} from {account} to {toAccount}'**
+  String suggestionTransfer(String amount, String account, String toAccount);
+
+  /// No description provided for @suggestionLogIncome.
+  ///
+  /// In en, this message translates to:
+  /// **'I got paid {amount} into {account}'**
+  String suggestionLogIncome(String amount, String account);
+
+  /// No description provided for @suggestionSpentWithTag.
+  ///
+  /// In en, this message translates to:
+  /// **'How much did I spend tagged {tag}?'**
+  String suggestionSpentWithTag(String tag);
+
+  /// No description provided for @suggestionRecentExpenses.
+  ///
+  /// In en, this message translates to:
+  /// **'What were my latest expenses?'**
+  String get suggestionRecentExpenses;
+
+  /// No description provided for @suggestionWhatCanYouDo.
+  ///
+  /// In en, this message translates to:
+  /// **'What can you do?'**
+  String get suggestionWhatCanYouDo;
+
+  /// No description provided for @suggestionCreateCashAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a cash account'**
+  String get suggestionCreateCashAccount;
+
+  /// No description provided for @suggestionSetupCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'Help me set up my categories'**
+  String get suggestionSetupCategories;
+
+  /// No description provided for @suggestionHowToLogExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'How do I record an expense?'**
+  String get suggestionHowToLogExpense;
+
+  /// No description provided for @suggestionHomeWidget.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a Home widget with this month\'s spending'**
+  String get suggestionHomeWidget;
+
+  /// No description provided for @suggestionHomeWidgetForCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a Home widget with my spending on {category}'**
+  String suggestionHomeWidgetForCategory(String category);
 
   /// No description provided for @microphonePermissionDenied.
   ///
@@ -3325,6 +3545,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the tag'**
   String get tagSaveFailed;
+
+  /// No description provided for @tagsReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your tags'**
+  String get tagsReorderFailed;
 
   /// No description provided for @legalFirstTitle.
   ///

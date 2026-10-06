@@ -4,10 +4,12 @@ import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/components/icon_picker.dart';
+import 'package:app/components/reorderable_grouped_list.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
@@ -66,12 +68,15 @@ class _CategoriesViewState extends State<CategoriesView>
           );
         }
 
-        return ListView.separated(
+        // Long-press a row to drag it into a new place (WAL-199).
+        return ReorderableGroupedList<CategoryWithCount>(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-          itemCount: data.length,
-          separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
-          itemBuilder: (context, index) {
-            final entry = data[index];
+          items: data,
+          idOf: (entry) => entry.category.id,
+          reorderFailedMessage: context.l10n.categoriesReorderFailed,
+          onReorder: (ordered) =>
+              categories.reorder([for (final e in ordered) e.category.id]),
+          itemBuilder: (context, entry, radius) {
             final category = entry.category;
             return CategoryListTile(
               name: category.name,
@@ -81,7 +86,7 @@ class _CategoriesViewState extends State<CategoriesView>
                 fallback: categoryDefaultColor,
               ),
               usageCount: entry.transactionCount,
-              borderRadius: groupedRadius(index, data.length),
+              borderRadius: radius,
               onTap: () => widget.onSelect(entry),
             );
           },
@@ -160,6 +165,11 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     widget.category.color,
     fallback: categoryDefaultColor,
   );
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   late IconData _icon = categoryIconFromName(widget.category.icon);
   late final TextEditingController _nameController = TextEditingController(
     text: widget.category.name,
@@ -181,6 +191,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
       context,
       selected: _color,
       options: colorOptions,
+      themed: true,
     );
     if (picked != null) setState(() => _color = picked);
   }
@@ -271,6 +282,15 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     }
   }
 
+  /// Opens the manual form with this category preselected.
+  Future<void> _openTransactionForm() async {
+    await pushTransactionForm(
+      context,
+      repos: widget.repos,
+      categoryId: _categoryId,
+    );
+  }
+
   void _openAllTransactions() {
     _close(); // close the sheet before switching tabs
     widget.nav.openActivityForCategory(_categoryId);
@@ -329,6 +349,13 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
         _buildIdentityGroup(context),
         const SizedBox(height: 12),
         _buildActions(context),
+        const SizedBox(height: 8),
+        M3EFilledButton.tonalIcon(
+          onPressed: _saving ? null : _openTransactionForm,
+          size: M3EButtonSize.md,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(context.l10n.addTransaction),
+        ),
         const SizedBox(height: 28),
         _buildTransactionsHeader(context),
         const SizedBox(height: 8),
@@ -372,7 +399,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     return Column(
       children: [
         Material(
-          color: _color.withValues(alpha: 0.14),
+          color: _paintedColor.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(kGroupOuterRadius),
             bottom: Radius.circular(kGroupInnerRadius),
@@ -391,11 +418,11 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: _color.withValues(alpha: 0.28),
+                      color: _paintedColor.withValues(alpha: 0.28),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(_icon, size: 30, color: _color),
+                    child: Icon(_icon, size: 30, color: _paintedColor),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -429,7 +456,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: _color,
+                        color: _paintedColor,
                         borderRadius: BorderRadius.circular(9),
                         border: Border.all(
                           color: colors.outlineVariant.withValues(alpha: 0.5),

@@ -23,6 +23,7 @@
 
 import {
     AGENT_CONTEXT_CAPS,
+    adjustmentAmount,
     convertAmount,
     DEFAULT_FX_MARKET,
     fxAlternatives,
@@ -38,6 +39,7 @@ import {
     toolSchemas,
 } from '@wallet-bot/shared'
 import { v } from 'convex/values'
+import { ZodError } from 'zod'
 import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
@@ -46,11 +48,18 @@ import { resolveFlagsForUser } from '../featureFlags/helpers'
 import { nextSeq, writeTombstone } from '../sync/helpers'
 import { tagAggregateDetach } from '../tags/helpers'
 import {
+    type AgentToolErrorReason,
+    recordAgentToolCall,
+    recordAgentToolError,
     recordFinancialAccountCreated,
     recordMovementCreated,
     recordTransferCreated,
 } from '../telemetry/metrics'
-import { aggregateInsert, aggregateReplace } from '../transactions/helpers'
+import {
+    aggregateInsert,
+    aggregateReplace,
+    balanceBeforeInLedger,
+} from '../transactions/helpers'
 import { hasDuplicateAccount } from '../v1/accounts/helpers'
 import {
     DEFAULT_ACCOUNT_COLOR,
@@ -64,12 +73,14 @@ import { DEFAULT_TAG_COLOR } from '../v1/tags/mutations'
 import { attachTags, detachTags } from '../v1/transactions/mutations'
 import { computeAccountBalance } from '../v1/transactions/queries'
 import { getDefaultCurrency } from '../v1/users/helpers'
+import { invalidToolArgsError } from './helpers'
 import { newEntityId } from './idempotency'
 import type { Resolution } from './resolve'
 import { resolveAccount, resolveCategory, resolveTag } from './resolve'
 import {
     formatLocalDateTime,
     hostDateAtLocalWallClock,
+    parseAgentBalanceAsOf,
     parseAgentDate,
     parseAgentDateEndOfDay,
     parseAgentTransactionDate,
@@ -97,9 +108,17 @@ const MAX_MEMORY_CHARS = 500
 type ToolResult = Record<string, unknown>
 
 const ok = (data: ToolResult = {}): ToolResult => ({ ok: true, ...data })
-const fail = (error: string, data: ToolResult = {}): ToolResult => ({
+// `reason` is consumed by `execute` for `agent.tool.errors.count` and
+// stripped before the result reaches the model — it's telemetry-only, not
+// part of the tool-call wire contract.
+const fail = (
+    error: string,
+    data: ToolResult = {},
+    reason: AgentToolErrorReason = 'invalid_args',
+): ToolResult => ({
     ok: false,
     error,
+    reason,
     ...data,
 })
 
@@ -112,8 +131,12 @@ const unresolved = <T>(
     resolution: Exclude<Resolution<T>, { kind: 'resolved' }>,
 ): ToolResult =>
     resolution.kind === 'ambiguous'
-        ? fail(`${label} is ambiguous`, { candidates: resolution.candidates })
-        : fail(`${label} not found`)
+        ? fail(
+              `${label} is ambiguous`,
+              { candidates: resolution.candidates },
+              'not_found',
+          )
+        : fail(`${label} not found`, {}, 'not_found')
 
 type Ctx = MutationCtx
 
@@ -558,11 +581,16 @@ const updateTagTool = async (
     }
     if (args.description !== undefined) patch.description = args.description
     if (args.color !== undefined) patch.color = args.color
-    await ctx.db.patch(row._id, {
-        ...patch,
-        updatedAt: BigInt(Date.now()),
-        seq,
-    })
+    const updatedAt = BigInt(Date.now())
+    if (patch.parentId !== undefined && patch.parentId !== row.parentId) {
+        // Moving under another parent drops the tag's position among its old
+        // siblings. Written with `replace` and an explicit document, as below
+        // and in `v1/tags/mutations.ts`, so the field is really gone.
+        const { _id, _creationTime, position: _position, ...rest } = row
+        await ctx.db.replace(_id, { ...rest, ...patch, updatedAt, seq })
+        return ok({ id: row.id })
+    }
+    await ctx.db.patch(row._id, { ...patch, updatedAt, seq })
     return ok({ id: row.id })
 }
 
@@ -589,7 +617,9 @@ const archiveTagTool = async (
         // Written with `replace` and an explicitly built document, the same
         // way `v1/tags/mutations.ts` does it: a child of a top-level tag must
         // end up with no `parentId` field at all, and `patch(..., {parentId:
-        // undefined})` is ambiguous about whether that removes it.
+        // undefined})` is ambiguous about whether that removes it. `position`
+        // is deliberately left out: it ranked the child among its old
+        // siblings, and the child is changing parent.
         const doc: {
             userId: string
             id: string
@@ -1021,17 +1051,6 @@ const addBalanceAdjustmentTool = async (
     const replay = await getTransactionRow(ctx, userId, id)
     if (replay) return ok({ id, duplicate: true })
 
-    // `balanceAfter` is the user's observed truth and is stored verbatim; the
-    // delta is derived, never the other way around.
-    const balanceAfter = parseAmountToCents(args.balanceAfter)
-    const current = await computeAccountBalance(
-        ctx,
-        userId,
-        account.value.id,
-        pastCutoffBigInt(new Date(clock.nowMs)),
-    )
-    const amount = balanceAfter - current
-
     const date = BigInt(
         parseAgentTransactionDate(
             args.date,
@@ -1041,9 +1060,25 @@ const addBalanceAdjustmentTool = async (
             clock.offsetMinutes,
         ),
     )
+    const now = BigInt(Date.now())
+
+    // `balanceAfter` is the user's declaration and is stored verbatim; the
+    // delta is derived from the ledger just before the adjustment's own date,
+    // never the other way around, and later writes before it re-derive it.
+    const balanceAfter = parseAmountToCents(args.balanceAfter)
+    const current = await balanceBeforeInLedger(ctx, userId, account.value.id, {
+        id,
+        type: 'balance_adjustment',
+        accountId: account.value.id,
+        amount: 0n,
+        balanceAfter,
+        date,
+        createdAt: now,
+        isArchived: false,
+    })
+    const amount = adjustmentAmount(balanceAfter, current)
 
     const seq = await nextSeq(ctx, userId)
-    const now = BigInt(Date.now())
     const inserted = await ctx.db.insert('transactions', {
         userId,
         id,
@@ -1089,6 +1124,24 @@ const updateTransactionTool = async (
 ): Promise<ToolResult> => {
     const row = await getTransactionRow(ctx, userId, args.id)
     if (!row) return fail('Transaction not found')
+
+    // An adjustment's amount is derived from the ledger and its date is when
+    // the declaration was made; neither is editable. A new declaration is a
+    // new adjustment.
+    if (row.type === 'balance_adjustment') {
+        if (args.amount !== undefined) {
+            return fail(
+                'A balance adjustment amount cannot be changed; record a new balance adjustment instead',
+            )
+        }
+        if (
+            args.date !== undefined ||
+            args.time !== undefined ||
+            args.timeStatus !== undefined
+        ) {
+            return fail('A balance adjustment date cannot be changed')
+        }
+    }
 
     let categoryId: string | undefined
     if (args.categoryIdOrName !== undefined) {
@@ -1591,17 +1644,28 @@ const dispatch = async (
             const args = toolSchemas.getAccountBalance.parse(raw)
             const found = await resolveAccount(ctx, userId, args.idOrName)
             if (found.kind !== 'resolved') return unresolved('Account', found)
+            // With a date, the balance at the end of that day in the user's
+            // calendar; without one, the balance right now.
+            const asOfMs =
+                args.date === undefined
+                    ? pastCutoffBigInt(new Date(clock.nowMs))
+                    : parseAgentBalanceAsOf(
+                          args.date,
+                          clock.nowMs,
+                          clock.offsetMinutes,
+                      )
             const balance = await computeAccountBalance(
                 ctx,
                 userId,
                 found.value.id,
-                pastCutoffBigInt(new Date(clock.nowMs)),
+                asOfMs,
             )
             return ok({
                 accountId: found.value.id,
                 accountName: found.value.name,
                 balance: centsToDecimal(balance),
                 currency: found.value.currency,
+                ...(args.date !== undefined ? { date: args.date } : {}),
             })
         }
         case 'createAccount':
@@ -1810,7 +1874,7 @@ const dispatch = async (
             )
 
         default:
-            return fail(`Unknown tool: ${name}`)
+            return fail(`Unknown tool: ${name}`, {}, 'unknown')
     }
 }
 
@@ -1842,8 +1906,28 @@ export const execute = internalMutation({
         writeKey: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<string> => {
+        // Records `agent.tool.calls.count`, plus `agent.tool.errors.count`
+        // for a failed result, then strips the telemetry-only `reason` field
+        // before the envelope reaches the model.
+        const finish = async (result: ToolResult): Promise<string> => {
+            await recordAgentToolCall(ctx, { toolName: args.name })
+            if (result.ok === false) {
+                await recordAgentToolError(ctx, {
+                    toolName: args.name,
+                    reason:
+                        (result.reason as AgentToolErrorReason | undefined) ??
+                        'invalid_args',
+                })
+            }
+            const { reason, ...publicResult } = result
+            void reason
+            return JSON.stringify(publicResult)
+        }
+
         if (!isAgentToolName(args.name)) {
-            return JSON.stringify(fail(`Unknown tool: ${args.name}`))
+            return await finish(
+                fail(`Unknown tool: ${args.name}`, {}, 'unknown'),
+            )
         }
         // A flag-gated tool is already filtered out of the declarations the
         // model is given (`agent/runner.ts`), so this is not a duplicate check
@@ -1853,25 +1937,44 @@ export const execute = internalMutation({
         if (flag !== undefined) {
             const flags = await resolveFlagsForUser(ctx, args.userId)
             if (!flags[flag]) {
-                return JSON.stringify(fail(`Unknown tool: ${args.name}`))
+                return await finish(
+                    fail(`Unknown tool: ${args.name}`, {}, 'unknown'),
+                )
             }
         }
-        const raw: unknown = JSON.parse(args.argsJson)
+        // A throw (a malformed argument via zod's `.parse`, a failed aggregate
+        // write) rolls this whole transaction back — any telemetry written
+        // here included — so thrown errors are recorded by the caller,
+        // outside the transaction (`agent/runner.ts`). Malformed arguments are
+        // rethrown as a coded `ConvexError` so the caller can tell them from
+        // a bug; they still throw, so the rollback is unchanged.
+        let raw: unknown
+        try {
+            raw = JSON.parse(args.argsJson)
+        } catch (error) {
+            throw invalidToolArgsError(error)
+        }
         if (hasUnsupportedRecurrenceArguments(args.name, raw)) {
-            return JSON.stringify(
+            return await finish(
                 fail(
                     'Recurring movements and series-wide changes must be managed in the app.',
                 ),
             )
         }
-        const result = await dispatch(
-            ctx,
-            args.userId,
-            args.name,
-            raw,
-            { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
-            args.writeKey,
-        )
-        return JSON.stringify(result)
+        try {
+            const result = await dispatch(
+                ctx,
+                args.userId,
+                args.name,
+                raw,
+                { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
+                args.writeKey,
+            )
+            return await finish(result)
+        } catch (error) {
+            throw error instanceof ZodError
+                ? invalidToolArgsError(error)
+                : error
+        }
     },
 })

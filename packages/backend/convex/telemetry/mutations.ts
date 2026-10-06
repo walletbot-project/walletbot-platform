@@ -1,7 +1,19 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import { internalMutation } from '../_generated/server'
-import { insertMetricBatch } from './metrics'
+import {
+    BATCH_SIZE_BUCKETS,
+    deleteExpiredLatencySamples as deleteExpiredSamples,
+    FIRST_RESPONSE_MODES,
+    insertLatencySample,
+    latencySnapshotMetrics,
+} from './latency'
+import {
+    insertMetricBatch,
+    recordAgentToolCall,
+    recordAgentToolError,
+    recordFunctionDuration,
+} from './metrics'
 import { metricInput, telemetryEventInput } from './validators'
 
 const authMethod = v.union(
@@ -148,6 +160,99 @@ export const recordUserAccountSignedIn = internalMutation({
             })
             return { accepted: 0 }
         }
+    },
+})
+
+// Called via `ctx.runMutation` from `whatsapp/nodeActions.ts:runAgentTurn`
+// (an action, no direct DB access) — the same action→mutation hop
+// `recordUserAccountCreated`/`recordUserAccountSignedIn` above use.
+export const recordFunctionDurationInternal = internalMutation({
+    args: {
+        function: v.literal('agent_turn'),
+        durationMs: v.number(),
+        status: v.union(v.literal('ok'), v.literal('error')),
+    },
+    handler: async (ctx, args) => {
+        await recordFunctionDuration(ctx, args)
+        return null
+    },
+})
+
+// Called from `agent/runner.ts` when `agent/tools.ts:execute` throws. The
+// throw rolled back everything `execute` wrote — its attempt count included —
+// so both the call and the error can only be recorded from outside that
+// transaction, in a mutation of their own.
+export const recordThrownAgentToolCall = internalMutation({
+    args: {
+        toolName: v.string(),
+        reason: v.union(v.literal('invalid_args'), v.literal('unknown')),
+    },
+    handler: async (ctx, args) => {
+        await recordAgentToolCall(ctx, { toolName: args.toolName })
+        await recordAgentToolError(ctx, args)
+        return null
+    },
+})
+
+// Scheduled by `telemetry/latency.ts:scheduleLatencySample`, never inline in
+// the operation being timed.
+export const recordLatencySample = internalMutation({
+    args: {
+        sample: v.union(
+            v.object({
+                operation: v.literal('sync_push'),
+                segment: v.union(
+                    ...BATCH_SIZE_BUCKETS.map((bucket) => v.literal(bucket)),
+                ),
+                durationMs: v.number(),
+            }),
+            v.object({
+                operation: v.literal('agent_first_response'),
+                segment: v.union(
+                    ...FIRST_RESPONSE_MODES.map((mode) => v.literal(mode)),
+                ),
+                durationMs: v.number(),
+            }),
+        ),
+    },
+    handler: async (ctx, args) => {
+        await insertLatencySample(ctx, args.sample)
+        return null
+    },
+})
+
+// Keeps `latencySamples` and its aggregate to the rolling window. Continues
+// itself while a full batch comes back, so a burst of traffic can't outgrow
+// the cron.
+export const deleteExpiredLatencySamples = internalMutation({
+    args: { limit: v.number() },
+    handler: async (ctx, args) => {
+        const limit = Math.min(Math.max(args.limit, 1), 200)
+        const deleted = await deleteExpiredSamples(ctx, {
+            now: Date.now(),
+            limit,
+        })
+        if (deleted === limit) {
+            await ctx.scheduler.runAfter(
+                0,
+                internal.telemetry.mutations.deleteExpiredLatencySamples,
+                { limit },
+            )
+        }
+        return { deleted }
+    },
+})
+
+// The latency percentiles as gauges, through the same outbox and exporter as
+// every other metric.
+export const recordLatencyPercentiles = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const now = Date.now()
+        return await insertMetricBatch(ctx, {
+            metrics: await latencySnapshotMetrics(ctx, now),
+            receivedAt: now,
+        })
     },
 })
 

@@ -45,7 +45,7 @@ const toolDescriptions = {
     getAccount:
         'Get a single account by UUID or name (case-insensitive). Use it when the context snapshot may be stale or a name is ambiguous — on ambiguity it returns candidates to choose from.',
     getAccountBalance:
-        'Get the current balance of an account in its own currency. Fails with "Account not found" when the id or name resolves to nothing.',
+        'Get the balance of an account in its own currency: the current one, or with `date` the balance at the end of that day (every movement of the day counts; for today it is the current balance; for a future day it includes the movements already scheduled up to then). For a currency total, call it per account and add the results. Fails with "Account not found" when the id or name resolves to nothing.',
     createAccount:
         'Create a new account. Currency is immutable once set and defaults to the user default currency when omitted. Returns the new account id.',
     updateAccount:
@@ -90,8 +90,8 @@ const toolDescriptions = {
     addTransfer:
         'Record a transfer between two of the user accounts. Category is optional. For cross-currency transfers, provide toAmount (and optionally exchangeRate) — same-currency transfers derive toAmount automatically.',
     addBalanceAdjustment:
-        'Record that the actual balance of an account is balanceAfter. The system computes the difference. Use when the user counted cash or reconciles a statement.',
-    updateTransaction: `Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in \`missing\`.${RECURRENCE_PARTS.updateTransaction.suffix}`,
+        "Record the user's declaration that an account holds balanceAfter at a moment (now unless date/time say otherwise). Use when the user counted cash or reconciles a statement. The system stores the difference from the balance it had computed just before that moment and keeps it current: recording, editing or deleting a movement dated before the adjustment changes the difference so the declared balance still holds; movements dated after it never touch it.",
+    updateTransaction: `Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in \`missing\`. A balance adjustment only accepts name, description, status and tags: its amount is derived and its date is when the declaration was made, so to correct a declared balance record a new balance adjustment.${RECURRENCE_PARTS.updateTransaction.suffix}`,
     deleteTransaction: `Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok.${RECURRENCE_PARTS.deleteTransaction.suffix}`,
     addRecurrenceOccurrences:
         'Extend an open-ended recurring rule by another batch, continuing from the LAST occurrence that exists — not from whichever one the user mentioned. Returns how many were created. Fails for a rule with an end date: that series is already complete, so change the end date instead.',
@@ -114,9 +114,9 @@ const toolDescriptions = {
     listDashboardWidgets:
         'List the home dashboard widgets in display order, including type, width, options, and resolved filter JSON. The same dashboard is shared across the user devices. Always call this before editing the layout — never invent widget ids.',
     createDashboardWidget:
-        'Create a home dashboard widget. Types: stat (aggregation sum/net/count over a filter), list (recent matching movements, `limit` rows), balance (as-of-now balance for `currency`, optionally scoped to accountIds — never date-bounded and it takes no filter), chart (breakdown by category/account/month; transfers are excluded from breakdowns). Width maps to a 6-unit grid: full=6, two_thirds=4, half=3, third=2. New widgets land on a fresh row below everything placed.',
+        'Create a home dashboard widget. Types: stat (aggregation sum/net/count over a filter), list (recent matching movements, `limit` rows), balance (as-of-now balance for `currency`, optionally scoped to accountIds — never date-bounded and it takes no filter), chart (breakdown by category/account/month; transfers are excluded from breakdowns), balance_comparison (the closing balance of last month — every movement of its last day counts —, the current balance, and the difference, for `currency` optionally scoped to accountIds; takes no filter). Width maps to a 6-unit grid: full=6, two_thirds=4, half=3, third=2. New widgets land on a fresh row below everything placed.',
     updateDashboardWidget:
-        'Edit a home dashboard widget: type, title, width, filter JSON, display options, background. Options not mentioned keep their current value, except balance accountIds which must be re-stated on every edit. Fails with "Dashboard widget not found" for unknown or archived ids.',
+        'Edit a home dashboard widget: type, title, width, filter JSON, display options, background. Options not mentioned keep their current value, except balance and balance_comparison accountIds, which must be re-stated on every edit. Fails with "Dashboard widget not found" for unknown or archived ids.',
     reorderDashboardWidgets:
         'Reorder the home dashboard by passing ALL live widget ids in display order (get them from listDashboardWidgets). Ids that name no live widget are skipped without shifting the rest.',
     archiveDashboardWidget:

@@ -1,0 +1,642 @@
+{
+    "datasets": {
+        "rich": {
+            "accounts": [
+                {
+                    "id": "a1",
+                    "name": "Mercado Pago",
+                    "currency": "ARS"
+                },
+                {
+                    "id": "a2",
+                    "name": "Brubank",
+                    "currency": "ARS"
+                },
+                {
+                    "id": "a3",
+                    "name": "Efectivo",
+                    "currency": "ARS"
+                },
+                {
+                    "id": "a4",
+                    "name": "Wise",
+                    "currency": "USD"
+                }
+            ],
+            "categories": [
+                {
+                    "id": "c1",
+                    "name": "Supermercado"
+                },
+                {
+                    "id": "c2",
+                    "name": "Café"
+                },
+                {
+                    "id": "c3",
+                    "name": "Transporte"
+                },
+                {
+                    "id": "c4",
+                    "name": "Sueldo"
+                },
+                {
+                    "id": "c5",
+                    "name": "Salidas"
+                }
+            ],
+            "tags": [
+                {
+                    "name": "Vacaciones",
+                    "usageCount": 3
+                },
+                {
+                    "name": "Trabajo",
+                    "usageCount": 0
+                },
+                {
+                    "name": "Regalos",
+                    "usageCount": 1
+                }
+            ],
+            "movements": [
+                {
+                    "type": "expense",
+                    "amountCents": 4532050,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 350000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c2"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 420000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c2"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 120000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c3"
+                },
+                {
+                    "type": "transfer",
+                    "amountCents": 5000000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c1",
+                    "toAccountId": "a1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 3870000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "income",
+                    "amountCents": 120000000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c4"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 2500000,
+                    "currency": "ARS",
+                    "accountId": "a3",
+                    "categoryId": "c5"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 380000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c2"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 100000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c9"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 5100000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 90000,
+                    "currency": "ARS",
+                    "accountId": "a3",
+                    "categoryId": "c3"
+                },
+                {
+                    "type": "transfer",
+                    "amountCents": 3000000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c1",
+                    "toAccountId": "a1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 4500,
+                    "currency": "USD",
+                    "accountId": "a4",
+                    "categoryId": "c5"
+                },
+                {
+                    "type": "income",
+                    "amountCents": 115000000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c4"
+                },
+                {
+                    "type": "balance_adjustment",
+                    "amountCents": 1000000,
+                    "currency": "ARS",
+                    "accountId": "a3",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 999000,
+                    "currency": "ARS",
+                    "accountId": "a9",
+                    "categoryId": "c2"
+                }
+            ]
+        },
+        "noTransfersTwoArsAccounts": {
+            "accounts": [
+                {
+                    "id": "a1",
+                    "name": "Galicia",
+                    "currency": "ARS"
+                },
+                {
+                    "id": "a2",
+                    "name": "Efectivo",
+                    "currency": "ARS"
+                }
+            ],
+            "categories": [
+                {
+                    "id": "c1",
+                    "name": "Farmacia"
+                },
+                {
+                    "id": "c2",
+                    "name": "Nafta"
+                }
+            ],
+            "tags": [],
+            "movements": [
+                {
+                    "type": "expense",
+                    "amountCents": 1834000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 4200000,
+                    "currency": "ARS",
+                    "accountId": "a2",
+                    "categoryId": "c2"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 3950000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c2"
+                }
+            ]
+        },
+        "singleAccountOneCategory": {
+            "accounts": [
+                {
+                    "id": "a1",
+                    "name": "Efectivo",
+                    "currency": "ARS"
+                }
+            ],
+            "categories": [
+                {
+                    "id": "c1",
+                    "name": "Comida"
+                }
+            ],
+            "tags": [],
+            "movements": [
+                {
+                    "type": "expense",
+                    "amountCents": 150000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 210000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c1"
+                }
+            ]
+        },
+        "newUser": {
+            "accounts": [
+                {
+                    "id": "a1",
+                    "name": "Efectivo",
+                    "currency": "ARS"
+                }
+            ],
+            "categories": [
+                {
+                    "id": "c1",
+                    "name": "Comida"
+                }
+            ],
+            "tags": [],
+            "movements": []
+        },
+        "onlyArchivedReferences": {
+            "accounts": [
+                {
+                    "id": "a1",
+                    "name": "Efectivo",
+                    "currency": "ARS"
+                }
+            ],
+            "categories": [
+                {
+                    "id": "c1",
+                    "name": "Comida"
+                }
+            ],
+            "tags": [],
+            "movements": [
+                {
+                    "type": "expense",
+                    "amountCents": 150000,
+                    "currency": "ARS",
+                    "accountId": "a8",
+                    "categoryId": "c1"
+                },
+                {
+                    "type": "expense",
+                    "amountCents": 150000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c8"
+                },
+                {
+                    "type": "transfer",
+                    "amountCents": 150000,
+                    "currency": "ARS",
+                    "accountId": "a1",
+                    "categoryId": "c1",
+                    "toAccountId": "a8"
+                }
+            ]
+        }
+    },
+    "cases": [
+        {
+            "name": "rich, seed 1",
+            "dataset": "rich",
+            "seed": 1,
+            "expect": [
+                {
+                    "kind": "homeWidget",
+                    "category": "Transporte"
+                },
+                {
+                    "kind": "transfer",
+                    "account": "Brubank",
+                    "toAccount": "Mercado Pago",
+                    "amountCents": 3000000
+                },
+                {
+                    "kind": "recentExpenses"
+                },
+                {
+                    "kind": "topSpendingThisMonth"
+                },
+                {
+                    "kind": "spentWithTag",
+                    "tag": "Vacaciones"
+                }
+            ]
+        },
+        {
+            "name": "rich, seed 2",
+            "dataset": "rich",
+            "seed": 2,
+            "expect": [
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Café"
+                },
+                {
+                    "kind": "spentWithTag",
+                    "tag": "Vacaciones"
+                },
+                {
+                    "kind": "homeWidget",
+                    "category": "Transporte"
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Mercado Pago"
+                },
+                {
+                    "kind": "transfer",
+                    "account": "Brubank",
+                    "toAccount": "Mercado Pago",
+                    "amountCents": 3000000
+                }
+            ]
+        },
+        {
+            "name": "rich, seed 3",
+            "dataset": "rich",
+            "seed": 3,
+            "expect": [
+                {
+                    "kind": "homeWidget",
+                    "category": "Supermercado"
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Mercado Pago"
+                },
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Supermercado"
+                },
+                {
+                    "kind": "transfer",
+                    "account": "Brubank",
+                    "toAccount": "Mercado Pago",
+                    "amountCents": 3000000
+                },
+                {
+                    "kind": "logIncome",
+                    "account": "Brubank",
+                    "amountCents": 120000000
+                }
+            ]
+        },
+        {
+            "name": "rich, seed 42",
+            "dataset": "rich",
+            "seed": 42,
+            "expect": [
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Transporte"
+                },
+                {
+                    "kind": "spentWithTag",
+                    "tag": "Vacaciones"
+                },
+                {
+                    "kind": "homeWidget",
+                    "category": "Salidas"
+                },
+                {
+                    "kind": "transfer",
+                    "account": "Brubank",
+                    "toAccount": "Mercado Pago",
+                    "amountCents": 3000000
+                },
+                {
+                    "kind": "logExpense",
+                    "category": "Café",
+                    "account": "Mercado Pago",
+                    "amountCents": 380000
+                }
+            ]
+        },
+        {
+            "name": "rich, seed 1 after seed 1",
+            "dataset": "rich",
+            "seed": 1,
+            "previousFrom": "rich, seed 1",
+            "expect": [
+                {
+                    "kind": "homeWidget",
+                    "category": "Café"
+                },
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Café"
+                },
+                {
+                    "kind": "logExpense",
+                    "category": "Supermercado",
+                    "account": "Mercado Pago",
+                    "amountCents": 4500000
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Mercado Pago"
+                },
+                {
+                    "kind": "topSpendingThisMonth"
+                }
+            ]
+        },
+        {
+            "name": "no transfers, seed 11",
+            "dataset": "noTransfersTwoArsAccounts",
+            "seed": 11,
+            "expect": [
+                {
+                    "kind": "logExpense",
+                    "category": "Nafta",
+                    "account": "Efectivo",
+                    "amountCents": 4000000
+                },
+                {
+                    "kind": "recentExpenses"
+                },
+                {
+                    "kind": "homeWidget",
+                    "category": "Nafta"
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Galicia"
+                },
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Farmacia"
+                }
+            ]
+        },
+        {
+            "name": "no transfers, seed 12",
+            "dataset": "noTransfersTwoArsAccounts",
+            "seed": 12,
+            "expect": [
+                {
+                    "kind": "recentExpenses"
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Efectivo"
+                },
+                {
+                    "kind": "logExpense",
+                    "category": "Farmacia",
+                    "account": "Galicia",
+                    "amountCents": 1800000
+                },
+                {
+                    "kind": "homeWidget",
+                    "category": "Nafta"
+                },
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Farmacia"
+                }
+            ]
+        },
+        {
+            "name": "single account, seed 7",
+            "dataset": "singleAccountOneCategory",
+            "seed": 7,
+            "expect": [
+                {
+                    "kind": "homeWidget"
+                },
+                {
+                    "kind": "logExpense",
+                    "category": "Comida",
+                    "amountCents": 150000
+                },
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Comida"
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Efectivo"
+                },
+                {
+                    "kind": "recentExpenses"
+                }
+            ]
+        },
+        {
+            "name": "single account, seed 8",
+            "dataset": "singleAccountOneCategory",
+            "seed": 8,
+            "expect": [
+                {
+                    "kind": "homeWidget"
+                },
+                {
+                    "kind": "recentExpenses"
+                },
+                {
+                    "kind": "spentInCategoryThisMonth",
+                    "category": "Comida"
+                },
+                {
+                    "kind": "logExpense",
+                    "category": "Comida",
+                    "amountCents": 150000
+                },
+                {
+                    "kind": "accountBalance",
+                    "account": "Efectivo"
+                }
+            ]
+        },
+        {
+            "name": "new user, seed 5",
+            "dataset": "newUser",
+            "seed": 5,
+            "expect": [
+                {
+                    "kind": "homeWidget"
+                },
+                {
+                    "kind": "howToLogExpense"
+                },
+                {
+                    "kind": "whatCanYouDo"
+                },
+                {
+                    "kind": "createCashAccount"
+                },
+                {
+                    "kind": "setupCategories"
+                }
+            ]
+        },
+        {
+            "name": "only archived references, seed 9",
+            "dataset": "onlyArchivedReferences",
+            "seed": 9,
+            "expect": [
+                {
+                    "kind": "howToLogExpense"
+                },
+                {
+                    "kind": "createCashAccount"
+                },
+                {
+                    "kind": "whatCanYouDo"
+                },
+                {
+                    "kind": "setupCategories"
+                },
+                {
+                    "kind": "homeWidget"
+                }
+            ]
+        }
+    ],
+    "mulberry32": {
+        "seed": 123456789,
+        "values": [
+            0.2577907438389957, 0.9707721115555614, 0.7853280142880976,
+            0.20616457983851433, 0.30307188746519387
+        ]
+    },
+    "niceAmountCents": [
+        [4532050, 4500000],
+        [3487, 3500],
+        [348700, 350000],
+        [999, 1000],
+        [155, 160],
+        [150, 150],
+        [99, 99],
+        [5, 5],
+        [-3870000, 3900000]
+    ]
+}

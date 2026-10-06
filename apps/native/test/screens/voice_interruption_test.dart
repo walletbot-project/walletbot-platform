@@ -1,14 +1,35 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/voice/voice_event.dart';
 import 'package:app/voice/voice_expense_command.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'hidden and paused release audio once without ending the conversation',
+    (tester) async {
+      final command = _ActiveVoiceCommand();
+      await tester.pumpWidget(_voiceApp(command));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(command.interruptionReasons, ['app_backgrounded']);
+      expect(command.audioStreamEnded, true);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(command.isActive, true);
+      expect(command.audioPlaybackStates, [true]);
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    },
+  );
+
   testWidgets('leaving voice screen interrupts the current agent response', (
     tester,
   ) async {
@@ -52,7 +73,6 @@ void main() {
       );
       expect(find.textContaining('WebSocket error'), findsNothing);
       expect(find.textContaining('Reconnect failed'), findsNothing);
-      expect(find.text('connecting'), findsOneWidget);
 
       command.emit(VoiceConnectedEvent());
       await tester.pump();
@@ -70,7 +90,6 @@ void main() {
     final command = _ActiveVoiceCommand(connected: false);
     await tester.pumpWidget(_voiceApp(command));
 
-    expect(find.text('connecting'), findsOneWidget);
     expect(
       find.text('Connection lost. Reconnecting automatically…'),
       findsOneWidget,
@@ -79,7 +98,6 @@ void main() {
     await tester.pumpWidget(_voiceApp(command, locale: const Locale('es')));
     await tester.pump();
 
-    expect(find.text('conectando'), findsOneWidget);
     expect(
       find.text('Se perdió la conexión. Reconectando automáticamente…'),
       findsOneWidget,
@@ -93,7 +111,7 @@ void main() {
     await tester.pumpWidget(_voiceApp(command));
 
     await tester.enterText(find.byType(TextField), 'typed message');
-    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(command.audioPlaybackStates, [false]);
 
@@ -217,6 +235,9 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   bool get isConnected => connected;
 
   @override
+  Future<void> prepareAudio() async {}
+
+  @override
   Future<void> ensureConnected() async {
     ensureConnectedCalls += 1;
   }
@@ -231,9 +252,21 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   Future<void> dispose() async {}
 
   @override
-  Future<void> endAudioStream() async {
+  Future<void> endTurn() async {
     audioStreamEnded = true;
   }
+
+  @override
+  VoiceConversationMode get mode => VoiceConversationMode.chat;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {}
+
+  @override
+  void discardTurn() {}
+
+  @override
+  bool get isNoteFull => false;
 
   @override
   Future<void> interruptAgentResponse({required String reason}) async {
@@ -257,7 +290,10 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   }
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {}
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {}
 
   @override
   Future<VoiceExpenseCommandResult> stop() async =>

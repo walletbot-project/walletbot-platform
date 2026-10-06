@@ -29,8 +29,14 @@ class BreakdownChartWidget extends StatelessWidget {
     Color(0xFF9CCC65),
   ];
 
-  Color _colorFor(BreakdownSlice slice, int index) => slice.colorHex != null
-      ? colorFromHex(slice.colorHex)
+  /// An account slice paints its stored accent adapted to the theme (see
+  /// [readableAccent]) so it matches the account everywhere else.
+  Color _colorFor(BuildContext context, BreakdownSlice slice, int index) =>
+      slice.colorHex != null
+      ? readableAccent(
+          colorFromHex(slice.colorHex),
+          Theme.of(context).brightness,
+        )
       : _palette[index % _palette.length];
 
   @override
@@ -94,7 +100,7 @@ class BreakdownChartWidget extends StatelessWidget {
                 for (var i = 0; i < slices.length; i++)
                   PieChartSectionData(
                     value: slices[i].totalCents.toDouble(),
-                    color: _colorFor(slices[i], i),
+                    color: _colorFor(context, slices[i], i),
                     radius: 56,
                     showTitle: _showsPct(slices[i].totalCents, total),
                     title: _pct(slices[i].totalCents, total),
@@ -139,7 +145,7 @@ class BreakdownChartWidget extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: _colorFor(slices[i], i),
+                  color: _colorFor(context, slices[i], i),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -180,7 +186,7 @@ class BreakdownChartWidget extends StatelessWidget {
                 barRods: [
                   BarChartRodData(
                     toY: slices[i].totalCents.toDouble() / 100,
-                    color: _colorFor(slices[i], i),
+                    color: _colorFor(context, slices[i], i),
                     width: 16,
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(4),

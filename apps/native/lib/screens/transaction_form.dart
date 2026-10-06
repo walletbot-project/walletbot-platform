@@ -21,13 +21,46 @@ const _defaultRecurrenceDayInterval = 15;
 
 enum _TransferAmountField { source, destination }
 
+/// Pushes [TransactionFormScreen] as a full-screen route prefilled with an
+/// account or category. Resolves to whether a transaction was saved.
+Future<bool?> pushTransactionForm(
+  BuildContext context, {
+  required AppRepositories repos,
+  String? accountId,
+  String? categoryId,
+}) {
+  // Pushed routes sit above the account-scoped providers; re-provide them
+  // so the new route keeps using the active account's data layer.
+  return Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => Provider<AppRepositories>.value(
+        value: repos,
+        child: TransactionFormScreen(
+          initialAccountId: accountId,
+          initialCategoryId: categoryId,
+        ),
+      ),
+    ),
+  );
+}
+
 class TransactionFormScreen extends StatefulWidget {
-  const TransactionFormScreen({super.key, this.onResult});
+  const TransactionFormScreen({
+    super.key,
+    this.onResult,
+    this.initialAccountId,
+    this.initialCategoryId,
+  });
 
   /// Embedded (split pane) mode: when set, the screen never pops its route —
   /// save/cancel report here instead ([saved] tells whether a transaction
   /// was recorded).
   final void Function(bool saved)? onResult;
+
+  /// Prefills opened from an entity detail (account or category sheet).
+  /// Ids that are not among the active accounts/categories are ignored.
+  final String? initialAccountId;
+  final String? initialCategoryId;
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -87,12 +120,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       repos.categories.listActive(),
       repos.tags.listActive(),
     ]);
-    final accounts = List<Account>.from(results[0] as List<Account>)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    final categories = List<Category>.from(results[1] as List<Category>)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    // Accounts and categories already come in the user's order (the
+    // repositories sort by position), which also makes the first one the
+    // default selection.
+    final accounts = List<Account>.from(results[0] as List<Account>);
+    final categories = List<Category>.from(results[1] as List<Category>);
+    // Tags stay strictly alphabetical in forms (not the user's tree order).
     final tags = List<Tag>.from(results[2] as List<Tag>)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     if (!mounted) return;
     setState(() {
@@ -108,7 +143,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           )
           .toList();
       _selectedAccount = _resolveSelectedAccount(
-        current: _selectedAccount,
+        current:
+            _selectedAccount ??
+            _findById(accounts, widget.initialAccountId, (a) => a.id),
         accounts: accounts,
       );
       _selectedDestinationAccount = _resolveDestinationAccount(
@@ -117,12 +154,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         source: _selectedAccount,
       );
       _selectedCategory = _resolveSelectedCategory(
-        current: _selectedCategory,
+        current:
+            _selectedCategory ??
+            _findById(categories, widget.initialCategoryId, (c) => c.id),
         categories: categories,
         type: _type,
       );
       _isLoading = false;
     });
+  }
+
+  T? _findById<T>(List<T> items, String? id, String Function(T) idOf) {
+    if (id == null) return null;
+    for (final item in items) {
+      if (idOf(item) == id) return item;
+    }
+    return null;
   }
 
   Account? _resolveSelectedAccount({
@@ -962,7 +1009,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _type = type;
       _replaceEditableControllers();
       _selectedCategory = _resolveSelectedCategory(
-        current: null,
+        current: type == TransactionFormType.transfer
+            ? null
+            : _findById(_categories, widget.initialCategoryId, (c) => c.id),
         categories: _categories,
         type: type,
       );

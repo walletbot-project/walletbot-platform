@@ -28,12 +28,23 @@ export const metricName = v.union(
     v.literal('business.transfers.created_count'),
     v.literal('business.users.registered_total'),
     v.literal('business.user_accounts.signed_in_count'),
+    v.literal('agent.sessions.started_count'),
     v.literal('agent.session.cost_usd'),
     v.literal('agent.interaction.cost_usd'),
     v.literal('agent.user.monthly_cost_usd'),
     v.literal('agent.interactions.completed_count'),
     v.literal('agent.session.cost_bucket_count'),
     v.literal('agent.reports.submitted_count'),
+    v.literal('sync.errors.count'),
+    v.literal('agent.tool.errors.count'),
+    v.literal('system.function.duration_bucket_count'),
+    v.literal('voice.connect.setup_complete_bucket_count'),
+    v.literal('agent.response.first_token_bucket_count'),
+    v.literal('agent.response.first_token_ms'),
+    v.literal('sync.push.client_failures.count'),
+    v.literal('agent.tool.calls.count'),
+    v.literal('system.latency.quantile_ms'),
+    v.literal('system.latency.samples_count'),
 )
 
 export const metricSource = v.union(
@@ -66,6 +77,7 @@ export const metricInput = v.object({
     sessionId: v.optional(v.string()),
     sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
+    appUserId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(telemetryPlatform),
 })

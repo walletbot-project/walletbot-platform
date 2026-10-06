@@ -33,6 +33,7 @@ import {
     estimatedDescription,
     formatTransactionTime,
     readFilterSeed,
+    readTransactionFormSeed,
     type TransactionTransferSide,
     transactionTimeStatus,
 } from './helpers'
@@ -324,9 +325,20 @@ export type ActivityOutletContext = {
 /** `/activity/new` — the transaction form as the layout's occupant. */
 export function TransactionCreateRoute() {
     const navigate = useNavigate()
+    const location = useLocation()
+    // Opened from an account/category detail: prefilled, and closing returns
+    // there instead of the activity list.
+    const seed = readTransactionFormSeed(location.state)
     // The list is query-driven, so a saved transaction shows up on its own.
-    const close = () => navigate('/activity')
-    return <TransactionForm onClose={close} onSaved={close} />
+    const close = () => navigate(seed.returnTo ?? '/activity')
+    return (
+        <TransactionForm
+            onClose={close}
+            onSaved={close}
+            initialAccountId={seed.accountId}
+            initialCategoryId={seed.categoryId}
+        />
+    )
 }
 
 /** `/activity/:transactionId` — one transaction's detail. */

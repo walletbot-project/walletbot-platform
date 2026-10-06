@@ -191,6 +191,8 @@ const exportableMetricAttributeKeys = (
             return new Set(['auth_method'])
         case 'business.user_accounts.signed_in_count':
             return new Set(['auth_method', 'client_platform'])
+        case 'agent.sessions.started_count':
+            return new Set(['model', 'start_kind'])
         case 'agent.session.cost_usd':
         case 'agent.interaction.cost_usd':
             return new Set([
@@ -200,13 +202,47 @@ const exportableMetricAttributeKeys = (
                 'pricing_effective_from',
             ])
         case 'agent.user.monthly_cost_usd':
-            return new Set(['user_hash', 'rank', 'month', 'model', 'mode'])
+            return new Set([
+                'user_hash',
+                'rank',
+                'month',
+                'model',
+                'mode',
+                'account_scope',
+                'parent_hash',
+            ])
         case 'agent.interactions.completed_count':
             return new Set(['model', 'mode', 'interaction_type'])
         case 'agent.session.cost_bucket_count':
             return new Set(['model', 'mode', 'cost_bucket'])
         case 'agent.reports.submitted_count':
             return new Set(['reason', 'scope', 'client_platform'])
+        case 'sync.errors.count':
+            return new Set(['direction', 'reason', 'platform'])
+        case 'agent.tool.errors.count':
+            return new Set(['tool_name', 'reason'])
+        case 'system.function.duration_bucket_count':
+            return new Set(['function', 'bucket', 'status'])
+        case 'voice.connect.setup_complete_bucket_count':
+            return new Set(['bucket', 'platform', 'resumed'])
+        case 'agent.response.first_token_bucket_count':
+            return new Set(['bucket', 'mode', 'platform'])
+        case 'agent.response.first_token_ms':
+            return new Set(['mode', 'platform'])
+        case 'sync.push.client_failures.count':
+            return new Set(['reason', 'platform'])
+        case 'agent.tool.calls.count':
+            return new Set(['tool_name'])
+        case 'system.latency.quantile_ms':
+            return new Set([
+                'operation',
+                'batch_size',
+                'mode',
+                'quantile',
+                'window',
+            ])
+        case 'system.latency.samples_count':
+            return new Set(['operation', 'batch_size', 'mode', 'window'])
         case 'business.users.registered_total':
         case 'agent.session.cost_outlier_count':
             return new Set()
@@ -308,7 +344,10 @@ const recordAgentMonthlyUsageMetric = async (
     month = currentMonth(),
 ): Promise<{ rows: number; exportedRows: number; accepted: number }> => {
     const rows: Array<{
-        userId: string
+        userId?: string
+        actorType: 'user' | 'local'
+        parentId?: string
+        actorKey: string
         month: string
         model: string
         mode: string
@@ -321,10 +360,16 @@ const recordAgentMonthlyUsageMetric = async (
     if (rows.length === 0) return { rows: 0, exportedRows: 0, accepted: 0 }
 
     const now = Date.now()
-    const topRows = rows
-        .filter((row) => row.estimatedCostUsd > 0)
-        .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd)
-        .slice(0, 20)
+    // Keep each scope visible even when remote users dominate the ranking.
+    const topRows = (['user', 'local'] as const).flatMap((actorType) =>
+        rows
+            .filter(
+                (row) =>
+                    row.actorType === actorType && row.estimatedCostUsd > 0,
+            )
+            .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd)
+            .slice(0, 20),
+    )
     const metrics: MetricInput[] = []
     for (const [index, row] of topRows.entries()) {
         const mode = normalizeAgentMode(row.mode)
@@ -335,9 +380,13 @@ const recordAgentMonthlyUsageMetric = async (
             type: 'gauge',
             value: row.estimatedCostUsd,
             unit: 'usd',
-            userId: row.userId,
+            ...(row.userId ? { userId: row.userId } : {}),
             attributes: {
-                user_hash: await userHash(row.userId),
+                user_hash: await userHash(row.userId ?? row.actorKey),
+                ...(row.parentId
+                    ? { parent_hash: await userHash(row.parentId) }
+                    : {}),
+                account_scope: row.actorType === 'local' ? 'local' : 'remote',
                 rank: `${index + 1}`,
                 month: row.month,
                 model: row.model,

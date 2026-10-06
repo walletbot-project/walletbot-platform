@@ -50,6 +50,9 @@ export const listMonthlyUsageForTelemetry = internalQuery({
             .collect()
         return rows.map((row) => ({
             userId: row.userId,
+            parentId: row.parentId,
+            actorType: row.actorType ?? 'user',
+            actorKey: row.actorKey ?? `user:${row.userId}`,
             month: row.month,
             model: row.model,
             mode: row.mode,
