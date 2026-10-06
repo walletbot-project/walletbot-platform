@@ -8,7 +8,7 @@ import schema from '../schema'
 
 const modules = import.meta.glob('../**/*.ts')
 const now = Date.UTC(2026, 9, 3, 12, 0)
-const client = { platform: 'android', appVersion: '0.4.0' }
+const client = { platform: 'android', appVersion: '0.6.0' }
 const userId = 'push-telemetry-user'
 
 async function fixture() {

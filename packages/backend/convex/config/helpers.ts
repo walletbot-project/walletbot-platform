@@ -76,14 +76,13 @@ type AccountConfigAccount =
     | { type: 'local'; name: string | null; accountId: string | null }
     | null
 
-// 0.3.x remains supported. Recurrence-aware sync is negotiated separately;
-// older clients receive only occurred movements and retain their v1 contract.
-const BASE_MIN_SUPPORTED_VERSION = '0.3.0'
+// Every client below 0.6.0 must update: sync fails closed for them while their
+// offline data stays on the device.
+const BASE_MIN_SUPPORTED_VERSION = '0.6.0'
 // Keep in lockstep with the PUBLISHED native build, not with pubspec.yaml.
 // Setting this ahead of the released build nags every current client with the
-// soft-update banner for a version that isn't out yet. Raise to 0.4.0 only
-// once the 0.4.0 builds are live in both stores.
-const BASE_LATEST_VERSION = '0.3.0'
+// soft-update banner for a version that isn't out yet.
+const BASE_LATEST_VERSION = '0.6.0'
 
 // A client that cannot determine its own version reports '0.0.0' (and any
 // unparseable string parses to 0.0.0 too — see utils.ts). Treat that as
@@ -102,6 +101,8 @@ const MACOS_LATEST_VERSION = BASE_LATEST_VERSION
 
 const ANDROID_PLAY_STORE_URL =
     'https://play.google.com/store/apps/details?id=live.walletbot.app'
+const IOS_APP_STORE_URL =
+    'https://apps.apple.com/us/app/wallet-bot-expense-tracker/id6809253565'
 
 const BASE_SOFT_VERSION_BANNER: LocalizedConfigBanner = {
     en: {
@@ -192,17 +193,35 @@ const CONFIG_BY_PLATFORM: Record<NativePlatform, NativeVersionConfig> = {
             },
         },
     },
-    // TODO: iOS/macOS have no distribution URL yet, so their version banners
-    // carry no action and `updateUrl` stays null — the hard-update prompt has no
-    // button. Add an App Store / distribution link (like Android's Play Store
-    // action) once there is a public build channel.
     [PLATFORM_IOS]: {
         minSupportedVersion: IOS_MIN_SUPPORTED_VERSION,
         latestVersion: IOS_LATEST_VERSION,
         banners: [],
-        softVersionBanner: BASE_SOFT_VERSION_BANNER,
-        hardVersionBanner: BASE_HARD_VERSION_BANNER,
+        softVersionBanner: {
+            en: {
+                ...BASE_SOFT_VERSION_BANNER.en,
+                actions: [{ label: 'Open App Store', url: IOS_APP_STORE_URL }],
+            },
+            es: {
+                ...BASE_SOFT_VERSION_BANNER.es,
+                actions: [{ label: 'Abrir App Store', url: IOS_APP_STORE_URL }],
+            },
+        },
+        hardVersionBanner: {
+            en: {
+                ...BASE_HARD_VERSION_BANNER.en,
+                actions: [{ label: 'Open App Store', url: IOS_APP_STORE_URL }],
+            },
+            es: {
+                ...BASE_HARD_VERSION_BANNER.es,
+                actions: [{ label: 'Abrir App Store', url: IOS_APP_STORE_URL }],
+            },
+        },
     },
+    // TODO: macOS has no distribution URL yet, so its version banners carry no
+    // action and `updateUrl` stays null, so the hard-update prompt has no
+    // button. Add a distribution link (like the store actions above) once there
+    // is a public build channel.
     [PLATFORM_MACOS]: {
         minSupportedVersion: MACOS_MIN_SUPPORTED_VERSION,
         latestVersion: MACOS_LATEST_VERSION,
