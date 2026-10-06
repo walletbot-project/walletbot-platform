@@ -150,35 +150,39 @@ class _AccountsScreenState extends State<AccountsScreen> {
             ),
           ],
         ),
-        body: StreamBuilder<List<Account>>(
-          stream: repos.accounts.watchActive(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return _ErrorBody(error: snapshot.error.toString());
-            }
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final accounts = snapshot.data ?? const <Account>[];
-            if (accounts.isEmpty) {
-              return _EmptyBody(onCreateTap: () => _openCreate(context));
-            }
-            // Long-press a row to drag it into a new place (WAL-199).
-            return ReorderableGroupedList<Account>(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
-              items: accounts,
-              idOf: (account) => account.id,
-              reorderFailedMessage: context.l10n.accountsReorderFailed,
-              onReorder: (ordered) =>
-                  repos.accounts.reorder([for (final a in ordered) a.id]),
-              itemBuilder: (context, account, radius) => _AccountTile(
-                account: account,
-                borderRadius: radius,
-                onTap: () => _openAccountDetails(account),
-              ),
-            );
-          },
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: StreamBuilder<List<Account>>(
+            stream: repos.accounts.watchActive(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _ErrorBody(error: snapshot.error.toString());
+              }
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final accounts = snapshot.data ?? const <Account>[];
+              if (accounts.isEmpty) {
+                return _EmptyBody(onCreateTap: () => _openCreate(context));
+              }
+              // Long-press a row to drag it into a new place (WAL-199).
+              return ReorderableGroupedList<Account>(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
+                items: accounts,
+                idOf: (account) => account.id,
+                reorderFailedMessage: context.l10n.accountsReorderFailed,
+                onReorder: (ordered) =>
+                    repos.accounts.reorder([for (final a in ordered) a.id]),
+                itemBuilder: (context, account, radius) => _AccountTile(
+                  account: account,
+                  borderRadius: radius,
+                  onTap: () => _openAccountDetails(account),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

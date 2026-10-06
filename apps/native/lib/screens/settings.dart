@@ -27,45 +27,49 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.settings)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          _PreferenceTile(
-            icon: Icons.language_rounded,
-            title: context.l10n.language,
-            value: _languageLabel(context, settings.language),
-            borderRadius: groupedRadius(0, tileCount),
-            onTap: () => _showLanguageChoices(context, settings),
-          ),
-          const SizedBox(height: kGroupSpacing),
-          _PreferenceTile(
-            icon: Icons.palette_outlined,
-            title: context.l10n.theme,
-            value: _themeLabel(context, settings.theme),
-            borderRadius: groupedRadius(1, tileCount),
-            onTap: () => _showThemeChoices(context, settings),
-          ),
-          const SizedBox(height: kGroupSpacing),
-          _PreferenceTile(
-            icon: Icons.attach_money_rounded,
-            title: context.l10n.currency,
-            value: defaultCurrency.value,
-            borderRadius: groupedRadius(2, tileCount),
-            onTap: () => _showCurrencyChoices(context, defaultCurrency),
-          ),
-          if (deletableEmail != null) ...[
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          children: [
+            _PreferenceTile(
+              icon: Icons.language_rounded,
+              title: context.l10n.language,
+              value: _languageLabel(context, settings.language),
+              borderRadius: groupedRadius(0, tileCount),
+              onTap: () => _showLanguageChoices(context, settings),
+            ),
             const SizedBox(height: kGroupSpacing),
             _PreferenceTile(
-              icon: Icons.person_off_rounded,
-              title: context.l10n.deleteUserAccount,
-              value: context.l10n.deleteUserAccountDescription,
-              borderRadius: groupedRadius(3, tileCount),
-              destructive: true,
-              onTap: () =>
-                  _confirmDeleteUserAccount(context, auth, deletableEmail),
+              icon: Icons.palette_outlined,
+              title: context.l10n.theme,
+              value: _themeLabel(context, settings.theme),
+              borderRadius: groupedRadius(1, tileCount),
+              onTap: () => _showThemeChoices(context, settings),
             ),
+            const SizedBox(height: kGroupSpacing),
+            _PreferenceTile(
+              icon: Icons.attach_money_rounded,
+              title: context.l10n.currency,
+              value: defaultCurrency.value,
+              borderRadius: groupedRadius(2, tileCount),
+              onTap: () => _showCurrencyChoices(context, defaultCurrency),
+            ),
+            if (deletableEmail != null) ...[
+              const SizedBox(height: kGroupSpacing),
+              _PreferenceTile(
+                icon: Icons.person_off_rounded,
+                title: context.l10n.deleteUserAccount,
+                value: context.l10n.deleteUserAccountDescription,
+                borderRadius: groupedRadius(3, tileCount),
+                destructive: true,
+                onTap: () =>
+                    _confirmDeleteUserAccount(context, auth, deletableEmail),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

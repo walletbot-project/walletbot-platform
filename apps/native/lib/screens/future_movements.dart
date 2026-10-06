@@ -80,40 +80,44 @@ class _FutureMovementsScreenState extends State<FutureMovementsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.futureMovements)),
-      body: StreamBuilder<_Payload>(
-        stream: _stream,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final payload = snapshot.requireData;
-          final now = DateTime.now();
-          final today = DateTime(now.year, now.month, now.day);
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: StreamBuilder<_Payload>(
+          stream: _stream,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final payload = snapshot.requireData;
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
 
-          return ListView(
-            padding: const EdgeInsets.only(top: 12, bottom: 80),
-            children: [
-              _InfoBanner(text: context.l10n.futureMovementsInfo),
-              const SizedBox(height: 16),
-              if (payload.movements.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 48,
-                  ),
-                  child: Text(
-                    context.l10n.noFutureMovements,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+            return ListView(
+              padding: const EdgeInsets.only(top: 12, bottom: 80),
+              children: [
+                _InfoBanner(text: context.l10n.futureMovementsInfo),
+                const SizedBox(height: 16),
+                if (payload.movements.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 48,
                     ),
-                  ),
-                )
-              else
-                ..._buildEntries(context, payload, today),
-            ],
-          );
-        },
+                    child: Text(
+                      context.l10n.noFutureMovements,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
+                  ..._buildEntries(context, payload, today),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

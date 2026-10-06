@@ -1526,41 +1526,45 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       body: Column(
         children: [
           Expanded(
-            child: _items.isEmpty
-                ? _WelcomeView(
-                    phase: phase,
-                    suggestions: suggestions,
-                    onSuggestion: _applySuggestion,
-                    onStart: canEnterLive ? _onEnterLivePressed : null,
-                  )
-                : NotificationListener<UserScrollNotification>(
-                    onNotification: _handleUserScroll,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: _items.isEmpty
+                  ? _WelcomeView(
+                      phase: phase,
+                      suggestions: suggestions,
+                      onSuggestion: _applySuggestion,
+                      onStart: canEnterLive ? _onEnterLivePressed : null,
+                    )
+                  : NotificationListener<UserScrollNotification>(
+                      onNotification: _handleUserScroll,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 16,
+                        ),
+                        itemCount: _items.length,
+                        itemBuilder: (context, i) {
+                          final item = _items[i];
+                          if (item is _ToolItem && !showToolCards) {
+                            return SizedBox.shrink(key: ObjectKey(item));
+                          }
+                          return Padding(
+                            // The report icon's fade keeps state, so its element
+                            // has to track the item and not the row index.
+                            key: ObjectKey(item),
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: _ChatItemView(
+                              item: item,
+                              onReport: _reportAgentBubble,
+                              showReportButton: showReportButton,
+                            ),
+                          );
+                        },
                       ),
-                      itemCount: _items.length,
-                      itemBuilder: (context, i) {
-                        final item = _items[i];
-                        if (item is _ToolItem && !showToolCards) {
-                          return SizedBox.shrink(key: ObjectKey(item));
-                        }
-                        return Padding(
-                          // The report icon's fade keeps state, so its element
-                          // has to track the item and not the row index.
-                          key: ObjectKey(item),
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: _ChatItemView(
-                            item: item,
-                            onReport: _reportAgentBubble,
-                            showReportButton: showReportButton,
-                          ),
-                        );
-                      },
                     ),
-                  ),
+            ),
           ),
           _ControlBar(
             mode: barMode,
