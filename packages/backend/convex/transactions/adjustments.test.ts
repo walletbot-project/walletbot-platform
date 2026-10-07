@@ -14,7 +14,7 @@ const modules = import.meta.glob('../**/*.ts')
 const userId = 'adjustments-user'
 const now = Date.UTC(2026, 9, 3, 15, 0)
 const DAY = 86_400_000
-const modern = { platform: 'android', appVersion: '0.4.0' }
+const modern = { platform: 'android', appVersion: '0.6.0' }
 
 function at(offsetMs: number): bigint {
     return BigInt(now + offsetMs)
