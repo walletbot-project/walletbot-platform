@@ -4,13 +4,16 @@ import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/config.dart';
+import 'package:app/l10n/app_localizations.dart';
 import 'package:app/main.dart';
+import 'package:app/screens/login.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:provider/provider.dart';
 
 import '../helpers/memory_display_settings_store.dart';
 
@@ -362,5 +365,46 @@ void main() {
     );
     // And no cooldown, so the reason stays reachable instead of a dead button.
     expect(find.text('Reenviar correo'), findsOneWidget);
+  });
+
+  testWidgets('promoting offers only the online path, with its own intro', (
+    tester,
+  ) async {
+    final auth = AuthController(awaitFrame: () async {});
+    final local = await auth.addLocal(name: 'Mine');
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthController>.value(value: auth),
+          ChangeNotifierProvider<AppConfigController>(
+            create: (_) => AppConfigController(),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LoginScreen(
+            canDismiss: true,
+            promotion: LocalPromotion(
+              accountId: local.id,
+              beforeConvert: () async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Create an online account and everything you have so far will be '
+        'synced to it.',
+      ),
+      findsOneWidget,
+    );
+    // No local-account option: the account being promoted already is one.
+    expect(find.text('Local account'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -11,6 +11,7 @@ class UserAccount {
     this.requiresReauth = false,
     this.serverDeleted = false,
     this.localAccountId,
+    this.remoteUserId,
   });
 
   final String id;
@@ -44,6 +45,18 @@ class UserAccount {
   /// assigns one.
   final String? localAccountId;
 
+  /// REMOTE accounts that began as a local account: the backend's user id.
+  /// Promotion converts a local account in place, so [id] stays the local one
+  /// — it names the on-device database and must never change — and this
+  /// carries the identity the server knows the account by. Null on every
+  /// account that was remote from the start, where [id] already is that user
+  /// id; read [serverUserId] rather than choosing between the two.
+  final String? remoteUserId;
+
+  /// The id the backend knows this account by. Only meaningful for remote
+  /// accounts.
+  String get serverUserId => remoteUserId ?? id;
+
   UserAccount copyWith({
     String? name,
     String? email,
@@ -52,6 +65,7 @@ class UserAccount {
     bool? requiresReauth,
     bool? serverDeleted,
     String? localAccountId,
+    String? remoteUserId,
   }) {
     return UserAccount(
       id: id,
@@ -63,6 +77,7 @@ class UserAccount {
       requiresReauth: requiresReauth ?? this.requiresReauth,
       serverDeleted: serverDeleted ?? this.serverDeleted,
       localAccountId: localAccountId ?? this.localAccountId,
+      remoteUserId: remoteUserId ?? this.remoteUserId,
     );
   }
 
@@ -76,6 +91,7 @@ class UserAccount {
     'requiresReauth': requiresReauth,
     'serverDeleted': serverDeleted,
     'localAccountId': localAccountId,
+    'remoteUserId': remoteUserId,
   };
 
   factory UserAccount.fromJson(Map<String, Object?> json) {
@@ -90,6 +106,7 @@ class UserAccount {
       requiresReauth: json['requiresReauth'] as bool? ?? false,
       serverDeleted: json['serverDeleted'] as bool? ?? false,
       localAccountId: json['localAccountId'] as String?,
+      remoteUserId: json['remoteUserId'] as String?,
     );
   }
 }

@@ -2528,6 +2528,30 @@ abstract class AppLocalizations {
   /// **'An account with that email already exists. Sign in with your password or with Google.'**
   String get accountExistsSignIn;
 
+  /// No description provided for @promoteBackUpData.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up my data'**
+  String get promoteBackUpData;
+
+  /// No description provided for @promoteIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Create an online account and everything you have so far will be synced to it.'**
+  String get promoteIntro;
+
+  /// No description provided for @promoteAccountExists.
+  ///
+  /// In en, this message translates to:
+  /// **'An online account already exists for that email or login. Pick a different one, or use “Add account” to sign in to it separately.'**
+  String get promoteAccountExists;
+
+  /// No description provided for @promoteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not back up your data: {error}'**
+  String promoteFailed(Object error);
+
   /// No description provided for @emailSignInFailedGoogleHint.
   ///
   /// In en, this message translates to:

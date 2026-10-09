@@ -34,13 +34,19 @@ enum _LoginPath { remote, local }
 enum _RemoteFlow { credentials, forgotPassword, verifyPending }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.canDismiss = false});
+  const LoginScreen({super.key, this.canDismiss = false, this.promotion});
 
   /// When true the screen was surfaced on top of an active account (via the
   /// account switcher's "add account" action), so it shows a close button that
   /// returns to the current account. When false it is the app root shown at
   /// first launch and offers no way out but signing in.
   final bool canDismiss;
+
+  /// Set when the screen turns the active local account into an online one
+  /// ("Back up my data"). The screen then offers only the online sign-up /
+  /// sign-in panel, every auth call carries the promotion, and success pops
+  /// with `true` instead of switching accounts.
+  final LocalPromotion? promotion;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -81,6 +87,12 @@ class _LoginScreenState extends State<LoginScreen> {
   int _resendCooldown = 0;
   Timer? _resendTimer;
 
+  bool get _promoting => widget.promotion != null;
+
+  void _finishPromotion() {
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
   @override
   void dispose() {
     _resendTimer?.cancel();
@@ -119,15 +131,18 @@ class _LoginScreenState extends State<LoginScreen> {
         await auth.signInWithEmail(
           email: email,
           password: password,
-          rejectExisting: widget.canDismiss,
+          rejectExisting: widget.canDismiss && !_promoting,
+          promotion: widget.promotion,
         );
+        if (_promoting) _finishPromotion();
       } else {
         final clientInfo = context.read<ClientInfo?>();
         await auth.signUpWithEmail(
           name: _remoteNameController.text.trim(),
           email: email,
           password: password,
-          rejectExisting: widget.canDismiss,
+          rejectExisting: widget.canDismiss && !_promoting,
+          promotion: widget.promotion,
           // Both documents: a new account accepts the whole agreement, and the
           // button cannot be pressed unless both boxes are ticked.
           acceptance: LegalAcceptancePayload(
@@ -142,6 +157,14 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AccountAlreadyAddedError {
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
     } on AccountExistsException {
+      if (_promoting) {
+        // Promotion never merges into an existing online account, and
+        // sending the user to sign-in here would only repeat the refusal.
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.promoteAccountExists)),
+        );
+        return;
+      }
       // Registering an existing address used to land on the verify-pending
       // screen waiting for mail the backend never sends. Say what happened
       // and drop the user into sign-in.
@@ -168,7 +191,9 @@ class _LoginScreenState extends State<LoginScreen> {
       // Generic, account-independent hint: many failed sign-ins are users who
       // actually registered with Google. Avoids leaking whether the email
       // exists or which provider it uses.
-      final message = _emailMode == _EmailAuthMode.signIn
+      final message = _promoting
+          ? l10n.promoteFailed(e)
+          : _emailMode == _EmailAuthMode.signIn
           ? l10n.emailSignInFailedGoogleHint
           : l10n.emailAuthFailed(_emailMode.actionLabel(l10n), e);
       messenger.showSnackBar(SnackBar(content: Text(message)));
@@ -296,8 +321,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final l10n = context.l10n;
     try {
       await context.read<AuthController>().signInWithApple(
-        rejectExisting: widget.canDismiss,
+        rejectExisting: widget.canDismiss && !_promoting,
+        promotion: widget.promotion,
       );
+      if (_promoting) _finishPromotion();
     } on SignInWithAppleAuthorizationException catch (e) {
       // Dismissing Apple's sheet is a choice, not a failure.
       if (e.code != AuthorizationErrorCode.canceled) {
@@ -307,6 +334,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AccountAlreadyAddedError {
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+    } on AccountExistsException {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.promoteAccountExists)),
+      );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.appleSignInFailed(e))),
@@ -322,8 +353,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final l10n = context.l10n;
     try {
       await context.read<AuthController>().signInWithGoogle(
-        rejectExisting: widget.canDismiss,
+        rejectExisting: widget.canDismiss && !_promoting,
+        promotion: widget.promotion,
       );
+      if (_promoting) _finishPromotion();
     } on GoogleSignInException catch (e) {
       // The user dismissing the Google sheet isn't an error worth surfacing.
       if (e.code != GoogleSignInExceptionCode.canceled) {
@@ -333,6 +366,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AccountAlreadyAddedError {
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+    } on AccountExistsException {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.promoteAccountExists)),
+      );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.googleSignInFailed(e))),
@@ -361,18 +398,28 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const _HeroHeader(),
+                            _HeroHeader(
+                              intro: _promoting
+                                  ? context.l10n.promoteIntro
+                                  : context.l10n.loginIntro,
+                            ),
                             const SizedBox(height: 22),
                             const AppConfigBannerList(
                               placement: 'auth',
                               bottomSpacing: 14,
                             ),
-                            _PathPicker(
-                              selected: _path,
-                              enabled: !_submitting,
-                              onChanged: (path) => setState(() => _path = path),
-                            ),
-                            const SizedBox(height: 14),
+                            // Promoting leaves no choice to make: the account
+                            // already exists locally, so only the online path
+                            // is offered.
+                            if (!_promoting) ...[
+                              _PathPicker(
+                                selected: _path,
+                                enabled: !_submitting,
+                                onChanged: (path) =>
+                                    setState(() => _path = path),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
                             _AuthPathSwitcher(
                               path: _path,
                               remote: KeyedSubtree(
@@ -455,7 +502,9 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader();
+  const _HeroHeader({required this.intro});
+
+  final String intro;
 
   @override
   Widget build(BuildContext context) {
@@ -493,7 +542,7 @@ class _HeroHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    context.l10n.loginIntro,
+                    intro,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w600,

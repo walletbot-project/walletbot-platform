@@ -3,6 +3,7 @@ import { APIError } from 'better-auth/api'
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
 import { type ActionCtx, httpAction } from '../_generated/server'
+import { isLocalAppUserId } from '../appUsers/helpers'
 import { authComponent, createAuth } from '../auth'
 import { authRateLimiter } from './rateLimits'
 import {
@@ -77,20 +78,28 @@ const parseJsonBody = async <T>(req: Request): Promise<T | null> => {
     }
 }
 
-type GoogleSignInBody = {
+// Present when the app is promoting a local account into this sign-in. Its
+// presence switches the handler into promotion mode: sign-in may only succeed
+// for an account created by this promotion (or already linked to it), never for
+// a pre-existing online account. See `finishPromotion`.
+type PromotionBody = {
+    promoteLocalAccountId?: unknown
+}
+
+type GoogleSignInBody = PromotionBody & {
     idToken?: string
     accessToken?: string
     nonce?: string
 }
 
-type AppleSignInBody = {
+type AppleSignInBody = PromotionBody & {
     idToken?: string
     nonce?: string
     givenName?: string
     familyName?: string
 }
 
-type EmailSignInBody = {
+type EmailSignInBody = PromotionBody & {
     email?: string
     password?: string
 }
@@ -232,6 +241,96 @@ const nativeAuth = (ctx: ActionCtx, req: Request) =>
         ctx,
     )
 
+/**
+ * The local account a request wants to promote, off an untrusted body: `null`
+ * for an ordinary sign-in, a normalized UUID for a promotion, or a 400 for
+ * anything else — a malformed id must never silently degrade to a plain
+ * sign-in, which would defeat the "never merge into an existing account" rule.
+ */
+const getPromotionId = (raw: unknown): string | null | Response => {
+    if (raw === undefined || raw === null) return null
+    if (
+        typeof raw !== 'string' ||
+        !isLocalAppUserId(`local:${raw.trim().toLowerCase()}`)
+    ) {
+        return jsonError(400, 'bad_request', 'invalid promoteLocalAccountId')
+    }
+    return raw.trim().toLowerCase()
+}
+
+// The social sign-in endpoints answer the same way for a registration and a
+// returning user, so "created by this request" is read off the user row: a
+// user inserted during this request has a `createdAt` at or after the moment
+// the handler started. The allowance only absorbs clock differences between
+// this action and the component's mutation that stamps the row.
+const CREATED_DURING_REQUEST_SKEW_MS = 5_000
+
+const createdSince = (
+    user: { createdAt: Date | string | number },
+    startedAt: number,
+) =>
+    new Date(user.createdAt).getTime() >=
+    startedAt - CREATED_DURING_REQUEST_SKEW_MS
+
+/**
+ * Promotion gate, run after the user is authenticated and before any native
+ * session is issued. Returns a 409 to send instead of a session, or `null` to
+ * continue. The client is not trusted to say whether the account is new: that
+ * comes from the caller's own observation (`createdNow`).
+ */
+const finishPromotion = async (
+    ctx: ActionCtx,
+    args: { localAccountId: string; userId: string; createdNow: boolean },
+): Promise<Response | null> => {
+    const result = await ctx.runMutation(
+        internal.appUsers.internal.claimLocal,
+        args,
+    )
+    if (result.ok) return null
+    switch (result.error) {
+        case 'local_account_claimed':
+            return jsonError(
+                409,
+                'local_account_claimed',
+                'Esta cuenta local ya fue vinculada a otra cuenta online.',
+            )
+        case 'invalid_local_identity':
+            return jsonError(
+                400,
+                'bad_request',
+                'invalid promoteLocalAccountId',
+            )
+        case 'account_exists':
+            return jsonError(
+                409,
+                'account_exists',
+                'Ya existe una cuenta online con esos datos.',
+            )
+    }
+}
+
+type NativeAuthInstance = Awaited<ReturnType<typeof nativeAuth>>['auth']
+
+// A rejected promotion has already been authenticated by better-auth, which
+// stores a session of its own. No native session is issued, so nothing would
+// ever use it: remove it rather than leave a live credential for an account the
+// caller was just told they cannot have.
+const dropBetterAuthSession = async (
+    auth: NativeAuthInstance,
+    token: string | null | undefined,
+): Promise<void> => {
+    if (!token) return
+    try {
+        const { internalAdapter } = await auth.$context
+        await internalAdapter.deleteSession(token)
+    } catch (err) {
+        console.warn(
+            'authNative: dropping better-auth session after rejected promotion failed',
+            err instanceof Error ? err.message : String(err),
+        )
+    }
+}
+
 const googleSignIn = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<GoogleSignInBody>(req)
     if (
@@ -241,6 +340,9 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
     ) {
         return jsonError(400, 'bad_request', 'missing idToken')
     }
+    const promotionId = getPromotionId(body.promoteLocalAccountId)
+    if (promotionId instanceof Response) return promotionId
+    const startedAt = Date.now()
 
     const { auth, headers } = await nativeAuth(ctx, req)
     const authHeaders = new Headers(headers)
@@ -270,6 +372,18 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
     // a `user` object; the redirect path returns `{ url, redirect: true }`.
     if (!('user' in result) || !result.user) {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
+    }
+
+    if (promotionId) {
+        const rejection = await finishPromotion(ctx, {
+            localAccountId: promotionId,
+            userId: result.user.id,
+            createdNow: createdSince(result.user, startedAt),
+        })
+        if (rejection) {
+            await dropBetterAuthSession(auth, result.token)
+            return rejection
+        }
     }
 
     const response = await issueNativeSession(ctx, req, result.user)
@@ -317,6 +431,9 @@ const appleSignIn = corsHttpAction(async (ctx, req) => {
     ) {
         return jsonError(400, 'bad_request', 'missing idToken')
     }
+    const promotionId = getPromotionId(body.promoteLocalAccountId)
+    if (promotionId instanceof Response) return promotionId
+    const startedAt = Date.now()
 
     const givenName = trimmedOrUndefined(body.givenName)
     const familyName = trimmedOrUndefined(body.familyName)
@@ -360,6 +477,18 @@ const appleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
     }
 
+    if (promotionId) {
+        const rejection = await finishPromotion(ctx, {
+            localAccountId: promotionId,
+            userId: result.user.id,
+            createdNow: createdSince(result.user, startedAt),
+        })
+        if (rejection) {
+            await dropBetterAuthSession(auth, result.token)
+            return rejection
+        }
+    }
+
     // better-auth stores `''` rather than null when no name was available, and
     // the account switcher's `name ?? email ?? noName` fallback only fires on
     // null. Reached by someone who authorized the app before, had their account
@@ -395,10 +524,11 @@ const getEmailAndPassword = (
 }
 
 const emailSignIn = corsHttpAction(async (ctx, req) => {
-    const parsed = getEmailAndPassword(
-        await parseJsonBody<EmailSignInBody>(req),
-    )
+    const body = await parseJsonBody<EmailSignInBody>(req)
+    const parsed = getEmailAndPassword(body)
     if (parsed instanceof Response) return parsed
+    const promotionId = getPromotionId(body?.promoteLocalAccountId)
+    if (promotionId instanceof Response) return promotionId
 
     const { auth, headers } = await nativeAuth(ctx, req)
     const authHeaders = new Headers(headers)
@@ -430,6 +560,22 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(401, 'sign_in_failed', message)
     }
 
+    // Signing in with email only promotes an account this same promotion
+    // created earlier (the sign-up that sent the verification link): the
+    // account is never new here, so the claim only passes when it is already
+    // linked to this local account.
+    if (promotionId) {
+        const rejection = await finishPromotion(ctx, {
+            localAccountId: promotionId,
+            userId: result.user.id,
+            createdNow: false,
+        })
+        if (rejection) {
+            await dropBetterAuthSession(auth, result.token)
+            return rejection
+        }
+    }
+
     const response = await issueNativeSession(ctx, req, result.user)
     await recordNativeSignInTelemetry(ctx, {
         userId: result.user.id,
@@ -442,6 +588,8 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<EmailSignUpBody>(req)
     const parsed = getEmailAndPassword(body)
     if (parsed instanceof Response) return parsed
+    const promotionId = getPromotionId(body?.promoteLocalAccountId)
+    if (promotionId instanceof Response) return promotionId
 
     const name =
         typeof body?.name === 'string' && body.name.trim().length > 0
@@ -529,12 +677,34 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
         // to a user id — email sign-up mints no session, so there is no
         // authenticated caller to run `v1/legal/mutations:accept`.
         const acceptance = parseAcceptanceInput(body?.acceptance)
+        // Re-resolve rather than trusting `result.user.id`: that id is
+        // synthetic for a duplicate sign-up, and neither a legal record nor a
+        // promotion link may hang off a fake user.
+        const created =
+            acceptance || promotionId
+                ? await internalAdapter.findUserByEmail(parsed.email)
+                : null
+        if (promotionId) {
+            // The duplicate-address case returned above, so a user that
+            // exists now was created by this request. Without the row there
+            // is nothing to link and nothing was created for the caller.
+            if (!created) {
+                return jsonError(
+                    500,
+                    'sign_up_failed',
+                    'sign-up did not create a user',
+                )
+            }
+            const rejection = await finishPromotion(ctx, {
+                localAccountId: promotionId,
+                userId: created.user.id,
+                createdNow: true,
+            })
+            if (rejection) return rejection
+        }
         if (acceptance) {
-            // Re-resolve rather than trusting `result.user.id`: that id is
-            // synthetic for a duplicate sign-up, and a legal record must never
-            // hang off a fake user. Failure here is logged, not fatal — the
-            // account exists, and the in-app gate is the backstop.
-            const created = await internalAdapter.findUserByEmail(parsed.email)
+            // Failure here is logged, not fatal — the account exists, and the
+            // in-app gate is the backstop.
             if (created) {
                 try {
                     await ctx.runMutation(

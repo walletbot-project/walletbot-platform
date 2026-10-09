@@ -1381,6 +1381,22 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ya existe una cuenta con ese correo. Iniciá sesión con tu contraseña o con Google.';
 
   @override
+  String get promoteBackUpData => 'Respaldar mis datos';
+
+  @override
+  String get promoteIntro =>
+      'Creá una cuenta online y todo lo que tenés hasta ahora se sincroniza en ella.';
+
+  @override
+  String get promoteAccountExists =>
+      'Ya existe una cuenta online con ese correo o ese acceso. Elegí otro, o usá «Agregar cuenta» para iniciar sesión en ella por separado.';
+
+  @override
+  String promoteFailed(Object error) {
+    return 'No se pudieron respaldar tus datos: $error';
+  }
+
+  @override
   String get emailSignInFailedGoogleHint =>
       'No se pudo iniciar sesión. Si te registraste con Google, usá «Continuar con Google».';
 
