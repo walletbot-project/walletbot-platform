@@ -7,6 +7,11 @@ export const isLocalAppUserId = (value: unknown): value is string =>
         value,
     )
 
+export const localAppUserIdFor = (localAccountId: string): string | null => {
+    const appUserId = `local:${localAccountId.trim().toLowerCase()}`
+    return isLocalAppUserId(appUserId) ? appUserId : null
+}
+
 export const findAppUser = (ctx: MutationCtx | QueryCtx, appUserId: string) =>
     ctx.db
         .query('appUsers')

@@ -1,7 +1,11 @@
 import { v } from 'convex/values'
 import type { Id } from '../../_generated/dataModel'
 import { type MutationCtx, mutation } from '../../_generated/server'
-import { consumeFeedbackLimit, resolveSubmitter } from '../../feedback/helpers'
+import {
+    consumeFeedbackLimit,
+    resolveSubmitter,
+    submitterFields,
+} from '../../feedback/helpers'
 import {
     FEEDBACK_MAX_ATTACHMENT_BYTES,
     FEEDBACK_MAX_ATTACHMENTS,
@@ -18,7 +22,9 @@ import {
  * no backend user, and they must be able to report problems. An unauthenticated
  * caller identifies itself with `deviceId` and gets the tighter rate limits in
  * `feedback/rateLimits.ts`; a signed-in caller's identity always wins over any
- * `deviceId` it also sends.
+ * `deviceId` it also sends. A local account also sends its `localAccountId`,
+ * stored as `appUserId` so its submissions can be told apart from a remote
+ * account whose session had not authenticated yet.
  *
  * Files never travel through a Convex function. The client asks for an upload
  * URL, POSTs the bytes straight to it, and sends back only the resulting storage
@@ -40,6 +46,8 @@ const clientArgs = {
     locale: v.optional(v.string()),
     /** Required when the caller has no identity (native local account). */
     deviceId: v.optional(v.string()),
+    /** The active local account, for attribution only. */
+    localAccountId: v.optional(v.string()),
 }
 
 export const generateAttachmentUploadUrl = mutation({
@@ -68,7 +76,11 @@ export const submit = mutation({
         ...clientArgs,
     },
     handler: async (ctx, args): Promise<FeedbackResult> => {
-        const submitter = await resolveSubmitter(ctx, args.deviceId)
+        const submitter = await resolveSubmitter(
+            ctx,
+            args.deviceId,
+            args.localAccountId,
+        )
         if (!submitter) return { ok: false, error: 'unidentified_client' }
 
         // Validated BEFORE the limit is consumed: a rejected submission writes
@@ -95,9 +107,7 @@ export const submit = mutation({
 
         const feedbackId = await ctx.db.insert('feedback', {
             message,
-            ...(submitter.kind === 'user'
-                ? { userId: submitter.userId }
-                : { deviceId: submitter.deviceId }),
+            ...submitterFields(submitter),
             platform: args.platform,
             appVersion: args.appVersion,
             locale: args.locale,

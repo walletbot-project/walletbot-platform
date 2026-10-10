@@ -55,20 +55,25 @@ typedef ConvexMutation =
 /// signed-in account's identity always wins over it server-side. That matters
 /// here more than it does for feedback — Google Play requires the reporting path
 /// to work for every user of the app, and a local account is still a user.
+///
+/// [resolveLocalAccountId] works exactly as it does on `FeedbackSubmitter`.
 class AgentReportSubmitter {
   AgentReportSubmitter({
     required this.clientInfo,
     ConvexClient? client,
     ConvexMutation? mutation,
+    Future<String?> Function()? resolveLocalAccountId,
   }) : assert(
          client != null || mutation != null,
          'provide a ConvexClient or a mutation stand-in',
        ),
        _mutation =
-           mutation ?? ((name, args) => client!.mutation<Object?>(name, args));
+           mutation ?? ((name, args) => client!.mutation<Object?>(name, args)),
+       _resolveLocalAccountId = resolveLocalAccountId;
 
   final ClientInfo clientInfo;
   final ConvexMutation _mutation;
+  final Future<String?> Function()? _resolveLocalAccountId;
 
   /// Throws [AgentReportException] on every failure path, so the caller has one
   /// place to map to copy.
@@ -83,6 +88,7 @@ class AgentReportSubmitter {
     String? model,
     DateTime? occurredAt,
   }) async {
+    final localAccountId = await _resolveLocalAccountId?.call();
     final response = await _call('v1/agentReports/mutations:submit', {
       'reason': reason,
       'scope': scope.name,
@@ -99,6 +105,7 @@ class AgentReportSubmitter {
       'appVersion': clientInfo.appVersion,
       'locale': locale,
       'deviceId': clientInfo.deviceId,
+      'localAccountId': ?localAccountId,
     });
     if (response['ok'] != true) {
       throw AgentReportException(_failureFor(response['error']));

@@ -83,6 +83,10 @@ const defaultFeedbackUploadTimeout = Duration(minutes: 2);
 /// Reachable by LOCAL-only accounts, whose Convex client carries no auth at all:
 /// `deviceId` is what identifies them to the server's rate limiter. A signed-in
 /// account's identity always wins over it server-side.
+///
+/// [resolveLocalAccountId] runs before the first call, so a remote account's
+/// session gets its chance to authenticate before anything is sent, and a
+/// local account's id travels with the submission for attribution.
 class FeedbackSubmitter {
   FeedbackSubmitter({
     required this.clientInfo,
@@ -90,18 +94,21 @@ class FeedbackSubmitter {
     ConvexMutation? mutation,
     http.Client? httpClient,
     this.uploadTimeout = defaultFeedbackUploadTimeout,
+    Future<String?> Function()? resolveLocalAccountId,
   }) : assert(
          client != null || mutation != null,
          'provide a ConvexClient or a mutation stand-in',
        ),
        _mutation =
            mutation ?? ((name, args) => client!.mutation<Object?>(name, args)),
-       _httpClient = httpClient ?? http.Client();
+       _httpClient = httpClient ?? http.Client(),
+       _resolveLocalAccountId = resolveLocalAccountId;
 
   final ClientInfo clientInfo;
   final Duration uploadTimeout;
   final ConvexMutation _mutation;
   final http.Client _httpClient;
+  final Future<String?> Function()? _resolveLocalAccountId;
 
   /// Throws [FeedbackException] on every failure path, so the caller has one
   /// place to map to copy.
@@ -111,6 +118,7 @@ class FeedbackSubmitter {
     required String locale,
     void Function(int uploaded, int total)? onUploadProgress,
   }) async {
+    final localAccountId = await _resolveLocalAccountId?.call();
     final uploaded = <Map<String, Object?>>[];
     for (final (index, attachment) in attachments.indexed) {
       onUploadProgress?.call(index, attachments.length);
@@ -126,6 +134,7 @@ class FeedbackSubmitter {
       'appVersion': clientInfo.appVersion,
       'locale': locale,
       'deviceId': clientInfo.deviceId,
+      'localAccountId': ?localAccountId,
     });
     if (response['ok'] != true) {
       throw FeedbackException(_failureFor(response['error']));
