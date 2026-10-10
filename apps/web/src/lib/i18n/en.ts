@@ -950,6 +950,25 @@ export const en: Messages = {
             'Uploads stop after 2 minutes. If the file is large, upload it over wifi.',
         recordingMeta: (p) => `${p.size}, uploaded ${p.date}`,
         download: 'Download',
+        viewScript: 'View script',
+        printMaterials: 'Print materials',
+        scriptTitle: 'Full script',
+        scriptStep: (p) => `Step ${p.number}`,
+        scriptScale: 'From 1 to 5',
+        scriptRecord: (p) => `Noted: ${p.fields}.`,
+        scriptExpectedAnswer:
+            'The expected answer depends on each session day and shows inside the session.',
+        scriptCredentials: (p) =>
+            `Sign in as the scenario ${p.scenario} user. It is generated with each session.`,
+        scriptScenarioTimer: 'Mark the start and end of the scenario.',
+        scriptSessionStart: 'Start the session clock.',
+        scriptSessionEnd: 'Stop the session clock.',
+        scriptRecording: 'Upload the session recording.',
+        susStatements: 'Statements',
+        printTitle: 'Materials to print',
+        print: 'Print',
+        printHint:
+            'Print one copy per participant. In the print dialog choose A4 and turn off headers and footers.',
     },
 
     actionWidget: {

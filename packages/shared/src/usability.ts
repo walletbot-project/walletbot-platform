@@ -42,16 +42,36 @@ export type UsabilityRow = {
     fields: readonly UsabilityField[]
 }
 
+export type UsabilityMaterial =
+    | { kind: 'list'; title: string; items: readonly string[] }
+    | {
+          kind: 'table'
+          title: string
+          notes?: readonly string[]
+          columns: readonly string[]
+          rows: readonly (readonly string[])[]
+          total?: readonly string[]
+          footer?: string
+          /** Column indexes that hold amounts, aligned to the end. */
+          amountColumns?: readonly number[]
+      }
+
 export type UsabilityBlock =
     | { type: 'say'; title?: string; paragraphs: readonly string[] }
     | { type: 'note'; text: string }
     | { type: 'list'; title: string; items: readonly string[] }
     | { type: 'fields'; title?: string; fields: readonly UsabilityField[] }
     | { type: 'checklist'; title: string; fields: readonly UsabilityField[] }
-    | { type: 'material'; title: string; lines: readonly string[] }
+    | {
+          type: 'material'
+          title: string
+          materials: readonly UsabilityMaterial[]
+      }
     | {
           type: 'rows'
           title: string
+          /** First column header of the printed observation sheet. */
+          rowHeader: string
           legend?: string
           rows: readonly UsabilityRow[]
       }
@@ -140,6 +160,90 @@ function notesBlock(stepId: string): UsabilityBlock {
         ],
     }
 }
+
+export const SCENARIO_0_EXPENSE_LIST: UsabilityMaterial = {
+    kind: 'list',
+    title: 'Gastos de la semana',
+    items: [
+        'Verdulería, hoy, $ 8.500, efectivo',
+        'Taxi, hace 3 días, $ 12.000, efectivo',
+        'Café con amigos, ayer, $ 9.800, MercadoPago',
+        'Factura de luz, hace 5 días, $ 38.400, MercadoPago',
+        'Farmacia, hace 2 días, $ 21.300, tarjeta',
+        'Zapatillas, hoy, $ 120.000 en 3 cuotas de $ 40.000, tarjeta',
+        'Pagué el resumen de la tarjeta desde MercadoPago, ayer, $ 250.000',
+    ],
+}
+
+export const SCENARIO_1_STATEMENT: UsabilityMaterial = {
+    kind: 'table',
+    title: 'Banco Ejemplo, Visa terminada en 4821',
+    notes: [
+        'Período: 25/08/2026 al 24/09/2026. Cierre: 24/09/2026. Vencimiento: 06/10/2026.',
+    ],
+    columns: ['Fecha', 'Detalle', 'Cuota', 'Pesos', 'Dólares'],
+    rows: [
+        ['27/08', 'COTO SUC 125', '', '64.320,00', ''],
+        ['02/09', 'YPF FULL PALERMO', '', '45.000,00', ''],
+        ['05/09', 'AMAZON MKTPLACE', '', '', '42,50'],
+        ['08/09', 'MERCADOLIBRE*TIENDA', '', '22.900,00', ''],
+        ['10/09', 'FARMACITY 089', '', '18.750,00', ''],
+        ['14/09', 'FRAVEGA', '03/06', '85.000,00', ''],
+        ['15/09', 'ZARA ALTO PALERMO', '02/03', '30.000,00', ''],
+        ['16/09', 'NETFLIX.COM', '', '', '12,99'],
+        ['18/09', 'DEV. MERCADOLIBRE*TIENDA', '', '-22.900,00', ''],
+        ['20/09', 'LA PAROLACCIA', '', '52.600,00', ''],
+        ['22/09', 'UBER *TRIP', '', '9.870,00', ''],
+    ],
+    footer: 'Saldo actual: $ 305.540,00 y U$S 55,49. Pago mínimo: $ 45.000,00.',
+    amountColumns: [3, 4],
+}
+
+export const SCENARIO_1_TICKETS: readonly UsabilityMaterial[] = [
+    {
+        kind: 'table',
+        title: 'Ticket 1. Verdulería La Huerta',
+        notes: ['26/09/2026. Pago: efectivo.'],
+        columns: ['Producto', 'Importe'],
+        rows: [
+            ['Tomate 1 kg', '2.400'],
+            ['Papa 2 kg', '2.100'],
+            ['Banana 1 kg', '1.950'],
+            ['Lechuga', '1.400'],
+        ],
+        total: ['Total', '7.850'],
+        amountColumns: [1],
+    },
+    {
+        kind: 'table',
+        title: 'Ticket 2. Farmacity 089',
+        notes: ['10/09/2026. Pago: Visa terminada en 4821.'],
+        columns: ['Producto', 'Importe'],
+        rows: [
+            ['Ibuprofeno 600 x20', '9.350'],
+            ['Protector solar', '9.400'],
+        ],
+        total: ['Total', '18.750'],
+        amountColumns: [1],
+    },
+    {
+        kind: 'table',
+        title: 'Ticket 3. Coto Suc 125',
+        notes: ['28/09/2026. Pago: Visa terminada en 4821.'],
+        columns: ['Producto', 'Importe'],
+        rows: [
+            ['Leche x2', '3.600'],
+            ['Pan lactal', '2.900'],
+            ['Fideos x3', '4.200'],
+            ['Aceite 1,5 L', '6.800'],
+            ['Detergente', '3.150'],
+            ['Carne picada 1 kg', '9.800'],
+            ['Queso', '10.780'],
+        ],
+        total: ['Total', '41.230'],
+        amountColumns: [1],
+    },
+]
 
 const SCENARIO_0_EXPENSES = [
     {
@@ -290,6 +394,59 @@ export const SUS_STATEMENTS = [
     'Me sentí con mucha confianza usando la app.',
     'Tuve que aprender muchas cosas antes de poder arrancar con la app.',
 ] as const
+
+export const SUS_INSTRUCTIONS =
+    'Cada afirmación se responde del 1 al 5, donde 1 es "totalmente en desacuerdo" y 5 es "totalmente de acuerdo".'
+
+/** The observation sheet's header rows, label and the options to circle. */
+export const OBSERVATION_SHEET_DATA: readonly (readonly [string, string])[] = [
+    ['ID de participante', ''],
+    ['Grupo', '1 nuevo / 2 usuario'],
+    ['Fecha', ''],
+    ['Conduce', ''],
+    ['Acompaña', ''],
+    ['Permiso de grabación', 'Sí / No'],
+    ['Versión de la app', ''],
+    ['Edad', ''],
+    ['Habilidad con la tecnología, 1 a 5', ''],
+    ['Cómo registra hoy', ''],
+    ['Uso previo de la app', ''],
+]
+
+export const OBSERVATION_SHEET_CLOSING: readonly string[] = [
+    'Dificultad escenario 0, 1 a 5',
+    'Dificultad escenario 1, 1 a 5',
+    'Dificultad escenario 2, 1 a 5',
+    'Puntaje SUS',
+    'Trabas principales',
+    'Pistas dadas',
+    'Frases textuales',
+    'Fallas o pérdida de datos, si pasó',
+]
+
+/** Fixed wording of the printed materials, read by participants and the team. */
+export const USABILITY_PRINT_TEXT = {
+    scenario: (scenario: number) => `Escenario ${scenario}`,
+    expenseList: 'Lista de gastos',
+    statement: 'Resumen de la tarjeta',
+    tickets: 'Tickets',
+    cards: 'Tarjetas de consignas. Recortar por la línea punteada.',
+    card: (number: number) => `Consigna ${number}`,
+    susTitle: 'Cuestionario',
+    participant: 'ID de participante',
+    date: 'Fecha',
+    susStatement: 'Afirmación',
+    sheetTitle: 'Planilla de observación',
+    sheetHint: 'Una por participante.',
+    data: 'Dato',
+    value: 'Valor',
+    start: 'Inicio',
+    end: 'Fin',
+    assistantTitle: 'Asistente, completar si lo usó en cualquier escenario',
+    question: 'Pregunta',
+    answer: 'Respuesta',
+    closingTitle: 'Cierre',
+} as const
 
 export function susKey(index: number): string {
     return `sus.${index + 1}`
@@ -466,16 +623,8 @@ export const USABILITY_STEPS: readonly UsabilityStep[] = [
             { type: 'credentials', scenario: 0 },
             {
                 type: 'material',
-                title: 'Lista impresa: gastos de la semana',
-                lines: [
-                    '1. Verdulería, hoy, $ 8.500, efectivo',
-                    '2. Taxi, hace 3 días, $ 12.000, efectivo',
-                    '3. Café con amigos, ayer, $ 9.800, MercadoPago',
-                    '4. Factura de luz, hace 5 días, $ 38.400, MercadoPago',
-                    '5. Farmacia, hace 2 días, $ 21.300, tarjeta',
-                    '6. Zapatillas, hoy, $ 120.000 en 3 cuotas de $ 40.000, tarjeta',
-                    '7. Pagué el resumen de la tarjeta desde MercadoPago, ayer, $ 250.000',
-                ],
+                title: 'Lista impresa',
+                materials: [SCENARIO_0_EXPENSE_LIST],
             },
             {
                 type: 'say',
@@ -497,6 +646,7 @@ export const USABILITY_STEPS: readonly UsabilityStep[] = [
             {
                 type: 'rows',
                 title: 'Gastos',
+                rowHeader: 'Gasto',
                 legend: 'Camino: M formulario manual, T asistente por texto, A nota de voz, V modo en vivo. Dudas: ninguna, pocas o muchas.',
                 rows: SCENARIO_0_EXPENSES.map((expense) => ({
                     id: expense.id,
@@ -549,31 +699,13 @@ export const USABILITY_STEPS: readonly UsabilityStep[] = [
             { type: 'credentials', scenario: 1 },
             {
                 type: 'material',
-                title: 'Resumen impreso: Banco Ejemplo, Visa terminada en 4821',
-                lines: [
-                    'Período: 25/08/2026 al 24/09/2026. Cierre: 24/09/2026. Vencimiento: 06/10/2026.',
-                    '27/08 COTO SUC 125, $ 64.320,00',
-                    '02/09 YPF FULL PALERMO, $ 45.000,00',
-                    '05/09 AMAZON MKTPLACE, U$S 42,50',
-                    '08/09 MERCADOLIBRE*TIENDA, $ 22.900,00',
-                    '10/09 FARMACITY 089, $ 18.750,00',
-                    '14/09 FRAVEGA, cuota 03/06, $ 85.000,00',
-                    '15/09 ZARA ALTO PALERMO, cuota 02/03, $ 30.000,00',
-                    '16/09 NETFLIX.COM, U$S 12,99',
-                    '18/09 DEV. MERCADOLIBRE*TIENDA, -$ 22.900,00',
-                    '20/09 LA PAROLACCIA, $ 52.600,00',
-                    '22/09 UBER *TRIP, $ 9.870,00',
-                    'Saldo actual: $ 305.540,00 y U$S 55,49. Pago mínimo: $ 45.000,00.',
-                ],
+                title: 'Resumen impreso',
+                materials: [SCENARIO_1_STATEMENT],
             },
             {
                 type: 'material',
                 title: 'Tickets impresos',
-                lines: [
-                    'Ticket 1. Verdulería La Huerta, 26/09/2026, efectivo. Tomate 2.400, papa 2.100, banana 1.950, lechuga 1.400. Total 7.850.',
-                    'Ticket 2. Farmacity 089, 10/09/2026, Visa 4821. Ibuprofeno 9.350, protector solar 9.400. Total 18.750.',
-                    'Ticket 3. Coto Suc 125, 28/09/2026, Visa 4821. Leche 3.600, pan lactal 2.900, fideos 4.200, aceite 6.800, detergente 3.150, carne picada 9.800, queso 10.780. Total 41.230.',
-                ],
+                materials: SCENARIO_1_TICKETS,
             },
             {
                 type: 'say',
@@ -598,6 +730,7 @@ export const USABILITY_STEPS: readonly UsabilityStep[] = [
             {
                 type: 'rows',
                 title: 'Casos',
+                rowHeader: 'Caso',
                 legend: 'Camino: M formulario manual, T asistente por texto, A nota de voz, V modo en vivo.',
                 rows: SCENARIO_1_CASES.map((item) => ({
                     id: item.id,
@@ -657,6 +790,7 @@ export const USABILITY_STEPS: readonly UsabilityStep[] = [
             {
                 type: 'rows',
                 title: 'Consignas',
+                rowHeader: '#',
                 legend: 'Método: N navegación y filtros, T asistente por texto, A nota de voz, V modo en vivo. Puede ser más de uno.',
                 rows: SCENARIO_2_QUESTIONS.map((question) => ({
                     id: `c${question.number}`,

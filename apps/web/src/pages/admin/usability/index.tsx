@@ -52,6 +52,22 @@ export function UsabilitySessions() {
                 }
             />
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                <div className="mx-auto flex w-full max-w-2xl flex-wrap gap-2 px-4 pt-4">
+                    <Button
+                        variant="tonal"
+                        onPress={() => navigate('/admin/usability/guion')}
+                    >
+                        <Icon name="menu_book" size={18} />
+                        {t.usability.viewScript}
+                    </Button>
+                    <Button
+                        variant="tonal"
+                        onPress={() => navigate('/admin/usability/imprimir')}
+                    >
+                        <Icon name="print" size={18} />
+                        {t.usability.printMaterials}
+                    </Button>
+                </div>
                 {status === 'LoadingFirstPage' ? (
                     <div className="mx-auto flex w-full max-w-2xl flex-col gap-2 p-4">
                         <Skeleton className="h-16 w-full" />

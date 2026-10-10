@@ -18,12 +18,18 @@ import {
     type UsabilityScenario,
 } from '@wallet-bot/shared'
 import { Button } from 'actify'
-import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/m3/icon'
 import { useFormatLocale, useT } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
 import { FieldInput } from './field-input'
+import {
+    ListBlock,
+    MaterialBlock,
+    NoteBlock,
+    SayBlock,
+    SectionTitle,
+    Surface,
+} from './protocol-view'
 import { RecordingBlock } from './recording'
 import {
     type FieldValues,
@@ -83,29 +89,6 @@ function blockKey(block: UsabilityBlock): string {
     }
 }
 
-function Surface({
-    children,
-    className,
-}: {
-    children: ReactNode
-    className?: string
-}) {
-    return (
-        <section
-            className={cn(
-                'flex flex-col gap-3 rounded-3xl bg-surface-container-high p-4 text-on-surface',
-                className,
-            )}
-        >
-            {children}
-        </section>
-    )
-}
-
-function SectionTitle({ children }: { children: ReactNode }) {
-    return <h2 className="m3-title-medium text-on-surface">{children}</h2>
-}
-
 function Block({
     block,
     context,
@@ -113,43 +96,15 @@ function Block({
     block: UsabilityBlock
     context: BlockContext
 }) {
-    const t = useT()
     switch (block.type) {
         case 'say':
             return (
-                <section className="flex flex-col gap-3 rounded-3xl border-l-4 border-tertiary bg-tertiary-container/40 p-4">
-                    <span className="m3-label-large flex items-center gap-2 text-on-surface-variant">
-                        <Icon name="record_voice_over" size={18} />
-                        {block.title ?? t.usability.readAloud}
-                    </span>
-                    {block.paragraphs.map((paragraph) => (
-                        <p
-                            key={paragraph}
-                            className="m3-body-large text-on-surface"
-                        >
-                            {paragraph}
-                        </p>
-                    ))}
-                </section>
+                <SayBlock title={block.title} paragraphs={block.paragraphs} />
             )
         case 'note':
-            return (
-                <p className="m3-body-medium flex gap-2 px-1 text-on-surface-variant">
-                    <Icon name="info" size={20} className="shrink-0" />
-                    <span>{block.text}</span>
-                </p>
-            )
+            return <NoteBlock text={block.text} />
         case 'list':
-            return (
-                <Surface>
-                    <SectionTitle>{block.title}</SectionTitle>
-                    <ul className="m3-body-medium flex list-disc flex-col gap-2 pl-5">
-                        {block.items.map((item) => (
-                            <li key={item}>{item}</li>
-                        ))}
-                    </ul>
-                </Surface>
-            )
+            return <ListBlock title={block.title} items={block.items} />
         case 'fields':
             return (
                 <Surface>
@@ -187,7 +142,12 @@ function Block({
                 </Surface>
             )
         case 'material':
-            return <MaterialBlock title={block.title} lines={block.lines} />
+            return (
+                <MaterialBlock
+                    title={block.title}
+                    materials={block.materials}
+                />
+            )
         case 'rows':
             return (
                 <section className="flex flex-col gap-3">
@@ -227,40 +187,6 @@ function Block({
                 />
             )
     }
-}
-
-function MaterialBlock({
-    title,
-    lines,
-}: {
-    title: string
-    lines: readonly string[]
-}) {
-    const t = useT()
-    const [open, setOpen] = useState(false)
-    return (
-        <Surface>
-            <button
-                type="button"
-                onClick={() => setOpen((value) => !value)}
-                aria-expanded={open}
-                className="flex cursor-pointer items-center gap-3 text-left"
-            >
-                <Icon name="description" className="text-on-surface-variant" />
-                <span className="m3-title-small flex-1">{title}</span>
-                <span className="m3-label-large text-on-surface-variant">
-                    {open ? t.usability.hideMaterial : t.usability.showMaterial}
-                </span>
-            </button>
-            {open ? (
-                <ul className="m3-body-medium flex flex-col gap-1.5 border-t border-outline-variant pt-3">
-                    {lines.map((line) => (
-                        <li key={line}>{line}</li>
-                    ))}
-                </ul>
-            ) : null}
-        </Surface>
-    )
 }
 
 function RowCard({

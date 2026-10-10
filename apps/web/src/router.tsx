@@ -337,6 +337,26 @@ export const router = createBrowserRouter([
                                                     })),
                                             },
                                             {
+                                                path: 'usability/guion',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/usability/script'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.UsabilityScript,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'usability/imprimir',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/usability/print'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.UsabilityPrint,
+                                                    })),
+                                            },
+                                            {
                                                 path: 'usability/new',
                                                 lazy: () =>
                                                     import(

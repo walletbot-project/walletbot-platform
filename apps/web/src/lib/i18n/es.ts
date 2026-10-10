@@ -1002,6 +1002,25 @@ export const es = {
         recordingMeta: (p: { size: string; date: string }) =>
             `${p.size}, subida el ${p.date}`,
         download: 'Descargar',
+        viewScript: 'Ver guion',
+        printMaterials: 'Imprimir materiales',
+        scriptTitle: 'Guion completo',
+        scriptStep: (p: { number: number }) => `Paso ${p.number}`,
+        scriptScale: 'Del 1 al 5',
+        scriptRecord: (p: { fields: string }) => `Se anota: ${p.fields}.`,
+        scriptExpectedAnswer:
+            'La respuesta esperada depende del día de cada sesión y se ve dentro de la sesión.',
+        scriptCredentials: (p: { scenario: number }) =>
+            `Loguear el usuario del escenario ${p.scenario}. Se genera con cada sesión.`,
+        scriptScenarioTimer: 'Marcar el inicio y el fin del escenario.',
+        scriptSessionStart: 'Empezar el reloj de la sesión.',
+        scriptSessionEnd: 'Terminar el reloj de la sesión.',
+        scriptRecording: 'Subir la grabación de la sesión.',
+        susStatements: 'Afirmaciones',
+        printTitle: 'Materiales para imprimir',
+        print: 'Imprimir',
+        printHint:
+            'Imprimí una copia por participante. En el diálogo de impresión elegí A4 y desactivá encabezados y pies de página.',
     },
 
     actionWidget: {
