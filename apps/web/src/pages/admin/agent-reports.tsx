@@ -5,7 +5,7 @@ import {
     isAgentReportReason,
 } from '@wallet-bot/shared'
 import { IconButton } from 'actify'
-import { useMutation, usePaginatedQuery, useQuery } from 'convex/react'
+import { useMutation, usePaginatedQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -40,7 +40,6 @@ const PAGE_SIZE = 20
 export function AgentReports() {
     const t = useT()
     const navigate = useNavigate()
-    const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
     const [status, setStatus] = useState<AgentReportStatus>('pending')
 
     const {
@@ -49,29 +48,9 @@ export function AgentReports() {
         loadMore,
     } = usePaginatedQuery(
         api.v1.agentReports.queries.list,
-        isAdmin === true ? { status } : 'skip',
+        { status },
         { initialNumItems: PAGE_SIZE },
     )
-
-    if (isAdmin === undefined) {
-        return (
-            <div className="flex flex-1 flex-col gap-4 p-4">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-            </div>
-        )
-    }
-
-    if (!isAdmin) {
-        return (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
-                <h2 className="text-lg font-medium">{t.adminReports.title}</h2>
-                <p className="text-sm text-muted-foreground">
-                    {t.adminReports.notAdmin}
-                </p>
-            </div>
-        )
-    }
 
     return (
         <>
@@ -80,20 +59,11 @@ export function AgentReports() {
                 leading={
                     <IconButton
                         aria-label={t.adminReports.back}
-                        onPress={() => navigate(-1)}
+                        onPress={() => navigate('/admin')}
                         className="text-on-surface-variant"
                     >
                         <Icon name="arrow_back" />
                     </IconButton>
-                }
-                actions={
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate('/admin/feature-flags')}
-                    >
-                        {t.adminReports.flagsLink}
-                    </Button>
                 }
             />
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">

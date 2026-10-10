@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
+import { AdminGuard } from '@/components/layout/admin-guard'
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { GlobalErrorBoundary } from '@/components/layout/error-boundary'
 import { LegalGuard } from '@/components/layout/legal-guard'
@@ -293,22 +294,79 @@ export const router = createBrowserRouter([
                                             ),
                                     },
                                     {
-                                        path: '/admin/feature-flags',
-                                        lazy: () =>
-                                            import(
-                                                '@/pages/admin/feature-flags'
-                                            ).then((m) => ({
-                                                Component: m.FeatureFlags,
-                                            })),
-                                    },
-                                    {
-                                        path: '/admin/agent-reports',
-                                        lazy: () =>
-                                            import(
-                                                '@/pages/admin/agent-reports'
-                                            ).then((m) => ({
-                                                Component: m.AgentReports,
-                                            })),
+                                        path: '/admin',
+                                        element: <AdminGuard />,
+                                        children: [
+                                            {
+                                                index: true,
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin'
+                                                    ).then((m) => ({
+                                                        Component: m.AdminHome,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'feature-flags',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/feature-flags'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.FeatureFlags,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'agent-reports',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/agent-reports'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.AgentReports,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'usability',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/usability'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.UsabilitySessions,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'usability/new',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/usability/new'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.UsabilitySessionCreate,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'usability/:sessionId',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/usability/session'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.UsabilitySessionOverview,
+                                                    })),
+                                            },
+                                            {
+                                                path: 'usability/:sessionId/:stepId',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/admin/usability/step'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.UsabilitySessionStep,
+                                                    })),
+                                            },
+                                        ],
                                     },
                                     {
                                         path: '*',

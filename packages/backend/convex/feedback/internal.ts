@@ -6,9 +6,10 @@ import { internalMutation } from '../_generated/server'
  *
  * A client asks for an upload URL and POSTs the bytes before it calls `submit`,
  * so every abandoned sheet — and every rejected submission — leaves stored bytes
- * behind, up to 1 GB per attempt. Nothing else in this project stores files, so
- * "in `_storage` but referenced by no `feedbackAttachments` row" is exactly the
- * set of garbage.
+ * behind, up to 1 GB per attempt. The only other stored files are usability
+ * session recordings, so "in `_storage` but referenced by no
+ * `feedbackAttachments` row and no `usabilitySessions` recording" is exactly
+ * the set of garbage.
  *
  * Walks `_storage` oldest-first in `limit`-sized windows, never a full scan, and
  * only ever looks at files older than `olderThanMs` so an upload belonging to a
@@ -39,6 +40,13 @@ export const deleteOrphanAttachments = internalMutation({
                 .withIndex('by_storageId', (q) => q.eq('storageId', file._id))
                 .first()
             if (reference) continue
+            const recording = await ctx.db
+                .query('usabilitySessions')
+                .withIndex('by_recording_storageId', (q) =>
+                    q.eq('recording.storageId', file._id),
+                )
+                .first()
+            if (recording) continue
             await ctx.storage.delete(file._id)
             deleted += 1
         }

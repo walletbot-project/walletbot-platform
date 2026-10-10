@@ -17,56 +17,25 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { useT } from '@/lib/i18n'
 
 export function FeatureFlags() {
+    const t = useT()
     const navigate = useNavigate()
-    const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
-    const flags = useQuery(
-        api.v1.featureFlags.queries.listFlags,
-        isAdmin === true ? {} : 'skip',
-    )
-
-    if (isAdmin === undefined) {
-        return (
-            <div className="flex flex-1 flex-col gap-4 p-4">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-            </div>
-        )
-    }
-
-    if (!isAdmin) {
-        return (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
-                <h2 className="text-lg font-medium">Not authorized</h2>
-                <p className="text-sm text-muted-foreground">
-                    You need admin access to view feature flags.
-                </p>
-            </div>
-        )
-    }
+    const flags = useQuery(api.v1.featureFlags.queries.listFlags)
 
     return (
         <>
             <AppBar
-                title="Feature flags"
+                title={t.admin.flagsTitle}
                 leading={
                     <IconButton
-                        aria-label="Go back"
-                        onPress={() => navigate(-1)}
+                        aria-label={t.common.goBack}
+                        onPress={() => navigate('/admin')}
                         className="text-on-surface-variant"
                     >
                         <Icon name="arrow_back" />
                     </IconButton>
-                }
-                actions={
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate('/admin/agent-reports')}
-                    >
-                        Reported responses
-                    </Button>
                 }
             />
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -92,6 +61,7 @@ type FlagRow = {
 const OVERRIDES_PAGE_SIZE = 20
 
 function FlagCard({ flag }: { flag: FlagRow }) {
+    const t = useT()
     const {
         results: overrides,
         status: overridesStatus,
@@ -114,9 +84,9 @@ function FlagCard({ flag }: { flag: FlagRow }) {
 
     const handleDefaultChange = (enabled: boolean) => {
         toast.promise(setFlagDefault({ key: flag.key, enabled }), {
-            loading: 'Saving…',
-            success: 'Default updated',
-            error: 'Could not update default',
+            loading: t.common.saving,
+            success: t.admin.flagDefaultUpdated,
+            error: t.admin.flagDefaultFailed,
         })
     }
 
@@ -124,18 +94,18 @@ function FlagCard({ flag }: { flag: FlagRow }) {
         toast.promise(
             setUserOverride({ flagKey: flag.key, targetUserId, enabled }),
             {
-                loading: 'Saving…',
-                success: 'Override updated',
-                error: 'Could not update override',
+                loading: t.common.saving,
+                success: t.admin.overrideUpdated,
+                error: t.admin.overrideUpdateFailed,
             },
         )
     }
 
     const handleRemoveOverride = (targetUserId: string) => {
         toast.promise(removeUserOverride({ flagKey: flag.key, targetUserId }), {
-            loading: 'Removing…',
-            success: 'Override removed',
-            error: 'Could not remove override',
+            loading: t.admin.overrideRemoving,
+            success: t.admin.overrideRemoved,
+            error: t.admin.overrideRemoveFailed,
         })
     }
 
@@ -146,9 +116,9 @@ function FlagCard({ flag }: { flag: FlagRow }) {
         toast.promise(
             setUserOverride({ flagKey: flag.key, targetUserId, enabled: true }),
             {
-                loading: 'Saving…',
-                success: 'Override added',
-                error: 'Could not add override',
+                loading: t.common.saving,
+                success: t.admin.overrideAdded,
+                error: t.admin.overrideAddFailed,
             },
         )
         setNewUserId('')
@@ -170,13 +140,13 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                 <CardDescription>{flag.description}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-                <p className="text-sm font-medium">Per-user overrides</p>
+                <p className="text-sm font-medium">{t.admin.overridesTitle}</p>
 
                 {overridesStatus === 'LoadingFirstPage' ? (
                     <Skeleton className="h-8 w-full" />
                 ) : overrides.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                        No overrides yet.
+                        {t.admin.overridesEmpty}
                     </p>
                 ) : (
                     <ul className="divide-y rounded-md border">
@@ -207,7 +177,7 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                                             )
                                         }
                                     >
-                                        Remove
+                                        {t.admin.overrideRemove}
                                     </Button>
                                 </div>
                             </li>
@@ -221,7 +191,7 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                         variant="outline"
                         onClick={() => loadMoreOverrides(OVERRIDES_PAGE_SIZE)}
                     >
-                        Load more
+                        {t.admin.loadMore}
                     </Button>
                 )}
 
@@ -230,12 +200,12 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                     onSubmit={handleAddOverride}
                 >
                     <Input
-                        placeholder="User id"
+                        placeholder={t.admin.overrideUserId}
                         value={newUserId}
                         onChange={(e) => setNewUserId(e.target.value)}
                     />
                     <Button type="submit" size="sm">
-                        Add override
+                        {t.admin.overrideAdd}
                     </Button>
                 </form>
             </CardContent>
