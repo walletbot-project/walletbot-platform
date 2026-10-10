@@ -373,6 +373,15 @@ export const purgeUserData = internalMutation({
             async (n) =>
                 deleteRows(
                     await ctx.db
+                        .query('syncConflicts')
+                        .withIndex('by_user_table_entity', (q) =>
+                            q.eq('userId', userId),
+                        )
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
                         .query('syncCounters')
                         .withIndex('by_user', (q) => q.eq('userId', userId))
                         .take(n),

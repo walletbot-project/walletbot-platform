@@ -178,6 +178,8 @@ void main() {
 
   Future<void> build({
     Duration operationTimeout = const Duration(seconds: 30),
+    int pushChunkLimit = 80,
+    int extraDirtyAccounts = 0,
   }) async {
     FlutterSecureStorage.setMockInitialValues({});
     metrics = [];
@@ -203,6 +205,20 @@ void main() {
             dirty: const Value(true),
           ),
         );
+    for (var i = 0; i < extraDirtyAccounts; i++) {
+      await db
+          .into(db.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              id: 'extra-$i',
+              name: 'Offline account $i',
+              currency: 'ARS',
+              createdAt: BigInt.one,
+              updatedAt: BigInt.from(100),
+              dirty: const Value(true),
+            ),
+          );
+    }
     server = FakeConvexServer();
     backend = _SyncBackend(server, counter: BigInt.from(5));
     client = ConvexClient(
@@ -230,6 +246,7 @@ void main() {
       client: client,
       clientInfo: clientInfo,
       telemetryClient: telemetry,
+      pushChunkLimit: pushChunkLimit,
       retryFloor: const Duration(milliseconds: 20),
     );
     engine.addListener(() => statuses.add(engine.status));
@@ -276,12 +293,11 @@ void main() {
         () => backend.pushesAnswered == 2 && engine.status == SyncStatus.synced,
       );
 
-      expect(backend.calls.take(4), [
-        'pull',
-        'push',
-        'pull',
-        'push',
-      ], reason: 'the mismatch re-ran the pull before the retried push');
+      expect(
+        backend.calls.take(4),
+        ['pull', 'push', 'pull', 'push'],
+        reason: 'the mismatch re-ran the pull before the retried push',
+      );
       // First round: cursor 5. The mismatch moved the server to 6, the re-pull
       // adopted it, and the retry was sent against 6.
       expect(backend.pullSince.take(2), [BigInt.from(5), BigInt.from(5)]);
@@ -377,38 +393,52 @@ void main() {
     });
   });
 
-  test('CURRENT BEHAVIOUR: after 5 cursor_mismatch rounds the cycle reports '
-      'synced with rows still dirty; the next trigger pushes them', () async {
+  test('after 5 cursor_mismatch rounds that pushed nothing the cycle errors '
+      'instead of reporting synced, and the retry pushes the rows', () async {
     await build();
     backend.replies.addAll(List.filled(5, _PushReply.cursorMismatch));
     await engine.start();
 
-    await driveUntil(
-      () =>
-          backend.pushesAnswered == 5 &&
-          statuses.isNotEmpty &&
-          statuses.last == SyncStatus.synced,
-    );
+    await driveUntil(() => engine.status == SyncStatus.error);
 
     expect(backend.calls.take(10), [
       for (var i = 0; i < 5; i++) ...['pull', 'push'],
     ]);
-    // Pinned as-is (`_runOnce` gives up after 5 rounds and falls through
-    // to the success path): nothing was pushed, yet the status is synced.
-    expect(engine.status, SyncStatus.synced);
     expect((await account()).dirty, isTrue);
-    expect(engine.lastSyncedAt, isNotNull);
-    expect(statuses, isNot(contains(SyncStatus.error)));
-    expect(metricsNamed('sync.push.client_failures.count'), isEmpty);
+    expect(statuses, isNot(contains(SyncStatus.synced)));
 
+    // No local write, no counter change: the retry timer runs the next cycle.
     backend.replies.add(_PushReply.ok);
-    final cycle = engine.sync();
     await driveUntil(
       () => backend.pushesAnswered == 6 && engine.status == SyncStatus.synced,
     );
-    await cycle;
     // 5 mismatches moved the counter 5 → 10; the push committed as 11.
     expect(backend.pushExpected.last, BigInt.from(10));
     await expectConverged(seq: BigInt.from(11));
+  });
+
+  test('cursor_mismatch rounds that still committed a chunk do not count '
+      'toward giving up', () async {
+    // One row per chunk and 7 dirty rows: every round commits one chunk and
+    // then hits a mismatch, as when the server rewrites rows behind each
+    // chunk of a long upload.
+    await build(pushChunkLimit: 1, extraDirtyAccounts: 6);
+    for (var i = 0; i < 6; i++) {
+      backend.replies.addAll([_PushReply.ok, _PushReply.cursorMismatch]);
+    }
+    backend.replies.add(_PushReply.ok);
+    await engine.start();
+
+    await driveUntil(
+      () => backend.pushesAnswered == 13 && engine.status == SyncStatus.synced,
+    );
+
+    expect(statuses, isNot(contains(SyncStatus.error)));
+    final dirty = await (db.select(
+      db.accounts,
+    )..where((a) => a.dirty.equals(true))).get();
+    expect(dirty, isEmpty);
+    // 7 commits and 6 mismatches moved the counter 5 → 18.
+    expect(await lastServerSeq(), BigInt.from(18));
   });
 }

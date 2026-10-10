@@ -22,7 +22,7 @@ import { occurrenceClock } from './schema/occurrenceClock'
 import { recurrences } from './schema/recurrences'
 import { refreshTokens } from './schema/refreshTokens'
 import { supportEmails } from './schema/supportEmails'
-import { syncCounters, tombstones } from './schema/sync'
+import { syncConflicts, syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
 import {
     latencySamples,
@@ -66,6 +66,7 @@ export default defineSchema({
     refreshTokens,
     savedFilters,
     supportEmails,
+    syncConflicts,
     syncCounters,
     tags,
     telemetryEvents,

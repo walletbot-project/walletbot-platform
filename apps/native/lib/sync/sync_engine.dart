@@ -12,6 +12,7 @@ import '../telemetry/telemetry_client.dart';
 import 'sync_merge.dart';
 import 'sync_recompute.dart';
 import 'sync_status.dart';
+import 'unsynced.dart';
 
 /// The `error` value returned by `sync/*:pull` and `push` when the backend
 /// rejects this client for being below the platform's `minSupportedVersion`.
@@ -114,11 +115,21 @@ class SyncEngine extends ChangeNotifier {
   static const _retryCeiling = Duration(minutes: 2);
   static const _maxRetryExponent = 6;
 
+  /// Consecutive `cursor_mismatch` rounds that committed nothing before a
+  /// cycle gives up. A round that did commit a chunk is progress (a long
+  /// upload where the server rewrites rows behind each chunk) and resets it.
+  static const _maxStalledRounds = 5;
+
+  /// Rounds per cycle even while each makes progress, so two sides that keep
+  /// rewriting each other's rows can't spin inside a single cycle.
+  static const _maxRounds = 50;
+
   Timer? _debounce;
   Timer? _retry;
   int _consecutiveFailures = 0;
   Future<void>? _inFlight;
   bool _trailingTrigger = false;
+  bool _writesDuringCycle = false;
   SubscriptionHandle? _counterSub;
   StreamSubscription<Object?>? _writeListener;
   StreamSubscription<ConnectionSnapshot>? _connectionListener;
@@ -189,7 +200,13 @@ class SyncEngine extends ChangeNotifier {
           ]),
         )
         .listen((_) {
-          if (_inFlight != null) return;
+          // Can't tell a user's write from the cycle's own here, so a write
+          // during a cycle only marks it; [_runOnce] looks for rows left
+          // dirty once its last push is done.
+          if (_inFlight != null) {
+            _writesDuringCycle = true;
+            return;
+          }
           notifyLocalWrite();
         });
 
@@ -299,15 +316,30 @@ class SyncEngine extends ChangeNotifier {
 
   Future<void> _runOnce() async {
     _setStatus(SyncStatus.syncing, error: null);
+    _writesDuringCycle = false;
     try {
       // One pull → push round. cursor_mismatch on push restarts the round.
-      var attempts = 0;
-      while (attempts < 5) {
-        attempts += 1;
+      var rounds = 0;
+      var stalledRounds = 0;
+      while (true) {
+        rounds += 1;
         await _pullDrain();
         await _recompute();
-        final mismatched = await _pushAllChunks();
-        if (!mismatched) break;
+        final push = await _pushAllChunks();
+        if (!push.cursorMismatch) break;
+        stalledRounds = push.committedChunks > 0 ? 0 : stalledRounds + 1;
+        if (stalledRounds >= _maxStalledRounds || rounds >= _maxRounds) {
+          // Rows are still waiting to be pushed, so this is not synced: fail
+          // the cycle and let the retry run another one.
+          throw StateError(
+            'sync: push still hit cursor_mismatch after $rounds rounds',
+          );
+        }
+      }
+      // A write that landed after the last chunk was collected would
+      // otherwise wait for an unrelated trigger.
+      if (_writesDuringCycle && await hasUnsyncedChanges(_db)) {
+        _trailingTrigger = true;
       }
       _lastSyncedAt = DateTime.now();
       // Persist a heartbeat so the UI can show "Last synced 1 min ago".
@@ -496,19 +528,24 @@ class SyncEngine extends ChangeNotifier {
 
   // ─── Push ────────────────────────────────────────────────────────────────
 
-  /// Returns `true` if we hit `cursor_mismatch` and need to re-pull. Returns
-  /// `false` when there's nothing left to push or every chunk committed.
-  Future<bool> _pushAllChunks() async {
+  /// Pushes chunks until nothing is dirty or the server answers
+  /// `cursor_mismatch`, in which case the caller re-pulls. Also returns how
+  /// many chunks committed before stopping.
+  Future<({bool cursorMismatch, int committedChunks})> _pushAllChunks() async {
+    var committedChunks = 0;
     while (true) {
       final chunk = await _collectChunk();
-      if (chunk.isEmpty) return false;
+      if (chunk.isEmpty) {
+        return (cursorMismatch: false, committedChunks: committedChunks);
+      }
 
       final expected = await _readLastServerSeq();
       final result = await _sendChunk(expected: expected, chunk: chunk);
       if (result.cursorMismatch) {
-        return true;
+        return (cursorMismatch: true, committedChunks: committedChunks);
       }
       await _applyChunkAck(chunk, ackedSeq: result.newSeq!);
+      committedChunks += 1;
     }
   }
 

@@ -89,11 +89,16 @@ accounts.id`) usan el UUID, no el `_id`.
 
 ### Filosofía
 
-La resolución de conflictos vive **en el cliente**. El servidor solo valida
+La resolución de conflictos vive **en el cliente**. El servidor valida
 legalidad (ownership, FKs, coherencia de moneda) y aplica un *compare-and-swap*
 sobre el contador del usuario antes de aceptar un push. Si el push es
 "fast-forward" (el cliente está al día), pasa; si no, el cliente debe primero
 pullear, mergear localmente y reintentar.
+
+Una fila ilegal nunca rechaza el push. El cliente reintenta el mismo chunk
+para siempre, así que un rechazo bloquea todo el sync de ese dispositivo. El
+servidor resuelve la fila dentro del mismo chunk, aunque se pierda el cambio
+del dispositivo (ver "Conflictos que resuelve el servidor").
 
 Last-write-wins por `updatedAt` (cliente) y `deletedAt` (tombstones) es la
 regla universal de resolución.
@@ -288,8 +293,8 @@ Servidor:
 2. Si `currentCounter != expectedServerSeq` → rechaza con
    `{ error: "cursor_mismatch", currentCounter }`.
 3. Valida cada upsert (ownership por `userId`, existencia de FKs,
-   coherencia de moneda, shape del payload). Si algo es ilegal → rechaza el
-   chunk entero.
+   coherencia de moneda, shape del payload). Una fila ilegal se resuelve sin
+   rechazar el chunk (ver "Conflictos que resuelve el servidor").
 4. Incrementa el contador a `currentCounter + 1` (= `newSeq`).
 5. Por cada upsert:
    - upsert por `(userId, id)`, estampa `seq = newSeq` y respeta el
@@ -322,7 +327,9 @@ Si un chunk falla con `cursor_mismatch`:
 
 #### Atomicidad por chunk
 
-Un chunk se commitea entero o se rechaza entero. El push completo a través
+Un chunk se commitea entero o se rechaza entero. Desde que el servidor
+resuelve las filas ilegales, solo un bug lo rechaza (`push_failed`,
+`reason: unknown`). El push completo a través
 de múltiples chunks **no** es atómico: si el chunk 3 de 5 falla por
 `cursor_mismatch`, los chunks 1 y 2 ya quedaron en server. Eso es OK porque
 las filas ya pusheadas tienen su `seq` y los pulls de otros dispositivos las
@@ -343,6 +350,37 @@ No hay soft delete a nivel UI. Cuando el usuario borra una entidad:
 
 Las queries normales nunca leen filas borradas: el delete es físico en
 cliente y server.
+
+Borrar una cuenta, categoría o tag **no** borra lo que la referencia. Los
+movimientos de una cuenta borrada siguen existiendo y siguen apuntando a su
+`id`. El servidor acepta esas referencias cuando existe un tombstone de ese
+`id` para el mismo usuario, que prueba que el padre era suyo. Así un
+dispositivo puede editar o borrar esos movimientos, y crear uno offline en
+una cuenta que otro dispositivo borró, sin bloquear el sync.
+
+### Conflictos que resuelve el servidor
+
+Cuando una fila no se puede guardar tal como llegó, el servidor hace una de
+tres cosas: la guarda con un arreglo (`repaired`), devuelve su propia copia
+(`reverted`) o la borra porque no tiene copia (`dropped`). Todo lo que el
+servidor cambia sale con un `seq` mayor al del push. El dispositivo marca
+como conocido el `seq` del push, así que con ese mismo `seq` nunca lo
+pullearía.
+
+| Caso | Qué hace el servidor |
+|---|---|
+| Cuenta con otra `currency` | Guarda el resto del cambio y conserva la moneda guardada (`repaired`) |
+| Tag que es su propio padre, o cuyo padre no existe | Lo mueve a la raíz (`repaired`). Un padre que llega en el mismo chunk cuenta como existente |
+| Movimiento en una cuenta que el usuario nunca tuvo | Devuelve la copia del servidor, o borra el movimiento si no hay (`reverted` / `dropped`) |
+| Movimiento con moneda distinta a la de su cuenta | Igual que el anterior |
+| Transferencia sin destino, sin `toAmount` o con origen = destino | Igual que el anterior |
+| `balance_adjustment` sin `balanceAfter` | Igual que el anterior |
+| Movimiento en una categoría que el usuario nunca tuvo | Lo guarda sin categoría (`repaired`) |
+| Join con `id` no canónico, o cuyo movimiento o tag no existe | Lo borra (`dropped`) |
+| Movimiento cuya cuenta llegó redirigida por un merge (WAL-148) | Lo guarda con la cuenta viva |
+
+Cada resolución deja un log `sync conflict resolved` y una fila en
+`syncConflicts`.
 
 ---
 
@@ -516,9 +554,9 @@ Defensa en capas:
    - que el `id` recibido coincida con el formato esperado
      (`${transactionId}__${tagId}`).
 
-   La tercera validación rechaza explícitamente con `invalid_join_id`
-   cualquier payload cuyo `id` no respete el formato canónico, en vez de
-   aceptar silenciosamente filas duplicadas.
+   Un join que no pasa alguna de las tres no se guarda: el servidor escribe
+   su tombstone (conflicto `join_invalid_id` o `join_parent_missing`), en vez
+   de aceptar filas duplicadas o rechazar el push.
 
 #### Borrado
 
@@ -563,6 +601,33 @@ deletedAt   int64
 ```
 
 Índices: `by_user_seq`, `by_user_table_entity`
+
+---
+
+### `syncConflicts`
+
+Registro permanente de las filas que el push resolvió en vez de guardarlas
+tal como llegaron, es decir de datos que un dispositivo perdió. Los logs de
+Convex solo cubren unas horas. Una fila por entidad: si un dispositivo
+manda la misma fila mala otra vez, sube `count` en vez de crecer la tabla.
+Se borra con el resto de los datos del usuario.
+
+```text
+userId       string
+tableName    igual que en tombstones
+entityId     string
+reason       "account_currency_changed" | "tag_self_parent" | "tag_parent_missing"
+             | "transaction_account_missing" | "transaction_currency_mismatch"
+             | "transaction_category_missing" | "transaction_invalid_transfer"
+             | "transaction_invalid_adjustment" | "join_invalid_id"
+             | "join_parent_missing"
+resolution   "repaired" | "reverted" | "dropped"
+count        number
+firstSeenAt  number
+lastSeenAt   number
+```
+
+Índice: `by_user_table_entity`
 
 ---
 

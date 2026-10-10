@@ -186,54 +186,96 @@ describe('sync convergence', { timeout: 30000 }, () => {
         expect((await rows(t)).categories).toHaveLength(2)
     })
 
-    it('fails a bad batch the same way every retry, leaving nothing behind', async () => {
+    it('resolves a row it cannot store instead of failing the batch', async () => {
         const { t, authed } = await fixture()
-        const bad = {
+        const batch = {
             upserts: {
                 categories: [category('c2', 'Rent')],
                 transactions: [transaction('USD')],
+            },
+        }
+        const result = await authed.mutation(api.v1.sync.mutations.push, {
+            ...client,
+            ...batch,
+            expectedServerSeq: 2n,
+        })
+        expect(result).toEqual({ ok: true, newSeq: 3n })
+        // The good row landed; the USD movement on an ARS account was dropped
+        // at a later seq, so the device that sent it pulls the tombstone.
+        expect(await rows(t)).toEqual({
+            categories: expect.arrayContaining(['c', 'c2']),
+            transactions: [],
+        })
+        expect(await counter(authed)).toBe(4n)
+        const page = await authed.query(api.v1.sync.queries.pull, {
+            ...client,
+            since: 3n,
+        })
+        expect(page).toMatchObject({
+            rows: [],
+            tombstones: [{ tableName: 'transactions', entityId: 't', seq: 4n }],
+            currentCounter: 4n,
+        })
+
+        // The device keeps sending it until it pulls: same outcome each time.
+        const again = await authed.mutation(api.v1.sync.mutations.push, {
+            ...client,
+            ...batch,
+            expectedServerSeq: 4n,
+        })
+        expect(again).toEqual({ ok: true, newSeq: 5n })
+        expect((await rows(t)).transactions).toEqual([])
+    })
+
+    it('fails a batch that hits a bug the same way every retry, then applies it at the same cursor once fixed', async () => {
+        const { t, authed } = await fixture()
+        // A second row under account `a`'s id is corrupt data: every lookup
+        // of `a` throws, standing in for a bug.
+        const duplicate = await t.run(
+            async (ctx) =>
+                await ctx.db.insert('accounts', {
+                    userId,
+                    id: 'a',
+                    name: 'Cash copy',
+                    currency: 'ARS',
+                    color: '#000000',
+                    icon: 'wallet',
+                    isArchived: false,
+                    createdAt: 1n,
+                    updatedAt: 1n,
+                    seq: 1n,
+                }),
+        )
+        const batch = {
+            upserts: {
+                categories: [category('c2', 'Rent')],
+                transactions: [transaction('ARS')],
             },
         }
         for (let attempt = 0; attempt < 3; attempt++) {
             const result = await authed.mutation(api.v1.sync.mutations.push, {
                 ...client,
-                ...bad,
+                ...batch,
                 expectedServerSeq: 2n,
             })
             expect(result).toEqual({
                 ok: false,
                 error: 'push_failed',
-                reason: 'validation',
+                reason: 'unknown',
             })
         }
         expect(await counter(authed)).toBe(2n)
         expect(await rows(t)).toEqual({ categories: ['c'], transactions: [] })
-    })
 
-    it('applies a corrected batch at the same cursor after a failed one', async () => {
-        const { t, authed } = await fixture()
-        const failed = await authed.mutation(api.v1.sync.mutations.push, {
-            ...client,
-            expectedServerSeq: 2n,
-            upserts: {
-                categories: [category('c2', 'Rent')],
-                transactions: [transaction('USD')],
-            },
-        })
-        expect(failed).toMatchObject({ ok: false, error: 'push_failed' })
-
-        // The failed batch never bumped the counter, so the client's cursor
-        // is still current and the corrected batch applies straight away.
+        // The failed batches never bumped the counter, so the client's cursor
+        // is still current and the same batch applies straight away.
+        await t.run(async (ctx) => await ctx.db.delete(duplicate))
         const fixed = await authed.mutation(api.v1.sync.mutations.push, {
             ...client,
+            ...batch,
             expectedServerSeq: 2n,
-            upserts: {
-                categories: [category('c2', 'Rent')],
-                transactions: [transaction('ARS')],
-            },
         })
         expect(fixed).toEqual({ ok: true, newSeq: 3n })
-        expect(await counter(authed)).toBe(3n)
         expect(await rows(t)).toEqual({
             categories: expect.arrayContaining(['c', 'c2']),
             transactions: ['t'],
