@@ -232,10 +232,10 @@ function AccountMenu({
         ...(isAdmin
             ? [
                   {
-                      key: 'feature-flags',
-                      icon: 'flag',
-                      label: t.settings.featureFlags,
-                      onClick: () => go('/admin/feature-flags'),
+                      key: 'admin',
+                      icon: 'admin_panel_settings',
+                      label: t.admin.title,
+                      onClick: () => go('/admin'),
                   },
               ]
             : []),

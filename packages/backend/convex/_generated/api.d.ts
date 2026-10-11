@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as admin_helpers from "../admin/helpers.js";
+import type * as admin_utils from "../admin/utils.js";
 import type * as agent_helpers from "../agent/helpers.js";
 import type * as agent_idempotency from "../agent/idempotency.js";
 import type * as agent_internal from "../agent/internal.js";
@@ -116,6 +118,7 @@ import type * as v1_accounts_helpers from "../v1/accounts/helpers.js";
 import type * as v1_accounts_internal from "../v1/accounts/internal.js";
 import type * as v1_accounts_mutations from "../v1/accounts/mutations.js";
 import type * as v1_accounts_queries from "../v1/accounts/queries.js";
+import type * as v1_admin_queries from "../v1/admin/queries.js";
 import type * as v1_agentReports_mutations from "../v1/agentReports/mutations.js";
 import type * as v1_agentReports_queries from "../v1/agentReports/queries.js";
 import type * as v1_categories_mutations from "../v1/categories/mutations.js";
@@ -169,6 +172,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "admin/helpers": typeof admin_helpers;
+  "admin/utils": typeof admin_utils;
   "agent/helpers": typeof agent_helpers;
   "agent/idempotency": typeof agent_idempotency;
   "agent/internal": typeof agent_internal;
@@ -277,6 +282,7 @@ declare const fullApi: ApiFromModules<{
   "v1/accounts/internal": typeof v1_accounts_internal;
   "v1/accounts/mutations": typeof v1_accounts_mutations;
   "v1/accounts/queries": typeof v1_accounts_queries;
+  "v1/admin/queries": typeof v1_admin_queries;
   "v1/agentReports/mutations": typeof v1_agentReports_mutations;
   "v1/agentReports/queries": typeof v1_agentReports_queries;
   "v1/categories/mutations": typeof v1_categories_mutations;
