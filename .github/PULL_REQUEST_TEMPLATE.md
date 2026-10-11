@@ -15,6 +15,13 @@
 - Dependencies to install
 - etc. -->
 
+<!-- Staging Google auth (delete when not applicable):
+For Google sign-in to work on a staging/preview deployment, its redirect URI must be added to the
+authorized redirect URIs of the OAuth client in Google Cloud Console:
+https://console.cloud.google.com/auth/clients/885078793236-a9es85agobrqq27ft5o3ks9j66jnfnsg.apps.googleusercontent.com?authuser=1&project=wallet-bot-493021
+Reviewer: if testing Google auth on staging, make sure the redirect URI is registered there first.
+-->
+
 <!-- SQLite / Drift checklist (delete when not applicable):
 - Bump AppDatabase.schemaVersion for every schema change
 - Add an explicit onUpgrade path that preserves existing local data
