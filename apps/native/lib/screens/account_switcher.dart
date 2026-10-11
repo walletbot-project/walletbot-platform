@@ -66,6 +66,30 @@ Future<void> showAccountSwitcher(
   );
 }
 
+/// Turns the active local account into an online one. The sign-in screen does
+/// the work and pops with `true`, which this returns as a bool.
+Future<bool> openLocalPromotion(
+  BuildContext context,
+  UserAccount account,
+  AppDatabase database,
+) async {
+  final promoted = await Navigator.of(context).push<bool>(
+    MaterialPageRoute<bool>(
+      builder: (_) => PopOnAccountSwitch(
+        accountId: account.id,
+        child: LoginScreen(
+          canDismiss: true,
+          promotion: LocalPromotion(
+            accountId: account.id,
+            beforeConvert: () => markAllSyncedTablesDirty(database),
+          ),
+        ),
+      ),
+    ),
+  );
+  return promoted == true;
+}
+
 /// The switcher's content: the active account and the actions that act on it,
 /// then the other accounts on this device, then "add account".
 ///
@@ -265,29 +289,15 @@ class AccountSwitcherView extends StatelessWidget {
         .whenComplete(() => aiConsent?.dispose());
   }
 
-  /// Turns the active local account into an online one. The sign-in screen
-  /// does the work and pops with `true`; the switcher then closes too, since
-  /// what it showed (a local account) is no longer true.
   Future<void> _openPromote(
     BuildContext context,
     UserAccount account,
     AppDatabase database,
   ) async {
-    final promoted = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => PopOnAccountSwitch(
-          accountId: account.id,
-          child: LoginScreen(
-            canDismiss: true,
-            promotion: LocalPromotion(
-              accountId: account.id,
-              beforeConvert: () => markAllSyncedTablesDirty(database),
-            ),
-          ),
-        ),
-      ),
-    );
-    if (promoted == true && context.mounted) Navigator.of(context).pop();
+    final promoted = await openLocalPromotion(context, account, database);
+    // The switcher closes too, since what it showed (a local account) is no
+    // longer true.
+    if (promoted && context.mounted) Navigator.of(context).pop();
   }
 
   void _openAddAccount(BuildContext context, String? activeId) {

@@ -405,6 +405,11 @@ void main() {
     );
     // No local-account option: the account being promoted already is one.
     expect(find.text('Local account'), findsNothing);
+    // Opens on sign-up and offers no way to sign in to an existing account.
+    expect(find.text('Sign up'), findsWidgets);
+    expect(find.text('Forgot your password?'), findsNothing);
+    expect(find.text('Already have an account? Sign in'), findsNothing);
+    expect(find.text('Need an account? Sign up'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

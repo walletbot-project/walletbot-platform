@@ -89,6 +89,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get _promoting => widget.promotion != null;
 
+  @override
+  void initState() {
+    super.initState();
+    // Promotion assumes the user has no online account yet and never merges
+    // into an existing one, so it opens on sign-up. See docs/riesgos.md R-060.
+    if (_promoting) _emailMode = _EmailAuthMode.signUp;
+  }
+
   void _finishPromotion() {
     if (mounted) Navigator.of(context).pop(true);
   }
@@ -438,6 +446,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                         setState(() => _ageConfirmed = value),
                                     onAcceptedLegalChanged: (value) =>
                                         setState(() => _acceptedLegal = value),
+                                    // Promoting has no sign-in to switch to:
+                                    // an existing online account is refused.
+                                    canSwitchMode: !_promoting,
                                     onModeChanged: (mode) =>
                                         setState(() => _emailMode = mode),
                                     onSubmit: _submitRemote,
@@ -711,6 +722,7 @@ class _RemoteLoginPanel extends StatelessWidget {
     required this.acceptedLegal,
     required this.onAgeConfirmedChanged,
     required this.onAcceptedLegalChanged,
+    required this.canSwitchMode,
     required this.onModeChanged,
     required this.onSubmit,
     required this.onApple,
@@ -728,6 +740,7 @@ class _RemoteLoginPanel extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController passwordController;
+  final bool canSwitchMode;
   final ValueChanged<_EmailAuthMode> onModeChanged;
   final VoidCallback onSubmit;
 
@@ -859,14 +872,16 @@ class _RemoteLoginPanel extends StatelessWidget {
                       ? null
                       : onSubmit,
                 ),
-                const SizedBox(height: 10),
-                Center(
-                  child: _EmailModeToggleButton(
-                    mode: mode,
-                    enabled: !submitting,
-                    onChanged: onModeChanged,
+                if (canSwitchMode) ...[
+                  const SizedBox(height: 10),
+                  Center(
+                    child: _EmailModeToggleButton(
+                      mode: mode,
+                      enabled: !submitting,
+                      onChanged: onModeChanged,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

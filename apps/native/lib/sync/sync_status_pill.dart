@@ -3,14 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:app/auth/account.dart';
+import 'package:app/auth/auth_controller.dart';
+import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/account_switcher.dart';
 
 import 'sync_engine.dart';
 import 'sync_status.dart';
 
 /// Tiny status indicator for the home AppBar. Shows the current sync state
-/// and lets the user force a sync by tapping. Hidden when the engine has
-/// never run (i.e. local-only accounts).
+/// and lets the user force a sync by tapping. On a local account there is
+/// nothing to sync, so tapping opens the flow that promotes it to an online
+/// account instead.
 class SyncStatusPill extends StatelessWidget {
   const SyncStatusPill({super.key});
 
@@ -18,6 +23,8 @@ class SyncStatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final engine = context.watch<SyncEngine>();
     final status = engine.status;
+    final active = context.watch<AuthController>().activeAccount;
+    final isLocal = active?.type == AccountType.local;
 
     final (icon, label, color) = switch (status) {
       SyncStatus.idle => (
@@ -43,9 +50,19 @@ class SyncStatusPill extends StatelessWidget {
     };
 
     return Tooltip(
-      message: _tooltipFor(context, status, engine),
+      message: isLocal
+          ? context.l10n.promoteBackUpData
+          : _tooltipFor(context, status, engine),
       child: InkWell(
-        onTap: status == SyncStatus.syncing
+        onTap: isLocal
+            ? () => unawaited(
+                openLocalPromotion(
+                  context,
+                  active!,
+                  context.read<AppDatabase>(),
+                ),
+              )
+            : status == SyncStatus.syncing
             ? null
             : () => unawaited(engine.sync()),
         borderRadius: BorderRadius.circular(20),
