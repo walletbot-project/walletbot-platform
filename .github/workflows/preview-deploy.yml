@@ -421,7 +421,11 @@ jobs:
   mobile:
     needs: [web, changes]
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    # `!cancelled()` is load-bearing: without a status-check function GitHub
+    # applies an implicit `success()`, which skips this job whenever `web` was
+    # skipped (a native-only push), regardless of the web.result check below.
     if: |
+      !cancelled() &&
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile') &&
       needs.changes.outputs.native == 'true' &&
       (needs.web.result == 'success' || needs.web.result == 'skipped')
