@@ -405,11 +405,68 @@ void main() {
     );
     // No local-account option: the account being promoted already is one.
     expect(find.text('Local account'), findsNothing);
-    // Opens on sign-up and offers no way to sign in to an existing account.
+    // Opens on sign-up, but can switch to sign-in: a backup begun by email and
+    // interrupted before the verification finished is completed by signing in.
     expect(find.text('Sign up'), findsWidgets);
     expect(find.text('Forgot your password?'), findsNothing);
-    expect(find.text('Already have an account? Sign in'), findsNothing);
-    expect(find.text('Need an account? Sign up'), findsNothing);
+    expect(find.text('Already have an account? Sign in'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('promoting: an existing address drops the user into sign-in', (
+    tester,
+  ) async {
+    final auth = AuthController(
+      awaitFrame: () async {},
+      httpClient: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'code': 'account_exists',
+            'message': 'Ya existe una cuenta con ese correo.',
+          }),
+          409,
+        ),
+      ),
+    );
+    final local = await auth.addLocal(name: 'Mine');
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthController>.value(value: auth),
+          ChangeNotifierProvider<AppConfigController>(
+            create: (_) => AppConfigController(),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: LoginScreen(
+              canDismiss: true,
+              promotion: LocalPromotion(
+                accountId: local.id,
+                beforeConvert: () async {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Mine');
+    await tester.enterText(find.byType(TextFormField).at(1), 'a@b.c');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    for (final box in find.byType(Checkbox).evaluate()) {
+      await tester.tap(find.byWidget(box.widget));
+    }
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign up').last);
+    await tester.pumpAndSettle();
+
+    // Now on sign-in, which a promotion allows for the address it began with.
+    expect(find.text('Need an account? Sign up'), findsOneWidget);
+    expect(find.textContaining('If you started this backup earlier'), findsOne);
   });
 }

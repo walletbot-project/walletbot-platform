@@ -84,6 +84,9 @@ const parseJsonBody = async <T>(req: Request): Promise<T | null> => {
 // a pre-existing online account. See `finishPromotion`.
 type PromotionBody = {
     promoteLocalAccountId?: unknown
+    // What the local account already settled on the device. Only read in
+    // promotion mode. See `parseCarryoverInput`.
+    carryover?: unknown
 }
 
 type GoogleSignInBody = PromotionBody & {
@@ -152,6 +155,55 @@ const parseAcceptanceInput = (raw: unknown): AcceptanceInput | null => {
             ? { appVersion: record.appVersion }
             : {}),
         ...(typeof record.locale === 'string' ? { locale: record.locale } : {}),
+    }
+}
+
+type CarryoverInput = {
+    acceptance?: AcceptanceInput
+    aiConsent?: { platform: string; appVersion?: string; locale?: string }
+    defaultCurrency?: string
+}
+
+/**
+ * The device-only state a promotion carries over, off an untrusted body. Every
+ * piece is optional and anything malformed is dropped rather than failing the
+ * sign-in: the worst outcome is the app asking the user again.
+ *
+ * As with `parseAcceptanceInput`, no version is read from the body — the
+ * server records its own current ones. The currency is validated where it is
+ * applied.
+ */
+const parseCarryoverInput = (raw: unknown): CarryoverInput => {
+    if (typeof raw !== 'object' || raw === null) return {}
+    const record = raw as Record<string, unknown>
+    const acceptance = parseAcceptanceInput(record.acceptance)
+    const aiConsent = record.aiConsent
+    const consent =
+        typeof aiConsent === 'object' && aiConsent !== null
+            ? (aiConsent as Record<string, unknown>)
+            : null
+    return {
+        ...(acceptance ? { acceptance } : {}),
+        ...(consent
+            ? {
+                  aiConsent: {
+                      platform:
+                          typeof consent.platform === 'string' &&
+                          consent.platform.length > 0
+                              ? consent.platform
+                              : 'unknown',
+                      ...(typeof consent.appVersion === 'string'
+                          ? { appVersion: consent.appVersion }
+                          : {}),
+                      ...(typeof consent.locale === 'string'
+                          ? { locale: consent.locale }
+                          : {}),
+                  },
+              }
+            : {}),
+        ...(typeof record.defaultCurrency === 'string'
+            ? { defaultCurrency: record.defaultCurrency }
+            : {}),
     }
 }
 
@@ -280,13 +332,28 @@ const createdSince = (
  */
 const finishPromotion = async (
     ctx: ActionCtx,
-    args: { localAccountId: string; userId: string; createdNow: boolean },
+    args: {
+        localAccountId: string
+        userId: string
+        createdNow: boolean
+        carryover: CarryoverInput
+    },
 ): Promise<Response | null> => {
+    const { carryover, ...claim } = args
     const result = await ctx.runMutation(
         internal.appUsers.internal.claimLocal,
-        args,
+        claim,
     )
-    if (result.ok) return null
+    if (result.ok) {
+        // After the claim, so nothing is written for a rejected promotion. It
+        // is idempotent, which makes a failure here safe to retry: the claim
+        // above also lets the same user through again.
+        await ctx.runMutation(internal.appUsers.internal.applyCarryover, {
+            userId: args.userId,
+            ...carryover,
+        })
+        return null
+    }
     switch (result.error) {
         case 'local_account_claimed':
             return jsonError(
@@ -379,6 +446,7 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
             localAccountId: promotionId,
             userId: result.user.id,
             createdNow: createdSince(result.user, startedAt),
+            carryover: parseCarryoverInput(body.carryover),
         })
         if (rejection) {
             await dropBetterAuthSession(auth, result.token)
@@ -482,6 +550,7 @@ const appleSignIn = corsHttpAction(async (ctx, req) => {
             localAccountId: promotionId,
             userId: result.user.id,
             createdNow: createdSince(result.user, startedAt),
+            carryover: parseCarryoverInput(body.carryover),
         })
         if (rejection) {
             await dropBetterAuthSession(auth, result.token)
@@ -569,6 +638,7 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
             localAccountId: promotionId,
             userId: result.user.id,
             createdNow: false,
+            carryover: parseCarryoverInput(body?.carryover),
         })
         if (rejection) {
             await dropBetterAuthSession(auth, result.token)
@@ -699,6 +769,12 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
                 localAccountId: promotionId,
                 userId: created.user.id,
                 createdNow: true,
+                // The form's own acceptance is recorded just below; carrying
+                // the local one too would write every document twice.
+                carryover: {
+                    ...parseCarryoverInput(body?.carryover),
+                    acceptance: undefined,
+                },
             })
             if (rejection) return rejection
         }

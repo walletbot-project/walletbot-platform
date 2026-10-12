@@ -1,6 +1,11 @@
 import { v } from 'convex/values'
 import { internalMutation } from '../_generated/server'
-import { claimLocalAppUser, registerLocalAppUser } from './helpers'
+import { acceptanceInputValidator } from '../legal/validators'
+import {
+    applyPromotionCarryover,
+    claimLocalAppUser,
+    registerLocalAppUser,
+} from './helpers'
 
 // Only called by the live-token HTTP handler after its existing rate limit.
 // There is deliberately no public endpoint for listing, linking or deleting
@@ -27,4 +32,23 @@ export const claimLocal = internalMutation({
             args.userId,
             args.createdNow,
         ),
+})
+
+// Called by the native auth handlers once a promotion has been accepted, with
+// the user the local account was linked to. See `applyPromotionCarryover`.
+export const applyCarryover = internalMutation({
+    args: {
+        userId: v.string(),
+        acceptance: v.optional(acceptanceInputValidator),
+        aiConsent: v.optional(
+            v.object({
+                platform: v.string(),
+                appVersion: v.optional(v.string()),
+                locale: v.optional(v.string()),
+            }),
+        ),
+        defaultCurrency: v.optional(v.string()),
+    },
+    handler: (ctx, { userId, ...carryover }) =>
+        applyPromotionCarryover(ctx, userId, carryover),
 })

@@ -165,21 +165,25 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AccountAlreadyAddedError {
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
     } on AccountExistsException {
-      if (_promoting) {
-        // Promotion never merges into an existing online account, and
-        // sending the user to sign-in here would only repeat the refusal.
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.promoteAccountExists)),
-        );
-        return;
-      }
       // Registering an existing address used to land on the verify-pending
       // screen waiting for mail the backend never sends. Say what happened
       // and drop the user into sign-in.
       if (mounted) {
         setState(() => _emailMode = _EmailAuthMode.signIn);
       }
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountExistsSignIn)));
+      // While promoting, the address may be this very backup's own account —
+      // signed up, then the screen closed before the verification finished —
+      // and signing in finishes it. The backend only lets that through for an
+      // account linked to this local one, and refuses any other.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            _promoting
+                ? l10n.promoteAccountExistsSignIn
+                : l10n.accountExistsSignIn,
+          ),
+        ),
+      );
     } on EmailNotVerifiedException {
       // The backend already (re-)sent the verification email on this attempt.
       if (mounted) {
@@ -446,9 +450,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                         setState(() => _ageConfirmed = value),
                                     onAcceptedLegalChanged: (value) =>
                                         setState(() => _acceptedLegal = value),
-                                    // Promoting has no sign-in to switch to:
-                                    // an existing online account is refused.
-                                    canSwitchMode: !_promoting,
                                     onModeChanged: (mode) =>
                                         setState(() => _emailMode = mode),
                                     onSubmit: _submitRemote,
@@ -722,7 +723,6 @@ class _RemoteLoginPanel extends StatelessWidget {
     required this.acceptedLegal,
     required this.onAgeConfirmedChanged,
     required this.onAcceptedLegalChanged,
-    required this.canSwitchMode,
     required this.onModeChanged,
     required this.onSubmit,
     required this.onApple,
@@ -740,7 +740,6 @@ class _RemoteLoginPanel extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController passwordController;
-  final bool canSwitchMode;
   final ValueChanged<_EmailAuthMode> onModeChanged;
   final VoidCallback onSubmit;
 
@@ -872,16 +871,14 @@ class _RemoteLoginPanel extends StatelessWidget {
                       ? null
                       : onSubmit,
                 ),
-                if (canSwitchMode) ...[
-                  const SizedBox(height: 10),
-                  Center(
-                    child: _EmailModeToggleButton(
-                      mode: mode,
-                      enabled: !submitting,
-                      onChanged: onModeChanged,
-                    ),
+                const SizedBox(height: 10),
+                Center(
+                  child: _EmailModeToggleButton(
+                    mode: mode,
+                    enabled: !submitting,
+                    onChanged: onModeChanged,
                   ),
-                ],
+                ),
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
+import 'package:app/auth/promotion_carryover.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
@@ -73,6 +74,16 @@ Future<bool> openLocalPromotion(
   UserAccount account,
   AppDatabase database,
 ) async {
+  // Read before the route is pushed: the sign-in screen only has the new
+  // session's server to hand it to, so it has to travel with the request.
+  final carryover = await buildPromotionCarryover(
+    database: database,
+    accountId: account.id,
+    clientInfo: context.read<ClientInfo?>(),
+    locale: Localizations.localeOf(context).toLanguageTag(),
+    versions: context.read<AppConfigController>().legalVersions,
+  );
+  if (!context.mounted) return false;
   final promoted = await Navigator.of(context).push<bool>(
     MaterialPageRoute<bool>(
       builder: (_) => PopOnAccountSwitch(
@@ -82,6 +93,7 @@ Future<bool> openLocalPromotion(
           promotion: LocalPromotion(
             accountId: account.id,
             beforeConvert: () => markAllSyncedTablesDirty(database),
+            carryover: carryover,
           ),
         ),
       ),

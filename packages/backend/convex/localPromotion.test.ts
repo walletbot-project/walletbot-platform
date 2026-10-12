@@ -99,3 +99,61 @@ it('rejects an id that is not a local account UUID', async () => {
         expect(await ctx.db.query('appUsers').take(10)).toHaveLength(0)
     })
 })
+
+const carryover = (t: ReturnType<typeof convexTest>, userId: string) =>
+    t.mutation(internal.appUsers.internal.applyCarryover, {
+        userId,
+        acceptance: {
+            documents: ['terms', 'privacy'],
+            ageConfirmed: true,
+            platform: 'ios',
+        },
+        aiConsent: { platform: 'ios', appVersion: '0.4.0' },
+        defaultCurrency: 'USD',
+    })
+
+it('carries the consent, terms and currency decided on the device over to the user', async () => {
+    const t = convexTest(schema, modules)
+    await carryover(t, 'user-1')
+    await t.run(async (ctx) => {
+        const rows = await ctx.db.query('legalAcceptances').take(10)
+        expect(rows.map((row) => row.document).sort()).toEqual([
+            'ai',
+            'privacy',
+            'terms',
+        ])
+        const settings = await ctx.db.query('userSettings').take(10)
+        expect(settings).toHaveLength(1)
+        expect(settings[0]).toMatchObject({
+            userId: 'user-1',
+            defaultCurrency: 'USD',
+        })
+    })
+})
+
+it('carries over once: a repeat neither duplicates rows nor undoes a later change', async () => {
+    const t = convexTest(schema, modules)
+    await carryover(t, 'user-1')
+    await t.run(async (ctx) => {
+        const settings = await ctx.db.query('userSettings').unique()
+        if (!settings) throw new Error('settings missing')
+        await ctx.db.patch(settings._id, { defaultCurrency: 'EUR' })
+    })
+    await carryover(t, 'user-1')
+    await t.run(async (ctx) => {
+        expect(await ctx.db.query('legalAcceptances').take(10)).toHaveLength(3)
+        const settings = await ctx.db.query('userSettings').unique()
+        expect(settings?.defaultCurrency).toBe('EUR')
+    })
+})
+
+it('ignores a currency that is not a currency code', async () => {
+    const t = convexTest(schema, modules)
+    await t.mutation(internal.appUsers.internal.applyCarryover, {
+        userId: 'user-1',
+        defaultCurrency: 'not-a-currency',
+    })
+    await t.run(async (ctx) => {
+        expect(await ctx.db.query('userSettings').take(10)).toHaveLength(0)
+    })
+})

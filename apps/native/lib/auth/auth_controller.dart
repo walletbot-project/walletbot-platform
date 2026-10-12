@@ -19,10 +19,20 @@ import 'package:uuid/uuid.dart';
 /// A request to turn the local account [accountId] into an online one, handed
 /// to the sign-in/sign-up calls of [AuthController].
 class LocalPromotion {
-  const LocalPromotion({required this.accountId, required this.beforeConvert});
+  const LocalPromotion({
+    required this.accountId,
+    required this.beforeConvert,
+    this.carryover = const {},
+  });
 
   /// [UserAccount.id] of the local account being promoted.
   final String accountId;
+
+  /// What the local account already settled on the device — the terms it
+  /// accepted, its AI consent, its default currency. The new online session
+  /// does not exist yet when the request goes out, so the server records it
+  /// for the user the promotion creates. See `buildPromotionCarryover`.
+  final Map<String, Object?> carryover;
 
   /// Runs once the server has accepted the promotion and before the account
   /// is converted, while the account's database is still open: it flags the
@@ -371,7 +381,10 @@ class AuthController extends ChangeNotifier {
     if (localAccountId == null) {
       throw StateError('Local account has no localAccountId: ${local.id}');
     }
-    return {'promoteLocalAccountId': localAccountId};
+    return {
+      'promoteLocalAccountId': localAccountId,
+      if (promotion.carryover.isNotEmpty) 'carryover': promotion.carryover,
+    };
   }
 
   /// Converts the local account in place: same [UserAccount.id] — it names the

@@ -415,8 +415,11 @@ costs, and creating a new account generates a new UUID. There is no reactivation
 flow. The schema separates stable `appUserId`, account type and optional
 authenticated `userId`: a later promotion can link the same row while retaining
 its origin. A local registration cannot downgrade a linked registered row.
-Promotion, verification of that link, and merging historical costs are future
-features; this PR does not implement them or register every Better Auth user.
+Promoting a local account links its row to the new user (`claimLocal`), but
+costs are not merged: usage recorded before the promotion stays under
+`local:<uuid>` and later usage lands under `user:<userId>`, so Grafana shows one
+person as two until WAL-222 moves the totals across. Not every Better Auth user
+is registered in `appUsers`.
 
 Samples are retained for 90 days by the existing cleanup, so sample deduplication
 is limited to that retention window. Monthly rollups and identity registry rows

@@ -87,6 +87,47 @@ void main() {
     },
   );
 
+  test('sends what the local account settled along with the request', () async {
+    late Map<String, Object?> sent;
+    final auth = controllerWith((request) async {
+      sent = jsonDecode(request.body) as Map<String, Object?>;
+      return ok(signedIn);
+    });
+    final local = await auth.addLocal(name: 'Mine');
+
+    await auth.signInWithEmail(
+      email: 'a@b.c',
+      password: 'password123',
+      promotion: LocalPromotion(
+        accountId: local.id,
+        beforeConvert: () async {},
+        carryover: const {'defaultCurrency': 'USD'},
+      ),
+    );
+
+    expect(sent['carryover'], {'defaultCurrency': 'USD'});
+  });
+
+  test('sends no carryover key when there is nothing to carry', () async {
+    late Map<String, Object?> sent;
+    final auth = controllerWith((request) async {
+      sent = jsonDecode(request.body) as Map<String, Object?>;
+      return ok(signedIn);
+    });
+    final local = await auth.addLocal(name: 'Mine');
+
+    await auth.signInWithEmail(
+      email: 'a@b.c',
+      password: 'password123',
+      promotion: LocalPromotion(
+        accountId: local.id,
+        beforeConvert: () async {},
+      ),
+    );
+
+    expect(sent.containsKey('carryover'), isFalse);
+  });
+
   test('a refused promotion leaves the local account untouched', () async {
     final auth = controllerWith(
       (_) async => http.Response(
