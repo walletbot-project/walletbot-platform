@@ -138,6 +138,10 @@ function SessionTile({
             : session.status === 'failed'
               ? t.usability.statusFailed
               : t.usability.statusProvisioning
+    const details = `${t.usability.groupLabel({ group: session.group })} · ${date}`
+    const progress = session.hasRecording
+        ? `${status} · ${t.usability.hasRecording}`
+        : status
 
     return (
         <GroupedCard radius={radius} onClick={onOpen}>
@@ -146,9 +150,8 @@ function SessionTile({
                     {participantCode(session.number)}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="m3-body-large">
-                        {t.usability.groupLabel({ group: session.group })} ·{' '}
-                        {date}
+                    <span className="m3-body-large wrap-break-word">
+                        {session.title ?? details}
                     </span>
                     <span
                         className={
@@ -157,10 +160,7 @@ function SessionTile({
                                 : 'm3-body-medium text-on-surface-variant'
                         }
                     >
-                        {status}
-                        {session.hasRecording
-                            ? ` · ${t.usability.hasRecording}`
-                            : ''}
+                        {session.title ? `${details} · ${progress}` : progress}
                     </span>
                 </div>
                 <Icon

@@ -963,6 +963,13 @@ export const es = {
         sessionDay: 'Día de la sesión',
         sessionDayHint:
             'Las fechas de los escenarios 0 y 2 se calculan desde este día.',
+        sessionTitle: 'Título (opcional)',
+        editTitle: 'Editar título',
+        titleDialog: 'Título de la sesión',
+        titleDialogHint:
+            'Dejalo vacío para ver solo el código del participante.',
+        titleSaved: 'Título actualizado',
+        titleSaveFailed: 'No se pudo actualizar el título',
         createDescription:
             'Se crean tres usuarios con el email verificado y los términos aceptados: el del escenario 0 con tres cuentas, el del escenario 1 vacío y el del escenario 2 con seis meses de historial.',
         create: 'Crear sesión',

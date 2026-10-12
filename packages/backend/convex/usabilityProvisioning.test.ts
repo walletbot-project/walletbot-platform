@@ -272,4 +272,50 @@ describe('usability provisioning', () => {
             stranger.query(api.v1.usability.queries.get, { sessionId }),
         ).rejects.toThrow('Forbidden')
     })
+
+    it('sets, trims and clears a session title', async () => {
+        const t = fixture()
+        const sessionId = await insertSession(t)
+        const authed = t.withIdentity({
+            subject: admin,
+            issuer: 'https://test.convex.site/native-auth',
+        })
+        const stranger = t.withIdentity({
+            subject: 'someone-else',
+            issuer: 'https://test.convex.site/native-auth',
+        })
+        const title = async () =>
+            (await authed.query(api.v1.usability.queries.get, { sessionId }))
+                ?.title
+
+        expect(await title()).toBeNull()
+
+        await authed.mutation(api.v1.usability.mutations.setTitle, {
+            sessionId,
+            title: '  Ana, coworking  ',
+        })
+        expect(await title()).toBe('Ana, coworking')
+
+        await expect(
+            authed.mutation(api.v1.usability.mutations.setTitle, {
+                sessionId,
+                title: 'x'.repeat(81),
+            }),
+        ).rejects.toThrow('Title is too long')
+        await expect(
+            stranger.mutation(api.v1.usability.mutations.setTitle, {
+                sessionId,
+                title: 'Other',
+            }),
+        ).rejects.toThrow('Forbidden')
+        expect(await title()).toBe('Ana, coworking')
+
+        await authed.mutation(api.v1.usability.mutations.setTitle, {
+            sessionId,
+            title: '   ',
+        })
+        expect(await title()).toBeNull()
+        const stored = await t.run(async (ctx) => ctx.db.get(sessionId))
+        expect(stored && 'title' in stored).toBe(false)
+    })
 })

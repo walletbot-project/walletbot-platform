@@ -1,5 +1,10 @@
 import { api } from '@wallet-bot/backend/api'
-import { USABILITY_GROUPS, type UsabilityGroup } from '@wallet-bot/shared'
+import {
+    USABILITY_GROUPS,
+    USABILITY_TITLE_MAX_LENGTH,
+    type UsabilityGroup,
+} from '@wallet-bot/shared'
+import { TextField } from 'actify'
 import { useMutation } from 'convex/react'
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -24,11 +29,12 @@ export function UsabilitySessionCreate() {
     const { pending, run } = useToastMutation()
     const [group, setGroup] = useState<UsabilityGroup>(1)
     const [sessionDay, setSessionDay] = useState(todayIso)
+    const [title, setTitle] = useState('')
 
     const submit = (event: FormEvent) => {
         event.preventDefault()
         if (!sessionDay) return
-        const promise = create({ group, sessionDay })
+        const promise = create({ group, sessionDay, title })
         void run(
             promise,
             {
@@ -86,6 +92,15 @@ export function UsabilitySessionCreate() {
                         {t.usability.sessionDayHint}
                     </p>
                 </div>
+
+                <TextField
+                    variant="outlined"
+                    className="w-full"
+                    label={t.usability.sessionTitle}
+                    value={title}
+                    maxLength={USABILITY_TITLE_MAX_LENGTH}
+                    onChange={setTitle}
+                />
 
                 <p className="m3-body-medium text-on-surface-variant">
                     {t.usability.createDescription}

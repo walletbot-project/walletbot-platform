@@ -22,6 +22,7 @@ export const list = query({
             page: result.page.map((session) => ({
                 id: session._id,
                 number: session.number,
+                title: session.title ?? null,
                 group: session.group,
                 sessionDay: session.sessionDay,
                 status: session.status,
@@ -59,6 +60,7 @@ export const get = query({
         return {
             id: session._id,
             number: session.number,
+            title: session.title ?? null,
             group: session.group,
             sessionDay: session.sessionDay,
             status: session.status,

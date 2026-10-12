@@ -1,4 +1,8 @@
-import { USABILITY_FIELDS, usabilityFieldError } from '@wallet-bot/shared'
+import {
+    USABILITY_FIELDS,
+    USABILITY_TITLE_MAX_LENGTH,
+    usabilityFieldError,
+} from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import type { Id } from '../../_generated/dataModel'
@@ -12,6 +16,15 @@ import { workflow } from '../../usability/workflow'
 const PASSWORD_LENGTH = 10
 const EMAIL_TAG_LENGTH = 4
 const MAX_RECORDING_NAME_LENGTH = 256
+
+function normalizeTitle(title: string | undefined): string | undefined {
+    const trimmed = title?.trim()
+    if (!trimmed) return undefined
+    if (trimmed.length > USABILITY_TITLE_MAX_LENGTH) {
+        throw new Error('Title is too long')
+    }
+    return trimmed
+}
 
 async function upsertField(
     ctx: MutationCtx,
@@ -57,12 +70,14 @@ export const create = mutation({
     args: {
         group: v.union(v.literal(1), v.literal(2)),
         sessionDay: v.string(),
+        title: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAdminCaller(ctx)
         if (!parseCivilDay(args.sessionDay)) {
             throw new Error('Invalid session day')
         }
+        const title = normalizeTitle(args.title)
         const last = await ctx.db
             .query('usabilitySessions')
             .withIndex('by_number')
@@ -70,6 +85,7 @@ export const create = mutation({
             .first()
         const sessionId = await ctx.db.insert('usabilitySessions', {
             number: (last?.number ?? 0) + 1,
+            title,
             group: args.group,
             sessionDay: args.sessionDay,
             password: randomCode(PASSWORD_LENGTH),
@@ -111,6 +127,17 @@ export const retryProvisioning = mutation({
                 sessionId,
             },
         )
+    },
+})
+
+export const setTitle = mutation({
+    args: { sessionId: v.id('usabilitySessions'), title: v.string() },
+    handler: async (ctx, args) => {
+        await requireAdminCaller(ctx)
+        await requireSession(ctx, args.sessionId)
+        await ctx.db.patch(args.sessionId, {
+            title: normalizeTitle(args.title),
+        })
     },
 })
 

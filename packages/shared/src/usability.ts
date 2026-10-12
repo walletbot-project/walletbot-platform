@@ -90,6 +90,7 @@ export type UsabilityStep = {
 
 export const USABILITY_TEXT_MAX_LENGTH = 500
 export const USABILITY_LONG_TEXT_MAX_LENGTH = 5000
+export const USABILITY_TITLE_MAX_LENGTH = 80
 
 export const SESSION_START_KEY = 'sesion.inicio'
 export const SESSION_END_KEY = 'sesion.fin'

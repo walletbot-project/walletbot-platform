@@ -919,6 +919,12 @@ export const en: Messages = {
         sessionDay: 'Session day',
         sessionDayHint:
             'Dates in scenarios 0 and 2 are calculated from this day.',
+        sessionTitle: 'Title (optional)',
+        editTitle: 'Edit title',
+        titleDialog: 'Session title',
+        titleDialogHint: 'Leave it empty to show only the participant code.',
+        titleSaved: 'Title updated',
+        titleSaveFailed: 'Could not update the title',
         createDescription:
             'Three users are created with a verified email and accepted terms: the scenario 0 one with three accounts, the scenario 1 one empty and the scenario 2 one with six months of history.',
         create: 'Create session',

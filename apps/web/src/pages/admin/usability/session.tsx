@@ -4,12 +4,14 @@ import {
     SESSION_START_KEY,
     USABILITY_SCENARIOS,
     USABILITY_STEPS,
+    USABILITY_TITLE_MAX_LENGTH,
 } from '@wallet-bot/shared'
-import { Button, CircularProgress, IconButton } from 'actify'
+import { Button, CircularProgress, IconButton, TextField } from 'actify'
 import { useMutation } from 'convex/react'
-import type { ReactNode } from 'react'
+import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
+import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { GroupedCard } from '@/components/m3/grouped-card'
 import { Icon } from '@/components/m3/icon'
 import { StateMessage } from '@/components/m3/state-message'
@@ -89,8 +91,13 @@ export function UsabilitySessionOverview() {
     return (
         <>
             <AppBar
-                title={participantCode(session.number)}
+                title={
+                    session.title
+                        ? `${participantCode(session.number)} · ${session.title}`
+                        : participantCode(session.number)
+                }
                 leading={backToList}
+                actions={<EditTitleAction session={session} />}
             />
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4 pb-8">
@@ -120,6 +127,77 @@ export function UsabilitySessionOverview() {
                     ))}
                 </div>
             </div>
+        </>
+    )
+}
+
+function EditTitleAction({ session }: { session: UsabilitySession }) {
+    const t = useT()
+    const formId = useId()
+    const setTitle = useMutation(api.v1.usability.mutations.setTitle)
+    const { pending, run } = useToastMutation()
+    const [open, setOpen] = useState(false)
+    const [draft, setDraft] = useState('')
+
+    const save = (event: FormEvent) => {
+        event.preventDefault()
+        void run(
+            setTitle({ sessionId: session.id, title: draft }),
+            {
+                loading: t.common.saving,
+                success: t.usability.titleSaved,
+                error: t.usability.titleSaveFailed,
+            },
+            () => setOpen(false),
+        )
+    }
+
+    return (
+        <>
+            <IconButton
+                aria-label={t.usability.editTitle}
+                onPress={() => {
+                    setDraft(session.title ?? '')
+                    setOpen(true)
+                }}
+                className="text-on-surface-variant"
+            >
+                <Icon name="edit" />
+            </IconButton>
+            <M3Dialog
+                open={open}
+                onOpenChange={(next) => {
+                    if (!pending) setOpen(next)
+                }}
+                title={t.usability.titleDialog}
+                description={t.usability.titleDialogHint}
+                actions={
+                    <>
+                        <DialogAction
+                            label={t.common.cancel}
+                            onPress={() => setOpen(false)}
+                            isDisabled={pending}
+                        />
+                        <DialogAction
+                            label={t.common.save}
+                            type="submit"
+                            form={formId}
+                            isDisabled={pending}
+                        />
+                    </>
+                }
+            >
+                <form id={formId} onSubmit={save} className="pt-4">
+                    <TextField
+                        variant="outlined"
+                        className="w-full"
+                        label={t.usability.sessionTitle}
+                        value={draft}
+                        maxLength={USABILITY_TITLE_MAX_LENGTH}
+                        onChange={setDraft}
+                    />
+                </form>
+            </M3Dialog>
         </>
     )
 }

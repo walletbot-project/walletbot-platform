@@ -291,5 +291,6 @@ export {
     USABILITY_SCENARIOS,
     USABILITY_STEPS,
     USABILITY_TEXT_MAX_LENGTH,
+    USABILITY_TITLE_MAX_LENGTH,
     usabilityFieldError,
 } from './usability'

@@ -56,6 +56,7 @@ export const scenario2AnswersValidator = v.object({
 // progress here so every step can be retried without duplicating anything.
 export const usabilitySessions = defineTable({
     number: v.number(),
+    title: v.optional(v.string()),
     group: v.union(v.literal(1), v.literal(2)),
     // The session day `S` in Argentina, `YYYY-MM-DD`. Every relative date in
     // the scenario datasets hangs off it.
