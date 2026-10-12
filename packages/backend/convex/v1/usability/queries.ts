@@ -1,8 +1,7 @@
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
-import { requireAdmin } from '../../featureFlags/helpers'
-import { requireAuth } from '../../users/helpers'
+import { requireAdminCaller } from '../../admin/helpers'
 
 /** Every planned field plus timers fits well under this. */
 const MAX_FIELDS = 500
@@ -10,8 +9,7 @@ const MAX_FIELDS = 500
 export const list = query({
     args: { paginationOpts: paginationOptsValidator },
     handler: async (ctx, args) => {
-        const userId = await requireAuth(ctx)
-        await requireAdmin(ctx, userId)
+        await requireAdminCaller(ctx)
 
         const result = await ctx.db
             .query('usabilitySessions')
@@ -41,8 +39,7 @@ export const list = query({
 export const get = query({
     args: { sessionId: v.string() },
     handler: async (ctx, args) => {
-        const userId = await requireAuth(ctx)
-        await requireAdmin(ctx, userId)
+        await requireAdminCaller(ctx)
 
         const sessionId = ctx.db.normalizeId(
             'usabilitySessions',

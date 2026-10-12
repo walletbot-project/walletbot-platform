@@ -8,7 +8,7 @@ import schema from '../schema'
 
 const modules = import.meta.glob('../**/*.ts')
 const now = Date.UTC(2026, 8, 30, 12, 0)
-const legacy = { platform: 'android', appVersion: '0.4.0' }
+const client = { platform: 'android', appVersion: '0.6.0' }
 const userId = 'ordering-user'
 const otherUserId = 'ordering-other-user'
 
@@ -168,9 +168,9 @@ describe('account and category ordering', { timeout: 30000 }, () => {
         })
         const counter = await authed.query(api.v1.sync.queries.getCounter, {})
 
-        // A 0.4.0 client renames a1 and c1: its upserts carry no `position`.
+        // A client renames a1 and c1 without a `position` in its upserts.
         const result = await authed.mutation(api.v1.sync.mutations.push, {
-            ...legacy,
+            ...client,
             expectedServerSeq: counter,
             upserts: {
                 accounts: [
@@ -211,7 +211,7 @@ describe('account and category ordering', { timeout: 30000 }, () => {
         const { authed } = await fixture()
         const counter = await authed.query(api.v1.sync.queries.getCounter, {})
         const result = await authed.mutation(api.v1.sync.mutations.push, {
-            ...legacy,
+            ...client,
             expectedServerSeq: counter,
             upserts: {
                 accounts: [
@@ -418,7 +418,7 @@ describe('tag ordering', { timeout: 30000 }, () => {
         ])
     })
 
-    it('sync keeps the position when an old client omits it, but not across parents', async () => {
+    it('sync keeps the position when a client omits it, but not across parents', async () => {
         const { authed } = await tagFixture()
         await authed.mutation(api.v1.tags.mutations.reorder, {
             ids: ['E', 'C', 'A'],
@@ -430,7 +430,7 @@ describe('tag ordering', { timeout: 30000 }, () => {
             updatedAt: 100n,
         }
         const result = await authed.mutation(api.v1.sync.mutations.push, {
-            ...legacy,
+            ...client,
             expectedServerSeq: counter,
             upserts: {
                 tags: [

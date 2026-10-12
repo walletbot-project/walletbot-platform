@@ -118,65 +118,69 @@ class AccountSwitcherView extends StatelessWidget {
         false;
     final topCount = (currency == null ? 2 : 3) + (whatsapp ? 1 : 0);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      children: [
-        ?header,
-        if (active != null) ...[
-          _SectionLabel(l10n.currentAccount),
-          _AccountCard(
-            account: active,
-            borderRadius: groupedRadius(0, topCount),
-          ),
-          if (currency != null) ...[
-            const SizedBox(height: kGroupSpacing),
-            _ActionTile(
-              icon: Icons.settings_rounded,
-              title: l10n.settings,
-              borderRadius: groupedRadius(1, topCount),
-              onTap: () => _openSettings(context, currency),
-            ),
-          ],
-          if (whatsapp) ...[
-            const SizedBox(height: kGroupSpacing),
-            _ActionTile(
-              icon: Icons.chat_bubble_outline_rounded,
-              title: l10n.whatsappTitle,
-              borderRadius: groupedRadius(topCount - 2, topCount),
-              onTap: () => _openWhatsapp(context, active),
-            ),
-          ],
-          const SizedBox(height: kGroupSpacing),
-          _ActionTile(
-            icon: removalActionIcon(active),
-            title: removalActionLabel(l10n, active),
-            destructive: true,
-            borderRadius: groupedRadius(topCount - 1, topCount),
-            onTap: () =>
-                confirmRemoveAccount(context, active, openDatabase: database),
-          ),
-          const SizedBox(height: 24),
-        ],
-        if (others.isNotEmpty) ...[
-          _SectionLabel(l10n.otherAccounts),
-          for (var i = 0; i < others.length; i++) ...[
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          ?header,
+          if (active != null) ...[
+            _SectionLabel(l10n.currentAccount),
             _AccountCard(
-              account: others[i],
-              borderRadius: groupedRadius(i, others.length),
-              onTap: () => _switchTo(context, others[i]),
-              onRemove: () => confirmRemoveAccount(context, others[i]),
+              account: active,
+              borderRadius: groupedRadius(0, topCount),
             ),
-            if (i != others.length - 1) const SizedBox(height: kGroupSpacing),
+            if (currency != null) ...[
+              const SizedBox(height: kGroupSpacing),
+              _ActionTile(
+                icon: Icons.settings_rounded,
+                title: l10n.settings,
+                borderRadius: groupedRadius(1, topCount),
+                onTap: () => _openSettings(context, currency),
+              ),
+            ],
+            if (whatsapp) ...[
+              const SizedBox(height: kGroupSpacing),
+              _ActionTile(
+                icon: Icons.chat_bubble_outline_rounded,
+                title: l10n.whatsappTitle,
+                borderRadius: groupedRadius(topCount - 2, topCount),
+                onTap: () => _openWhatsapp(context, active),
+              ),
+            ],
+            const SizedBox(height: kGroupSpacing),
+            _ActionTile(
+              icon: removalActionIcon(active),
+              title: removalActionLabel(l10n, active),
+              destructive: true,
+              borderRadius: groupedRadius(topCount - 1, topCount),
+              onTap: () =>
+                  confirmRemoveAccount(context, active, openDatabase: database),
+            ),
+            const SizedBox(height: 24),
           ],
-          const SizedBox(height: 24),
+          if (others.isNotEmpty) ...[
+            _SectionLabel(l10n.otherAccounts),
+            for (var i = 0; i < others.length; i++) ...[
+              _AccountCard(
+                account: others[i],
+                borderRadius: groupedRadius(i, others.length),
+                onTap: () => _switchTo(context, others[i]),
+                onRemove: () => confirmRemoveAccount(context, others[i]),
+              ),
+              if (i != others.length - 1) const SizedBox(height: kGroupSpacing),
+            ],
+            const SizedBox(height: 24),
+          ],
+          _ActionTile(
+            icon: Icons.person_add_alt_1_rounded,
+            title: l10n.addAccount,
+            borderRadius: groupedRadius(0, 1),
+            onTap: () => _openAddAccount(context, active?.id),
+          ),
         ],
-        _ActionTile(
-          icon: Icons.person_add_alt_1_rounded,
-          title: l10n.addAccount,
-          borderRadius: groupedRadius(0, 1),
-          onTap: () => _openAddAccount(context, active?.id),
-        ),
-      ],
+      ),
     );
   }
 

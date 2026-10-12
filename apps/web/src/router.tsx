@@ -1,10 +1,10 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
-import { AdminGuard } from '@/components/layout/admin-guard'
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { GlobalErrorBoundary } from '@/components/layout/error-boundary'
 import { LegalGuard } from '@/components/layout/legal-guard'
 import { PublicGuard } from '@/components/layout/public-guard'
+import { AdminLayout } from '@/layouts/admin-layout'
 import { AuthLayout } from '@/layouts/auth-layout'
 import { RootLayout } from '@/layouts/root-layout'
 import Home from './pages/home'
@@ -294,101 +294,6 @@ export const router = createBrowserRouter([
                                             ),
                                     },
                                     {
-                                        path: '/admin',
-                                        element: <AdminGuard />,
-                                        children: [
-                                            {
-                                                index: true,
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin'
-                                                    ).then((m) => ({
-                                                        Component: m.AdminHome,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'feature-flags',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/feature-flags'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.FeatureFlags,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'agent-reports',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/agent-reports'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.AgentReports,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'usability',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/usability'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.UsabilitySessions,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'usability/guion',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/usability/script'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.UsabilityScript,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'usability/imprimir',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/usability/print'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.UsabilityPrint,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'usability/new',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/usability/new'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.UsabilitySessionCreate,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'usability/:sessionId',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/usability/session'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.UsabilitySessionOverview,
-                                                    })),
-                                            },
-                                            {
-                                                path: 'usability/:sessionId/:stepId',
-                                                lazy: () =>
-                                                    import(
-                                                        '@/pages/admin/usability/step'
-                                                    ).then((m) => ({
-                                                        Component:
-                                                            m.UsabilitySessionStep,
-                                                    })),
-                                            },
-                                        ],
-                                    },
-                                    {
                                         path: '*',
                                         lazy: () =>
                                             import('@/pages/not-found').then(
@@ -396,6 +301,146 @@ export const router = createBrowserRouter([
                                                     Component: m.NotFound,
                                                 }),
                                             ),
+                                    },
+                                ],
+                            },
+                            {
+                                // The back office is a sibling of the app shell:
+                                // it has its own navigation and none of the
+                                // bottom bar or voice FAB. Whether the caller is
+                                // an admin is decided by `AdminLayout`, and
+                                // re-checked by every backend function it uses.
+                                path: '/admin',
+                                element: <AdminLayout />,
+                                children: [
+                                    {
+                                        index: true,
+                                        element: (
+                                            <Navigate
+                                                to="/admin/feature-flags"
+                                                replace
+                                            />
+                                        ),
+                                    },
+                                    {
+                                        path: 'feature-flags',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/feature-flags'
+                                            ).then((m) => ({
+                                                Component: m.FeatureFlags,
+                                            })),
+                                    },
+                                    {
+                                        path: 'feedback',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/feedback'
+                                            ).then((m) => ({
+                                                Component: m.Feedback,
+                                            })),
+                                    },
+                                    {
+                                        path: 'agent-reports',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/agent-reports'
+                                            ).then((m) => ({
+                                                Component: m.AgentReports,
+                                            })),
+                                    },
+                                    {
+                                        path: 'metrics',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/metrics'
+                                            ).then((m) => ({
+                                                Component: m.Metrics,
+                                            })),
+                                    },
+                                    {
+                                        path: 'users',
+                                        lazy: () =>
+                                            import('@/pages/admin/users').then(
+                                                (m) => ({
+                                                    Component: m.Users,
+                                                }),
+                                            ),
+                                    },
+                                    {
+                                        path: 'transcripts',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/transcripts'
+                                            ).then((m) => ({
+                                                Component: m.Transcripts,
+                                            })),
+                                    },
+                                    {
+                                        path: 'transcripts/:userId/:sessionId',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/transcripts'
+                                            ).then((m) => ({
+                                                Component: m.TranscriptDetail,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability'
+                                            ).then((m) => ({
+                                                Component: m.UsabilitySessions,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/guion',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/script'
+                                            ).then((m) => ({
+                                                Component: m.UsabilityScript,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/imprimir',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/print'
+                                            ).then((m) => ({
+                                                Component: m.UsabilityPrint,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/new',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/new'
+                                            ).then((m) => ({
+                                                Component:
+                                                    m.UsabilitySessionCreate,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/:sessionId',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/session'
+                                            ).then((m) => ({
+                                                Component:
+                                                    m.UsabilitySessionOverview,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/:sessionId/:stepId',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/step'
+                                            ).then((m) => ({
+                                                Component:
+                                                    m.UsabilitySessionStep,
+                                            })),
                                     },
                                 ],
                             },

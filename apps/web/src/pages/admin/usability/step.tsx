@@ -107,9 +107,7 @@ export function UsabilitySessionStep() {
                 <StepContent session={session} blocks={step.blocks} />
             </StepBody>
             <footer className="shrink-0 border-t border-outline-variant bg-surface">
-                {/* The extra bottom room on phones keeps the buttons clear of
-                    the voice FAB, which overlaps the navigation bar's top edge. */}
-                <div className="mx-auto flex w-full max-w-2xl gap-2 p-3 pb-10 sm:pb-3">
+                <div className="mx-auto flex w-full max-w-2xl gap-2 p-3">
                     <Button
                         variant="outlined"
                         className="flex-1"

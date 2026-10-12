@@ -1,11 +1,7 @@
 import { api } from '@wallet-bot/backend/api'
-import { IconButton } from 'actify'
 import { useMutation, usePaginatedQuery, useQuery } from 'convex/react'
 import { type FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AppBar } from '@/components/m3/app-bar'
-import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import {
     Card,
@@ -20,35 +16,19 @@ import { Switch } from '@/components/ui/switch'
 import { useT } from '@/lib/i18n'
 
 export function FeatureFlags() {
-    const t = useT()
-    const navigate = useNavigate()
     const flags = useQuery(api.v1.featureFlags.queries.listFlags)
 
     return (
-        <>
-            <AppBar
-                title={t.admin.flagsTitle}
-                leading={
-                    <IconButton
-                        aria-label={t.common.goBack}
-                        onPress={() => navigate('/admin')}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="arrow_back" />
-                    </IconButton>
-                }
-            />
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-                {flags === undefined ? (
-                    <>
-                        <Skeleton className="h-24 w-full shrink-0" />
-                        <Skeleton className="h-24 w-full shrink-0" />
-                    </>
-                ) : (
-                    flags.map((flag) => <FlagCard key={flag.key} flag={flag} />)
-                )}
-            </div>
-        </>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+            {flags === undefined ? (
+                <>
+                    <Skeleton className="h-24 w-full shrink-0" />
+                    <Skeleton className="h-24 w-full shrink-0" />
+                </>
+            ) : (
+                flags.map((flag) => <FlagCard key={flag.key} flag={flag} />)
+            )}
+        </div>
     )
 }
 
@@ -85,8 +65,8 @@ function FlagCard({ flag }: { flag: FlagRow }) {
     const handleDefaultChange = (enabled: boolean) => {
         toast.promise(setFlagDefault({ key: flag.key, enabled }), {
             loading: t.common.saving,
-            success: t.admin.flagDefaultUpdated,
-            error: t.admin.flagDefaultFailed,
+            success: t.admin.flags.defaultUpdated,
+            error: t.admin.flags.defaultFailed,
         })
     }
 
@@ -95,17 +75,17 @@ function FlagCard({ flag }: { flag: FlagRow }) {
             setUserOverride({ flagKey: flag.key, targetUserId, enabled }),
             {
                 loading: t.common.saving,
-                success: t.admin.overrideUpdated,
-                error: t.admin.overrideUpdateFailed,
+                success: t.admin.flags.overrideUpdated,
+                error: t.admin.flags.overrideFailed,
             },
         )
     }
 
     const handleRemoveOverride = (targetUserId: string) => {
         toast.promise(removeUserOverride({ flagKey: flag.key, targetUserId }), {
-            loading: t.admin.overrideRemoving,
-            success: t.admin.overrideRemoved,
-            error: t.admin.overrideRemoveFailed,
+            loading: t.admin.flags.removing,
+            success: t.admin.flags.overrideRemoved,
+            error: t.admin.flags.overrideRemoveFailed,
         })
     }
 
@@ -117,8 +97,8 @@ function FlagCard({ flag }: { flag: FlagRow }) {
             setUserOverride({ flagKey: flag.key, targetUserId, enabled: true }),
             {
                 loading: t.common.saving,
-                success: t.admin.overrideAdded,
-                error: t.admin.overrideAddFailed,
+                success: t.admin.flags.overrideAdded,
+                error: t.admin.flags.overrideAddFailed,
             },
         )
         setNewUserId('')
@@ -140,13 +120,13 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                 <CardDescription>{flag.description}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-                <p className="text-sm font-medium">{t.admin.overridesTitle}</p>
+                <p className="text-sm font-medium">{t.admin.flags.overrides}</p>
 
                 {overridesStatus === 'LoadingFirstPage' ? (
                     <Skeleton className="h-8 w-full" />
                 ) : overrides.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                        {t.admin.overridesEmpty}
+                        {t.admin.flags.noOverrides}
                     </p>
                 ) : (
                     <ul className="divide-y rounded-md border">
@@ -177,7 +157,7 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                                             )
                                         }
                                     >
-                                        {t.admin.overrideRemove}
+                                        {t.admin.flags.remove}
                                     </Button>
                                 </div>
                             </li>
@@ -200,12 +180,12 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                     onSubmit={handleAddOverride}
                 >
                     <Input
-                        placeholder={t.admin.overrideUserId}
+                        placeholder={t.admin.flags.userId}
                         value={newUserId}
                         onChange={(e) => setNewUserId(e.target.value)}
                     />
                     <Button type="submit" size="sm">
-                        {t.admin.overrideAdd}
+                        {t.admin.flags.addOverride}
                     </Button>
                 </form>
             </CardContent>

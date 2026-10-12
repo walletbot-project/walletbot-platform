@@ -32,15 +32,6 @@ export function UsabilitySessions() {
         <>
             <AppBar
                 title={t.usability.title}
-                leading={
-                    <IconButton
-                        aria-label={t.common.goBack}
-                        onPress={() => navigate('/admin')}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="arrow_back" />
-                    </IconButton>
-                }
                 actions={
                     <IconButton
                         aria-label={t.usability.newSession}

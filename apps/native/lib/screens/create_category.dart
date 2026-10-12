@@ -115,97 +115,101 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
               ),
         title: Text(context.l10n.newCategory),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              context.l10n.suggestions,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final s in _nameSuggestions(context.l10n))
-                  ActionChip(
-                    avatar: Icon(s.icon),
-                    label: Text(s.label),
-                    onPressed: () => _applySuggestion(s),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            TextFormField(
-              controller: _nameController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: context.l10n.nameRequiredLabel,
-                hintText: context.l10n.categoryNameExample,
-                border: const OutlineInputBorder(),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                context.l10n.suggestions,
+                style: Theme.of(context).textTheme.labelLarge,
               ),
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? context.l10n.enterName
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _descriptionController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: context.l10n.descriptionOptional,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              context.l10n.iconAndColor,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Tappable icon tile, tinted with the selected accent.
-                InkWell(
-                  onTap: _pickIcon,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: _paintedColor.withValues(alpha: 0.28),
-                      borderRadius: BorderRadius.circular(18),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final s in _nameSuggestions(context.l10n))
+                    ActionChip(
+                      avatar: Icon(s.icon),
+                      label: Text(s.label),
+                      onPressed: () => _applySuggestion(s),
                     ),
-                    alignment: Alignment.center,
-                    child: Icon(_icon, size: 28, color: _paintedColor),
-                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              TextFormField(
+                controller: _nameController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: context.l10n.nameRequiredLabel,
+                  hintText: context.l10n.categoryNameExample,
+                  border: const OutlineInputBorder(),
                 ),
-                const SizedBox(width: 16),
-                // Inline accent swatches.
-                Expanded(
-                  child: ColorPicker(
-                    selected: _color,
-                    options: colorOptions,
-                    themed: true,
-                    onChanged: (color) => setState(() => _color = color),
-                  ),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? context.l10n.enterName
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: context.l10n.descriptionOptional,
+                  border: const OutlineInputBorder(),
                 ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            FilledButton(
-              onPressed: _saving ? null : _submit,
-              child: _saving
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(context.l10n.createCategory),
-            ),
-          ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                context.l10n.iconAndColor,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Tappable icon tile, tinted with the selected accent.
+                  InkWell(
+                    onTap: _pickIcon,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: _paintedColor.withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(_icon, size: 28, color: _paintedColor),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Inline accent swatches.
+                  Expanded(
+                    child: ColorPicker(
+                      selected: _color,
+                      options: colorOptions,
+                      themed: true,
+                      onChanged: (color) => setState(() => _color = color),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              FilledButton(
+                onPressed: _saving ? null : _submit,
+                child: _saving
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(context.l10n.createCategory),
+              ),
+            ],
+          ),
         ),
       ),
     );

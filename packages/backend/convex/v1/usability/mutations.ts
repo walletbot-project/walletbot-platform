@@ -3,22 +3,15 @@ import { v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import type { Id } from '../../_generated/dataModel'
 import { type MutationCtx, mutation } from '../../_generated/server'
-import { requireAdmin } from '../../featureFlags/helpers'
+import { requireAdminCaller } from '../../admin/helpers'
 import { usabilityFieldValueValidator } from '../../schema/usability'
 import { parseCivilDay } from '../../usability/datasets'
 import { randomCode } from '../../usability/utils'
 import { workflow } from '../../usability/workflow'
-import { requireAuth } from '../../users/helpers'
 
 const PASSWORD_LENGTH = 10
 const EMAIL_TAG_LENGTH = 4
 const MAX_RECORDING_NAME_LENGTH = 256
-
-async function requireAdminUser(ctx: MutationCtx): Promise<string> {
-    const userId = await requireAuth(ctx)
-    await requireAdmin(ctx, userId)
-    return userId
-}
 
 async function upsertField(
     ctx: MutationCtx,
@@ -66,7 +59,7 @@ export const create = mutation({
         sessionDay: v.string(),
     },
     handler: async (ctx, args) => {
-        const userId = await requireAdminUser(ctx)
+        const userId = await requireAdminCaller(ctx)
         if (!parseCivilDay(args.sessionDay)) {
             throw new Error('Invalid session day')
         }
@@ -102,7 +95,7 @@ export const create = mutation({
 export const retryProvisioning = mutation({
     args: { sessionId: v.id('usabilitySessions') },
     handler: async (ctx, { sessionId }) => {
-        await requireAdminUser(ctx)
+        await requireAdminCaller(ctx)
         const session = await requireSession(ctx, sessionId)
         if (session.status !== 'failed') {
             throw new Error('Only a failed session can be retried')
@@ -128,7 +121,7 @@ export const setField = mutation({
         value: usabilityFieldValueValidator,
     },
     handler: async (ctx, args) => {
-        const userId = await requireAdminUser(ctx)
+        const userId = await requireAdminCaller(ctx)
         await requireSession(ctx, args.sessionId)
         const error = usabilityFieldError(args.key, args.value)
         if (error) throw new Error(error)
@@ -140,7 +133,7 @@ export const setField = mutation({
 export const stampField = mutation({
     args: { sessionId: v.id('usabilitySessions'), key: v.string() },
     handler: async (ctx, args) => {
-        const userId = await requireAdminUser(ctx)
+        const userId = await requireAdminCaller(ctx)
         await requireSession(ctx, args.sessionId)
         if (USABILITY_FIELDS.get(args.key)?.kind !== 'timestamp') {
             throw new Error(`${args.key} is not a timer`)
@@ -154,7 +147,7 @@ export const stampField = mutation({
 export const generateRecordingUploadUrl = mutation({
     args: { sessionId: v.id('usabilitySessions') },
     handler: async (ctx, { sessionId }) => {
-        await requireAdminUser(ctx)
+        await requireAdminCaller(ctx)
         await requireSession(ctx, sessionId)
         return await ctx.storage.generateUploadUrl()
     },
@@ -171,7 +164,7 @@ export const attachRecording = mutation({
         name: v.string(),
     },
     handler: async (ctx, args) => {
-        await requireAdminUser(ctx)
+        await requireAdminCaller(ctx)
         const session = await requireSession(ctx, args.sessionId)
         const storageId = ctx.db.system.normalizeId('_storage', args.storageId)
         if (!storageId) throw new Error('Recording upload not found')

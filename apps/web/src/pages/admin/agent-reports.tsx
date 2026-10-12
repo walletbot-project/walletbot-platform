@@ -4,13 +4,10 @@ import {
     type AgentReportStatus,
     isAgentReportReason,
 } from '@wallet-bot/shared'
-import { IconButton } from 'actify'
 import { useMutation, usePaginatedQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,6 +19,7 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { formatMoment } from '@/lib/format-moment'
 import { useFormatLocale, useT } from '@/lib/i18n'
 
 const PAGE_SIZE = 20
@@ -39,7 +37,6 @@ const PAGE_SIZE = 20
  */
 export function AgentReports() {
     const t = useT()
-    const navigate = useNavigate()
     const [status, setStatus] = useState<AgentReportStatus>('pending')
 
     const {
@@ -53,62 +50,45 @@ export function AgentReports() {
     )
 
     return (
-        <>
-            <AppBar
-                title={t.adminReports.title}
-                leading={
-                    <IconButton
-                        aria-label={t.adminReports.back}
-                        onPress={() => navigate('/admin')}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="arrow_back" />
-                    </IconButton>
-                }
-            />
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-                <p className="text-sm text-muted-foreground">
-                    {t.adminReports.subtitle}
-                </p>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <p className="text-sm text-muted-foreground">
+                {t.adminReports.subtitle}
+            </p>
 
-                <div className="flex flex-wrap gap-2">
-                    {AGENT_REPORT_STATUSES.map((option) => (
-                        <Button
-                            key={option}
-                            size="sm"
-                            variant={status === option ? 'default' : 'outline'}
-                            onClick={() => setStatus(option)}
-                        >
-                            {statusLabel(option, t)}
-                        </Button>
-                    ))}
-                </div>
-
-                {pageStatus === 'LoadingFirstPage' ? (
-                    <>
-                        <Skeleton className="h-40 w-full shrink-0" />
-                        <Skeleton className="h-40 w-full shrink-0" />
-                    </>
-                ) : reports.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                        {t.adminReports.empty}
-                    </p>
-                ) : (
-                    reports.map((report) => (
-                        <ReportCard key={report.id} report={report} />
-                    ))
-                )}
-
-                {pageStatus === 'CanLoadMore' && (
+            <div className="flex flex-wrap gap-2">
+                {AGENT_REPORT_STATUSES.map((option) => (
                     <Button
-                        variant="outline"
-                        onClick={() => loadMore(PAGE_SIZE)}
+                        key={option}
+                        size="sm"
+                        variant={status === option ? 'default' : 'outline'}
+                        onClick={() => setStatus(option)}
                     >
-                        {t.adminReports.loadMore}
+                        {statusLabel(option, t)}
                     </Button>
-                )}
+                ))}
             </div>
-        </>
+
+            {pageStatus === 'LoadingFirstPage' ? (
+                <>
+                    <Skeleton className="h-40 w-full shrink-0" />
+                    <Skeleton className="h-40 w-full shrink-0" />
+                </>
+            ) : reports.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                    {t.adminReports.empty}
+                </p>
+            ) : (
+                reports.map((report) => (
+                    <ReportCard key={report.id} report={report} />
+                ))
+            )}
+
+            {pageStatus === 'CanLoadMore' && (
+                <Button variant="outline" onClick={() => loadMore(PAGE_SIZE)}>
+                    {t.adminReports.loadMore}
+                </Button>
+            )}
+        </div>
     )
 }
 
@@ -289,12 +269,4 @@ function reasonLabel(reason: string, t: ReturnType<typeof useT>): string {
         case 'other':
             return t.agentReport.reasonOther
     }
-}
-
-/** Timestamps travel as `v.int64()`, so they arrive as a bigint. */
-function formatMoment(millis: bigint, locale: string): string {
-    return new Date(Number(millis)).toLocaleString(locale, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    })
 }
