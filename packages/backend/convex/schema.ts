@@ -32,6 +32,7 @@ import {
 } from './schema/telemetry'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
+import { usabilityFields, usabilitySessions } from './schema/usability'
 import { deletedUsers, userDeletionRequests } from './schema/userDeletion'
 import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
@@ -76,6 +77,8 @@ export default defineSchema({
     tombstones,
     transactionTags,
     transactions,
+    usabilityFields,
+    usabilitySessions,
     userDeletionRequests,
     userSettings,
     voiceSessionEvents,

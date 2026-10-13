@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as admin_helpers from "../admin/helpers.js";
+import type * as admin_utils from "../admin/utils.js";
 import type * as agent_helpers from "../agent/helpers.js";
 import type * as agent_idempotency from "../agent/idempotency.js";
 import type * as agent_internal from "../agent/internal.js";
@@ -82,6 +84,7 @@ import type * as schema_tags from "../schema/tags.js";
 import type * as schema_telemetry from "../schema/telemetry.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
+import type * as schema_usability from "../schema/usability.js";
 import type * as schema_userDeletion from "../schema/userDeletion.js";
 import type * as schema_userSettings from "../schema/userSettings.js";
 import type * as schema_voice from "../schema/voice.js";
@@ -108,6 +111,11 @@ import type * as telemetry_validators from "../telemetry/validators.js";
 import type * as transactions_adjustmentBackfill from "../transactions/adjustmentBackfill.js";
 import type * as transactions_backfill from "../transactions/backfill.js";
 import type * as transactions_helpers from "../transactions/helpers.js";
+import type * as usability_actions from "../usability/actions.js";
+import type * as usability_datasets from "../usability/datasets.js";
+import type * as usability_internal from "../usability/internal.js";
+import type * as usability_utils from "../usability/utils.js";
+import type * as usability_workflow from "../usability/workflow.js";
 import type * as userDeletion_helpers from "../userDeletion/helpers.js";
 import type * as userDeletion_http from "../userDeletion/http.js";
 import type * as userDeletion_internal from "../userDeletion/internal.js";
@@ -116,6 +124,7 @@ import type * as v1_accounts_helpers from "../v1/accounts/helpers.js";
 import type * as v1_accounts_internal from "../v1/accounts/internal.js";
 import type * as v1_accounts_mutations from "../v1/accounts/mutations.js";
 import type * as v1_accounts_queries from "../v1/accounts/queries.js";
+import type * as v1_admin_queries from "../v1/admin/queries.js";
 import type * as v1_agentReports_mutations from "../v1/agentReports/mutations.js";
 import type * as v1_agentReports_queries from "../v1/agentReports/queries.js";
 import type * as v1_categories_mutations from "../v1/categories/mutations.js";
@@ -143,6 +152,8 @@ import type * as v1_tags_mutations from "../v1/tags/mutations.js";
 import type * as v1_tags_queries from "../v1/tags/queries.js";
 import type * as v1_transactions_mutations from "../v1/transactions/mutations.js";
 import type * as v1_transactions_queries from "../v1/transactions/queries.js";
+import type * as v1_usability_mutations from "../v1/usability/mutations.js";
+import type * as v1_usability_queries from "../v1/usability/queries.js";
 import type * as v1_users_helpers from "../v1/users/helpers.js";
 import type * as v1_users_internal from "../v1/users/internal.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
@@ -169,6 +180,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "admin/helpers": typeof admin_helpers;
+  "admin/utils": typeof admin_utils;
   "agent/helpers": typeof agent_helpers;
   "agent/idempotency": typeof agent_idempotency;
   "agent/internal": typeof agent_internal;
@@ -243,6 +256,7 @@ declare const fullApi: ApiFromModules<{
   "schema/telemetry": typeof schema_telemetry;
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
+  "schema/usability": typeof schema_usability;
   "schema/userDeletion": typeof schema_userDeletion;
   "schema/userSettings": typeof schema_userSettings;
   "schema/voice": typeof schema_voice;
@@ -269,6 +283,11 @@ declare const fullApi: ApiFromModules<{
   "transactions/adjustmentBackfill": typeof transactions_adjustmentBackfill;
   "transactions/backfill": typeof transactions_backfill;
   "transactions/helpers": typeof transactions_helpers;
+  "usability/actions": typeof usability_actions;
+  "usability/datasets": typeof usability_datasets;
+  "usability/internal": typeof usability_internal;
+  "usability/utils": typeof usability_utils;
+  "usability/workflow": typeof usability_workflow;
   "userDeletion/helpers": typeof userDeletion_helpers;
   "userDeletion/http": typeof userDeletion_http;
   "userDeletion/internal": typeof userDeletion_internal;
@@ -277,6 +296,7 @@ declare const fullApi: ApiFromModules<{
   "v1/accounts/internal": typeof v1_accounts_internal;
   "v1/accounts/mutations": typeof v1_accounts_mutations;
   "v1/accounts/queries": typeof v1_accounts_queries;
+  "v1/admin/queries": typeof v1_admin_queries;
   "v1/agentReports/mutations": typeof v1_agentReports_mutations;
   "v1/agentReports/queries": typeof v1_agentReports_queries;
   "v1/categories/mutations": typeof v1_categories_mutations;
@@ -304,6 +324,8 @@ declare const fullApi: ApiFromModules<{
   "v1/tags/queries": typeof v1_tags_queries;
   "v1/transactions/mutations": typeof v1_transactions_mutations;
   "v1/transactions/queries": typeof v1_transactions_queries;
+  "v1/usability/mutations": typeof v1_usability_mutations;
+  "v1/usability/queries": typeof v1_usability_queries;
   "v1/users/helpers": typeof v1_users_helpers;
   "v1/users/internal": typeof v1_users_internal;
   "v1/users/mutations": typeof v1_users_mutations;

@@ -220,6 +220,28 @@ jobs:
           npx convex env set OTEL_EXPORTER_OTLP_HEADERS "$OTEL_EXPORTER_OTLP_HEADERS_PREVIEW" \
             --deployment "$CONVEX_PREVIEW_NAME"
 
+      # A preview is a brand-new, empty Convex deployment, so RESEND_API_KEY is
+      # never set on it and every transactional email (verification, password
+      # reset, account deletion — emails/nodeActions.ts) fails to send. Prod
+      # and local set the same var by hand; this mirrors that for previews.
+      # testMode is hardcoded off (emails/helpers.ts), so previews send REAL
+      # emails — use a dedicated preview key. EMAIL_FROM is left unset so the
+      # code default applies. Skips (warns, doesn't fail the job) if the
+      # secret hasn't been provisioned yet.
+      - name: Set backend preview email env vars
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          RESEND_API_KEY_PREVIEW: ${{ secrets.RESEND_API_KEY_PREVIEW }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RESEND_API_KEY_PREVIEW" ]; then
+            echo "::warning::RESEND_API_KEY_PREVIEW secret not set — emails will fail to send on this preview"
+            exit 0
+          fi
+          npx convex env set RESEND_API_KEY "$RESEND_API_KEY_PREVIEW" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+
       - name: Build web app
         working-directory: apps/web
         run: pnpm run build
@@ -421,7 +443,11 @@ jobs:
   mobile:
     needs: [web, changes]
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    # `!cancelled()` is load-bearing: without a status-check function GitHub
+    # applies an implicit `success()`, which skips this job whenever `web` was
+    # skipped (a native-only push), regardless of the web.result check below.
     if: |
+      !cancelled() &&
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile') &&
       needs.changes.outputs.native == 'true' &&
       (needs.web.result == 'success' || needs.web.result == 'skipped')
