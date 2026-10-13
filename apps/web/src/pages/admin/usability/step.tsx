@@ -1,7 +1,10 @@
 import {
     SESSION_END_KEY,
     SESSION_START_KEY,
+    scenarioEndKey,
+    scenarioStartKey,
     USABILITY_STEPS,
+    type UsabilityStep,
 } from '@wallet-bot/shared'
 import { Button, IconButton } from 'actify'
 import { type ReactNode, useEffect, useRef } from 'react'
@@ -106,42 +109,71 @@ export function UsabilitySessionStep() {
                 </div>
                 <StepContent session={session} blocks={step.blocks} />
             </StepBody>
-            <footer className="shrink-0 border-t border-outline-variant bg-surface">
-                <div className="mx-auto flex w-full max-w-2xl gap-2 p-3">
-                    <Button
-                        variant="outlined"
-                        className="flex-1"
-                        isDisabled={!previous}
-                        onPress={() =>
-                            previous &&
-                            navigate(
-                                `/admin/usability/${session.id}/${previous.id}`,
-                            )
-                        }
-                    >
-                        <Icon name="arrow_back" size={18} />
-                        {t.usability.previous}
-                    </Button>
-                    <Button
-                        variant="filled"
-                        className="flex-1"
-                        onPress={() =>
-                            navigate(
-                                next
-                                    ? `/admin/usability/${session.id}/${next.id}`
-                                    : `/admin/usability/${session.id}`,
-                            )
-                        }
-                    >
-                        {next ? t.usability.next : t.usability.finish}
-                        <Icon
-                            name={next ? 'arrow_forward' : 'check'}
-                            size={18}
-                        />
-                    </Button>
-                </div>
-            </footer>
+            <StepFooter
+                session={session}
+                step={step}
+                previous={previous}
+                next={next}
+            />
         </>
+    )
+}
+
+function StepFooter({
+    session,
+    step,
+    previous,
+    next,
+}: {
+    session: UsabilitySession
+    step: UsabilityStep
+    previous: UsabilityStep | undefined
+    next: UsabilityStep | undefined
+}) {
+    const t = useT()
+    const navigate = useNavigate()
+    const values = useFieldValues(session)
+    const { stamp } = useSessionWrites(session.id)
+
+    const goForward = () => {
+        for (const block of step.blocks) {
+            if (block.type !== 'scenarioTimer') continue
+            const endKey = scenarioEndKey(block.scenario)
+            const running =
+                numberValue(values, scenarioStartKey(block.scenario)) !==
+                    undefined && numberValue(values, endKey) === undefined
+            if (running) stamp(endKey)
+        }
+        navigate(
+            next
+                ? `/admin/usability/${session.id}/${next.id}`
+                : `/admin/usability/${session.id}`,
+        )
+    }
+
+    return (
+        <footer className="shrink-0 border-t border-outline-variant bg-surface">
+            <div className="mx-auto flex w-full max-w-2xl gap-2 p-3">
+                <Button
+                    variant="outlined"
+                    className="flex-1"
+                    isDisabled={!previous}
+                    onPress={() =>
+                        previous &&
+                        navigate(
+                            `/admin/usability/${session.id}/${previous.id}`,
+                        )
+                    }
+                >
+                    <Icon name="arrow_back" size={18} />
+                    {t.usability.previous}
+                </Button>
+                <Button variant="filled" className="flex-1" onPress={goForward}>
+                    {next ? t.usability.next : t.usability.finish}
+                    <Icon name={next ? 'arrow_forward' : 'check'} size={18} />
+                </Button>
+            </div>
+        </footer>
     )
 }
 
