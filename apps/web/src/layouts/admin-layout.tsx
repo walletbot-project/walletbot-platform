@@ -40,6 +40,11 @@ const SECTIONS = [
         icon: 'forum',
         label: (t: Messages) => t.admin.navTranscripts,
     },
+    {
+        to: '/admin/usability',
+        icon: 'science',
+        label: (t: Messages) => t.admin.navUsability,
+    },
 ] as const
 
 /**

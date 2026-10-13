@@ -385,6 +385,63 @@ export const router = createBrowserRouter([
                                                 Component: m.TranscriptDetail,
                                             })),
                                     },
+                                    {
+                                        path: 'usability',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability'
+                                            ).then((m) => ({
+                                                Component: m.UsabilitySessions,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/guion',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/script'
+                                            ).then((m) => ({
+                                                Component: m.UsabilityScript,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/imprimir',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/print'
+                                            ).then((m) => ({
+                                                Component: m.UsabilityPrint,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/new',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/new'
+                                            ).then((m) => ({
+                                                Component:
+                                                    m.UsabilitySessionCreate,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/:sessionId',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/session'
+                                            ).then((m) => ({
+                                                Component:
+                                                    m.UsabilitySessionOverview,
+                                            })),
+                                    },
+                                    {
+                                        path: 'usability/:sessionId/:stepId',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/usability/step'
+                                            ).then((m) => ({
+                                                Component:
+                                                    m.UsabilitySessionStep,
+                                            })),
+                                    },
                                 ],
                             },
                         ],
