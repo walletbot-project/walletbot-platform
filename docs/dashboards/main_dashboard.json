@@ -50,7 +50,7 @@
                                             "spec": {
                                                 "alias": "Visits",
                                                 "editorMode": "code",
-                                                "expr": "max(last_over_time(business_users_registered_total_count{deployment_environment=\"$Scope\"}[25h]))",
+                                                "expr": "sum(last_over_time(business_users_registered_total_count{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
@@ -134,7 +134,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -156,12 +156,10 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "code",
-                                                "expr": "sum by (parent_hash, month) (max by (parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=\"local\"}[25h])))",
-                                                "format": "table",
-                                                "instant": true,
+                                                "editorMode": "builder",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
                                                 "legendFormat": "__auto",
-                                                "range": false
+                                                "range": true
                                             },
                                             "version": "v0"
                                         },
@@ -170,34 +168,15 @@
                                 }
                             ],
                             "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Time": true
-                                            },
-                                            "renameByName": {
-                                                "Value": "Consumo (USD)",
-                                                "user_hash": "Identidad seudónima",
-                                                "account_scope": "Tipo de cuenta",
-                                                "parent_hash": "Instalación de origen",
-                                                "month": "Mes UTC"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
+                            "transformations": []
                         }
                     },
-                    "description": "Suma del consumo mensual de las cuentas locales representadas en los snapshots (top 20 filas locales). No incluye necesariamente todas las cuentas o modelos de una instalación. El padre no identifica una persona verificada.",
+                    "description": "",
                     "id": 10,
                     "links": [],
-                    "title": "Consumo local por instalación de origen",
+                    "title": "Cantidad de llamadas por tool (WIP)",
                     "vizConfig": {
-                        "group": "table",
+                        "group": "stat",
                         "kind": "VizConfig",
                         "spec": {
                             "fieldConfig": {
@@ -205,44 +184,39 @@
                                     "color": {
                                         "mode": "thresholds"
                                     },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false,
-                                        "wrapText": false
-                                    },
-                                    "fieldMinMax": false,
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
                                             {
                                                 "color": "green",
                                                 "value": 0
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 80
                                             }
                                         ]
-                                    },
-                                    "unit": "currencyUSD"
+                                    }
                                 },
                                 "overrides": []
                             },
                             "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [
-                                    {
-                                        "desc": true,
-                                        "displayName": "Consumo (USD)"
-                                    }
-                                ],
-                                "zebraStriping": false
+                                "colorMode": "value",
+                                "graphMode": "area",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "auto",
+                                "wideLayout": true
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -329,7 +303,7 @@
                                 }
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -353,10 +327,10 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "sum by (cost_bucket) (count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
+                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.01 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.05 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.10 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.50 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
                                                 "format": "table",
                                                 "instant": true,
-                                                "legendFormat": "{{cost_bucket}}",
+                                                "legendFormat": "{{bucket}}",
                                                 "range": false
                                             },
                                             "version": "v0"
@@ -369,10 +343,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cuenta eventos exportados por rango de costo. Una sesión puede generar muestras separadas por modelo; no es un conteo de sesiones únicas. Usa muestras reales, no pasos de evaluación de una subquery.",
+                    "description": "",
                     "id": 12,
                     "links": [],
-                    "title": "Muestras de costo por rango (USD)",
+                    "title": "Sesiones por bucket de costo (USD)",
                     "vizConfig": {
                         "group": "barchart",
                         "kind": "VizConfig",
@@ -434,16 +408,16 @@
                                     "mode": "single",
                                     "sort": "none"
                                 },
-                                "xField": "cost_bucket",
+                                "xField": "bucket",
                                 "xTickLabelRotation": 0,
                                 "xTickLabelSpacing": 0
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
-            "panel-2": {
+            "panel-13": {
                 "kind": "Panel",
                 "spec": {
                     "data": {
@@ -462,479 +436,9 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(movement_type) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__interval]))",
-                                                "instant": false,
-                                                "legendFormat": "{{movement_type}}",
-                                                "range": true
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Movimientos creados por intervalo, apilados por tipo. No incluye transferencias: viajan en business.transfers.created_count.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 2,
-                    "links": [],
-                    "title": "Movimientos creados en el tiempo",
-                    "vizConfig": {
-                        "group": "timeseries",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "palette-classic"
-                                    },
-                                    "custom": {
-                                        "axisBorderShow": false,
-                                        "axisCenteredZero": false,
-                                        "axisColorMode": "text",
-                                        "axisLabel": "",
-                                        "axisPlacement": "auto",
-                                        "barAlignment": 0,
-                                        "barWidthFactor": 0.8,
-                                        "drawStyle": "bars",
-                                        "fillOpacity": 80,
-                                        "gradientMode": "none",
-                                        "hideFrom": {
-                                            "legend": false,
-                                            "tooltip": false,
-                                            "viz": false
-                                        },
-                                        "insertNulls": false,
-                                        "lineInterpolation": "linear",
-                                        "lineWidth": 0,
-                                        "pointSize": 6,
-                                        "scaleDistribution": {
-                                            "type": "linear"
-                                        },
-                                        "showPoints": "always",
-                                        "spanNulls": false,
-                                        "stacking": {
-                                            "group": "A",
-                                            "mode": "normal"
-                                        },
-                                        "thresholdsStyle": {
-                                            "mode": "off"
-                                        },
-                                        "showValues": false
-                                    },
-                                    "min": 0,
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "short"
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "legend": {
-                                    "calcs": ["sum"],
-                                    "displayMode": "table",
-                                    "placement": "right",
-                                    "showLegend": true
-                                },
-                                "tooltip": {
-                                    "hideZeros": false,
-                                    "mode": "multi",
-                                    "sort": "desc"
-                                }
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-3": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (model, mode) (max_over_time(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__interval]))",
-                                                "legendFormat": "{{model}} / {{mode}}",
-                                                "range": true
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "Token costs"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Costo del agente separado por modelo y modo (texto, voz o hibrido). Los nombres que contienen 3.8 se muestran en azul y los que contienen 3.1 en naranja. Selecciona All o ambos modelos en el selector Modelo para compararlos simultaneamente.\n\nAlgunos puntos se muestran duplicados.",
-                    "id": 3,
-                    "links": [],
-                    "title": "Máximo costo reportado por modelo y modo",
-                    "vizConfig": {
-                        "group": "timeseries",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "palette-classic"
-                                    },
-                                    "custom": {
-                                        "axisBorderShow": false,
-                                        "axisCenteredZero": false,
-                                        "axisColorMode": "text",
-                                        "axisLabel": "",
-                                        "axisPlacement": "auto",
-                                        "barAlignment": 0,
-                                        "barWidthFactor": 0.6,
-                                        "drawStyle": "line",
-                                        "fillOpacity": 0,
-                                        "gradientMode": "none",
-                                        "hideFrom": {
-                                            "legend": false,
-                                            "tooltip": false,
-                                            "viz": false
-                                        },
-                                        "insertNulls": false,
-                                        "lineInterpolation": "linear",
-                                        "lineWidth": 1,
-                                        "pointSize": 5,
-                                        "scaleDistribution": {
-                                            "type": "linear"
-                                        },
-                                        "showPoints": "auto",
-                                        "showValues": false,
-                                        "spanNulls": false,
-                                        "stacking": {
-                                            "group": "A",
-                                            "mode": "none"
-                                        },
-                                        "thresholdsStyle": {
-                                            "mode": "off"
-                                        }
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            },
-                                            {
-                                                "color": "red",
-                                                "value": 80
-                                            }
-                                        ]
-                                    },
-                                    "unit": "currencyUSD",
-                                    "min": 0
-                                },
-                                "overrides": [
-                                    {
-                                        "matcher": {
-                                            "id": "byRegexp",
-                                            "options": "/.*3[.]8.*/"
-                                        },
-                                        "properties": [
-                                            {
-                                                "id": "color",
-                                                "value": {
-                                                    "mode": "fixed",
-                                                    "fixedColor": "#5794F2"
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "matcher": {
-                                            "id": "byRegexp",
-                                            "options": "/.*3[.]1.*/"
-                                        },
-                                        "properties": [
-                                            {
-                                                "id": "color",
-                                                "value": {
-                                                    "mode": "fixed",
-                                                    "fixedColor": "#FF9830"
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            },
-                            "options": {
-                                "legend": {
-                                    "calcs": [],
-                                    "displayMode": "list",
-                                    "placement": "bottom",
-                                    "showLegend": true
-                                },
-                                "tooltip": {
-                                    "hideZeros": false,
-                                    "mode": "multi",
-                                    "sort": "desc"
-                                }
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-4": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max(max_over_time(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
-                                                "legendFormat": "Costo",
-                                                "range": false,
-                                                "instant": true
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "Token costs"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "",
-                    "id": 4,
-                    "links": [],
-                    "title": "Máximo costo reportado en el período",
-                    "vizConfig": {
-                        "group": "stat",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            },
-                                            {
-                                                "color": "red",
-                                                "value": 80
-                                            }
-                                        ]
-                                    },
-                                    "unit": "currencyUSD"
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "colorMode": "value",
-                                "graphMode": "area",
-                                "justifyMode": "auto",
-                                "orientation": "auto",
-                                "percentChangeColorMode": "standard",
-                                "reduceOptions": {
-                                    "calcs": ["max"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "showPercentChange": false,
-                                "textMode": "auto",
-                                "wideLayout": true
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-5": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
+                                                "expr": "sum by(created_by) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
-                                                "legendFormat": "{{start_kind}}",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "Token costs"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Sesiones de voz abiertas en el rango seleccionado. Nuevas (`new`) son sesiones que no existian un momento antes; re-iniciadas (`resumed`) son la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: un mint ocurre tambien en cada reconexion y en el prefetch de la pantalla. Hoy solo emite el cliente nativo.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 5,
-                    "links": [],
-                    "title": "Sesiones abiertas en el rango",
-                    "vizConfig": {
-                        "group": "stat",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "fixed",
-                                        "fixedColor": "text"
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "min": 0,
-                                    "noValue": "Sin sesiones",
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": [
-                                    {
-                                        "matcher": {
-                                            "id": "byName",
-                                            "options": "new"
-                                        },
-                                        "properties": [
-                                            {
-                                                "id": "color",
-                                                "value": {
-                                                    "fixedColor": "green",
-                                                    "mode": "fixed"
-                                                }
-                                            },
-                                            {
-                                                "id": "displayName",
-                                                "value": "Nuevas"
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "matcher": {
-                                            "id": "byName",
-                                            "options": "resumed"
-                                        },
-                                        "properties": [
-                                            {
-                                                "id": "color",
-                                                "value": {
-                                                    "fixedColor": "orange",
-                                                    "mode": "fixed"
-                                                }
-                                            },
-                                            {
-                                                "id": "displayName",
-                                                "value": "Re-iniciadas"
-                                            }
-                                        ]
-                                    }
-                                ]
-                            },
-                            "options": {
-                                "colorMode": "value",
-                                "graphMode": "none",
-                                "justifyMode": "auto",
-                                "orientation": "auto",
-                                "percentChangeColorMode": "standard",
-                                "reduceOptions": {
-                                    "calcs": ["lastNotNull"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "showPercentChange": false,
-                                "textMode": "value_and_name",
-                                "wideLayout": true
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-6": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "expr": "sum by(auth_method) (count_over_time(business_user_accounts_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{auth_method}}",
+                                                "legendFormat": "{{created_by}}",
                                                 "range": false
                                             },
                                             "version": "v0"
@@ -947,10 +451,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cuentas nuevas creadas por metodo de autenticacion dentro en el rango seleccionado seleccionado (business.user_accounts.created_count).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 6,
+                    "description": "Movimientos creados en el rango seleccionado segun el flujo de origen: `form` (alta manual) vs `agent` (agente de voz).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 13,
                     "links": [],
-                    "title": "Altas de cuenta por metodo de autenticacion",
+                    "title": "Origen de los movimientos",
                     "vizConfig": {
                         "group": "piechart",
                         "kind": "VizConfig",
@@ -968,6 +472,7 @@
                                             "viz": false
                                         }
                                     },
+                                    "decimals": 0,
                                     "min": 0,
                                     "unit": "short"
                                 },
@@ -982,7 +487,7 @@
                                     "showLegend": true,
                                     "values": ["value", "percent"]
                                 },
-                                "pieType": "pie",
+                                "pieType": "donut",
                                 "reduceOptions": {
                                     "calcs": ["lastNotNull"],
                                     "fields": "",
@@ -996,198 +501,7 @@
                                 }
                             }
                         },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-7": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "expr": "max by (account_scope) (sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=~\"local|remote\"}[25h]) or label_replace(last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=\"\"}[25h]), \"account_scope\", \"remote\", \"user_hash\", \".*\"))))",
-                                                "legendFormat": "{{account_scope}}",
-                                                "range": true
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Mayor consumo mensual entre las cuentas representadas en los snapshots de las últimas 25 h, por tipo. Top 20 filas por tipo; un desglose puede estar incompleto. Incluye series remotas anteriores sin account_scope.",
-                    "id": 7,
-                    "links": [],
-                    "title": "Máximo costo mensual por tipo de cuenta",
-                    "vizConfig": {
-                        "group": "stat",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            },
-                                            {
-                                                "color": "red",
-                                                "value": 80
-                                            }
-                                        ]
-                                    },
-                                    "unit": "currencyUSD"
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "colorMode": "value",
-                                "graphMode": "area",
-                                "justifyMode": "auto",
-                                "orientation": "auto",
-                                "percentChangeColorMode": "standard",
-                                "reduceOptions": {
-                                    "calcs": ["lastNotNull"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "showPercentChange": false,
-                                "textMode": "auto",
-                                "wideLayout": true
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-8": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "expr": "sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=~\"local|remote\"}[25h]) or label_replace(last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=\"\"}[25h]), \"account_scope\", \"remote\", \"user_hash\", \".*\")))",
-                                                "format": "table",
-                                                "instant": true,
-                                                "legendFormat": "__auto",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Time": true
-                                            },
-                                            "renameByName": {
-                                                "Value": "Consumo (USD)",
-                                                "user_hash": "Identidad seudónima",
-                                                "account_scope": "Tipo de cuenta",
-                                                "parent_hash": "Instalación de origen",
-                                                "month": "Mes UTC"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Consumo mensual estimado de las filas exportadas (top 20 por tipo local/remota; hasta 40). El desglose por modelo/modo puede estar incompleto. El padre agrupa cuentas de una instalación, no una persona verificada. Las series históricas sin account_scope se consideran remotas; se colapsan cambios de rank y etiquetas. Ventana de snapshot: 25 h. No es el total de facturación.",
-                    "id": 8,
-                    "links": [],
-                    "title": "Consumo mensual: usuarios y cuentas locales",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false,
-                                        "wrapText": false
-                                    },
-                                    "fieldMinMax": false,
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "currencyUSD"
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [
-                                    {
-                                        "desc": true,
-                                        "displayName": "Consumo (USD)"
-                                    }
-                                ],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -1210,7 +524,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "(sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) or vector(0)) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "% agente",
                                                 "range": false
@@ -1279,95 +593,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-13": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "expr": "sum by(created_by) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{created_by}}",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Movimientos creados en el rango seleccionado segun el flujo de origen: `form` (alta manual) vs `agent` (agente de voz).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 13,
-                    "links": [],
-                    "title": "Origen de los movimientos",
-                    "vizConfig": {
-                        "group": "piechart",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "palette-classic",
-                                        "fixedColor": "#73BF69"
-                                    },
-                                    "custom": {
-                                        "hideFrom": {
-                                            "legend": false,
-                                            "tooltip": false,
-                                            "viz": false
-                                        }
-                                    },
-                                    "min": 0,
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "displayLabels": ["name", "value", "percent"],
-                                "legend": {
-                                    "displayMode": "table",
-                                    "overflow": "ellipsis",
-                                    "placement": "right",
-                                    "showLegend": true,
-                                    "values": ["value", "percent"]
-                                },
-                                "pieType": "donut",
-                                "reduceOptions": {
-                                    "calcs": ["lastNotNull"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "sort": "desc",
-                                "tooltip": {
-                                    "hideZeros": false,
-                                    "mode": "single",
-                                    "sort": "desc"
-                                }
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -1458,6 +684,7 @@
                                         },
                                         "inspect": false
                                     },
+                                    "decimals": 0,
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
@@ -1467,8 +694,7 @@
                                             }
                                         ]
                                     },
-                                    "unit": "short",
-                                    "decimals": 0
+                                    "unit": "short"
                                 },
                                 "overrides": []
                             },
@@ -1484,7 +710,7 @@
                                 "zebraStriping": false
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -1559,6 +785,7 @@
                                             "type": "linear"
                                         },
                                         "showPoints": "always",
+                                        "showValues": false,
                                         "spanNulls": false,
                                         "stacking": {
                                             "group": "A",
@@ -1566,13 +793,11 @@
                                         },
                                         "thresholdsStyle": {
                                             "mode": "off"
-                                        },
-                                        "showValues": false
+                                        }
                                     },
                                     "decimals": 0,
                                     "min": 0,
                                     "noValue": "Sin sesiones en el rango",
-                                    "unit": "short",
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
@@ -1585,7 +810,8 @@
                                                 "value": 80
                                             }
                                         ]
-                                    }
+                                    },
+                                    "unit": "short"
                                 },
                                 "overrides": [
                                     {
@@ -1642,7 +868,7 @@
                                 }
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
@@ -1665,7 +891,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
+                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) - sum(count_over_time(agent_session_cost_bucket_count{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "Sin costo reportado",
                                                 "range": false
@@ -1680,10 +906,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Eventos de costo exportados en el período, separados por sesión/modelo. No se restan de aperturas: sus unidades no equivalen a sesiones únicas.",
+                    "description": "Sesiones abiertas en el rango seleccionado que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes en el rango seleccionado, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
                     "id": 17,
                     "links": [],
-                    "title": "Muestras de costo reportadas",
+                    "title": "Sesiones sin costo reportado",
                     "vizConfig": {
                         "group": "stat",
                         "kind": "VizConfig",
@@ -1732,11 +958,11 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
-            "panel-18": {
+            "panel-2": {
                 "kind": "Panel",
                 "spec": {
                     "data": {
@@ -1755,979 +981,14 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "(sum(count_over_time(system_function_duration_bucket_count_total{deployment_environment=\"$Scope\", function=\"sync_push\", status=\"error\"}[$__range])) or vector(0)) / sum(count_over_time(system_function_duration_bucket_count_total{deployment_environment=\"$Scope\", function=\"sync_push\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Batches de sync cuyo apply en el backend tiro una excepcion, sobre todos los intentos de push en el rango. Los rechazos (`cursor_mismatch`, `client_outdated`) quedan afuera a proposito: son respuestas esperadas, sin escrituras, y no fallas del backend. Un solo emisor (el backend), una muestra por llamada. No incluye pushes que nunca llegaron o no autenticados: ver \"Fallas de push en el cliente\".\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 18,
-                    "links": [],
-                    "title": "Tasa de error de sync push",
-                    "vizConfig": {
-                        "group": "stat",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "fixed",
-                                        "fixedColor": "text"
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "min": 0,
-                                    "noValue": "Sin pushes",
-                                    "unit": "percentunit",
-                                    "decimals": 1
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "colorMode": "value",
-                                "graphMode": "none",
-                                "justifyMode": "auto",
-                                "orientation": "auto",
-                                "percentChangeColorMode": "standard",
-                                "reduceOptions": {
-                                    "calcs": ["lastNotNull"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "showPercentChange": false,
-                                "textMode": "value_and_name",
-                                "wideLayout": true
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-19": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (status) (count_over_time(system_function_duration_bucket_count_total{deployment_environment=\"$Scope\", function=\"sync_push\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{status}}",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": []
-                        }
-                    },
-                    "description": "Intentos de push por resultado: `ok` aplicado, `rejected` rechazo devuelto como dato (cursor_mismatch / client_outdated), `error` excepcion al aplicar el batch.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 19,
-                    "links": [],
-                    "title": "Resultados de sync push",
-                    "vizConfig": {
-                        "group": "stat",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "fixed",
-                                        "fixedColor": "text"
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "min": 0,
-                                    "noValue": "Sin pushes",
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "colorMode": "value",
-                                "graphMode": "none",
-                                "justifyMode": "auto",
-                                "orientation": "auto",
-                                "percentChangeColorMode": "standard",
-                                "reduceOptions": {
-                                    "calcs": ["lastNotNull"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "showPercentChange": false,
-                                "textMode": "value_and_name",
-                                "wideLayout": true
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-20": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (direction, reason) (count_over_time(sync_errors_count_total{deployment_environment=\"$Scope\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{direction}} / {{reason}}",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "reduce",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "labelsToFields": true,
-                                            "reducers": ["max"]
-                                        }
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Field": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "Max": "Total",
-                                                "direction": "Direccion",
-                                                "reason": "Motivo"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Push lo emite el backend; pull lo emite el cliente nativo (pull es una query y no puede escribir). `cursor_mismatch` es recuperable: mide contencion, no rotura.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 20,
-                    "links": [],
-                    "title": "Errores de sync por direccion y motivo",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [
-                                    {
-                                        "desc": true,
-                                        "displayName": "Total"
-                                    }
-                                ],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-21": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (reason, platform) (count_over_time(sync_push_client_failures_count_total{deployment_environment=\"$Scope\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{reason}} / {{platform}}",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "reduce",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "labelsToFields": true,
-                                            "reducers": ["max"]
-                                        }
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Field": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "Max": "Total",
-                                                "reason": "Motivo",
-                                                "platform": "Plataforma"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Pushes que tiraron en el cliente antes de que el backend pudiera registrar un resultado: `auth_failure` (sesion vencida: `requireAuth` tira antes de registrar nada), `network` (timeout de la operacion) y `unknown`. Metrica aparte para que el backend siga siendo el unico emisor de los resultados de push. Hoy solo emite el cliente nativo (la web no hace sync).\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 21,
-                    "links": [],
-                    "title": "Fallas de push en el cliente",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [
-                                    {
-                                        "desc": true,
-                                        "displayName": "Total"
-                                    }
-                                ],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-25": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "calls"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (tool_name) (count_over_time(agent_tool_errors_count_total{deployment_environment=\"$Scope\"}[$__range])) or (sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range])) * 0)",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "errors"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "(sum by (tool_name) (count_over_time(agent_tool_errors_count_total{deployment_environment=\"$Scope\"}[$__range])) or (sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range])) * 0)) / sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "rate"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "merge",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {}
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Time": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "tool_name": "Tool",
-                                                "Value #calls": "Llamadas",
-                                                "Value #errors": "Errores",
-                                                "Value #rate": "Tasa de error"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Llamadas a tools del agente de WhatsApp, errores y tasa de error por tool. Una llamada se cuenta una sola vez: la registra `agent/tools.ts:execute` si devuelve, o `agent/runner.ts` si tira.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 25,
-                    "links": [],
-                    "title": "Tasa de error de tools (WhatsApp)",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [
-                                    {
-                                        "desc": true,
-                                        "displayName": "Llamadas"
-                                    }
-                                ],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-22": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.5\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p50"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.95\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p95"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.99\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p99"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (batch_size) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "samples"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "merge",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {}
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Time": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "batch_size": "Filas del batch",
-                                                "Value #p50": "p50",
-                                                "Value #p95": "p95",
-                                                "Value #p99": "p99",
-                                                "Value #samples": "Muestras (24h)"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Duracion del apply de un batch de sync en el backend (`sync_push`, solo los aplicados), por cantidad de filas del batch: un batch de 80 filas y uno de 1 no son la misma operacion. `all` junta todos.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
-                    "id": 22,
-                    "links": [],
-                    "title": "Latencia de sync push por tamano de batch",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "ms",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-23": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.5\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p50"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.95\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p95"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.99\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p99"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "samples"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "merge",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {}
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Time": true,
-                                                "mode": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "Value #p50": "p50",
-                                                "Value #p95": "p95",
-                                                "Value #p99": "p99",
-                                                "Value #samples": "Muestras (24h)"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Desde que el usuario envia el mensaje de texto hasta el primer fragmento de la respuesta, medido en el cliente (nativo y web). Es la metrica confiable: el inicio es exacto (el envio del mensaje). Solo cuentan los requests autenticados, para que un llamador anonimo no pueda mover el p99.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
-                    "id": 23,
-                    "links": [],
-                    "title": "Tiempo hasta la primera respuesta (texto)",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "ms",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-24": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.95\", batch_size=\"all\"}[65m]))",
+                                                "expr": "sum by(movement_type) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__interval]))",
                                                 "instant": false,
-                                                "legendFormat": "sync_push",
+                                                "legendFormat": "{{movement_type}}",
                                                 "range": true
                                             },
                                             "version": "v0"
                                         },
-                                        "refId": "push"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max(last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.95\"}[65m]))",
-                                                "instant": false,
-                                                "legendFormat": "primera respuesta (texto)",
-                                                "range": true
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "first"
+                                        "refId": "A"
                                     }
                                 }
                             ],
@@ -2735,10 +996,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cada punto es la foto horaria del p95 sobre las 24h anteriores, no el p95 de ese intervalo. Sirve para ver tendencias; para el valor actual y su cantidad de muestras, ver las tablas de arriba. La primera respuesta de voz queda afuera a proposito: es aproximada (ver su tabla).",
-                    "id": 24,
+                    "description": "Movimientos creados por intervalo, apilados por tipo. No incluye transferencias: viajan en business.transfers.created_count.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 2,
                     "links": [],
-                    "title": "p95 en el tiempo (ventana movil de 24h)",
+                    "title": "Movimientos creados en el tiempo",
                     "vizConfig": {
                         "group": "timeseries",
                         "kind": "VizConfig",
@@ -2756,8 +1017,8 @@
                                         "axisPlacement": "auto",
                                         "barAlignment": 0,
                                         "barWidthFactor": 0.8,
-                                        "drawStyle": "line",
-                                        "fillOpacity": 0,
+                                        "drawStyle": "bars",
+                                        "fillOpacity": 80,
                                         "gradientMode": "none",
                                         "hideFrom": {
                                             "legend": false,
@@ -2766,21 +1027,21 @@
                                         },
                                         "insertNulls": false,
                                         "lineInterpolation": "linear",
-                                        "lineWidth": 2,
+                                        "lineWidth": 0,
                                         "pointSize": 6,
                                         "scaleDistribution": {
                                             "type": "linear"
                                         },
                                         "showPoints": "always",
-                                        "spanNulls": true,
+                                        "showValues": false,
+                                        "spanNulls": false,
                                         "stacking": {
                                             "group": "A",
-                                            "mode": "none"
+                                            "mode": "normal"
                                         },
                                         "thresholdsStyle": {
                                             "mode": "off"
-                                        },
-                                        "showValues": false
+                                        }
                                     },
                                     "min": 0,
                                     "thresholds": {
@@ -2792,13 +1053,13 @@
                                             }
                                         ]
                                     },
-                                    "unit": "ms"
+                                    "unit": "short"
                                 },
                                 "overrides": []
                             },
                             "options": {
                                 "legend": {
-                                    "calcs": ["lastNotNull"],
+                                    "calcs": ["sum"],
                                     "displayMode": "table",
                                     "placement": "right",
                                     "showLegend": true
@@ -2810,11 +1071,11 @@
                                 }
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
-            "panel-26": {
+            "panel-3": {
                 "kind": "Panel",
                 "spec": {
                     "data": {
@@ -2834,128 +1095,174 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\", quantile=\"0.5\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
+                                                "expr": "max by(model, mode) (agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "legendFormat": "{{model}} / {{mode}}",
+                                                "range": true
                                             },
                                             "version": "v0"
                                         },
-                                        "refId": "p50"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\", quantile=\"0.95\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p95"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\", quantile=\"0.99\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "p99"
-                                    }
-                                },
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\"}[2h]))",
-                                                "instant": true,
-                                                "legendFormat": "",
-                                                "range": false,
-                                                "format": "table"
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "samples"
+                                        "refId": "Token costs"
                                     }
                                 }
                             ],
                             "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "merge",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {}
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Time": true,
-                                                "mode": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "Value #p50": "p50",
-                                                "Value #p95": "p95",
-                                                "Value #p99": "p99",
-                                                "Value #samples": "Muestras (24h)"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
+                            "transformations": []
                         }
                     },
-                    "description": "Aproximado: el inicio del turno de voz no es exacto. El timer arranca en `endAudioStream()`, que se llama al silenciar el mic, al tipear o al salir de la pantalla, y en manos libres el fin del turno lo decide el VAD de Gemini sin avisarnos: no sabemos cuando termino de hablar el usuario. Leerlo como orden de magnitud, nunca combinado con texto.\n\nDesde el fin del turno de audio hasta el primer fragmento de la respuesta, medido en el cliente (nativo y web). Solo cuentan los requests autenticados.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
-                    "id": 26,
+                    "description": "Costo del agente separado por modelo y modo (texto, voz o hibrido). Los nombres que contienen 3.8 se muestran en azul y los que contienen 3.1 en naranja. Selecciona All o ambos modelos en el selector Modelo para compararlos simultaneamente.\n\nAlgunos puntos se muestran duplicados.",
+                    "id": 3,
                     "links": [],
-                    "title": "Tiempo hasta la primera respuesta (voz, aproximado)",
+                    "title": "Costo por modo",
                     "vizConfig": {
-                        "group": "table",
+                        "group": "timeseries",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "palette-classic"
+                                    },
+                                    "custom": {
+                                        "axisBorderShow": false,
+                                        "axisCenteredZero": false,
+                                        "axisColorMode": "text",
+                                        "axisLabel": "",
+                                        "axisPlacement": "auto",
+                                        "barAlignment": 0,
+                                        "barWidthFactor": 0.6,
+                                        "drawStyle": "line",
+                                        "fillOpacity": 0,
+                                        "gradientMode": "none",
+                                        "hideFrom": {
+                                            "legend": false,
+                                            "tooltip": false,
+                                            "viz": false
+                                        },
+                                        "insertNulls": false,
+                                        "lineInterpolation": "linear",
+                                        "lineWidth": 1,
+                                        "pointSize": 5,
+                                        "scaleDistribution": {
+                                            "type": "linear"
+                                        },
+                                        "showPoints": "auto",
+                                        "showValues": false,
+                                        "spanNulls": false,
+                                        "stacking": {
+                                            "group": "A",
+                                            "mode": "none"
+                                        },
+                                        "thresholdsStyle": {
+                                            "mode": "off"
+                                        }
+                                    },
+                                    "min": 0,
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 80
+                                            }
+                                        ]
+                                    },
+                                    "unit": "currencyUSD"
+                                },
+                                "overrides": [
+                                    {
+                                        "matcher": {
+                                            "id": "byRegexp",
+                                            "options": "/.*3[.]8.*/"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "#5794F2",
+                                                    "mode": "fixed"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "matcher": {
+                                            "id": "byRegexp",
+                                            "options": "/.*3[.]1.*/"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "#FF9830",
+                                                    "mode": "fixed"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            "options": {
+                                "legend": {
+                                    "calcs": [],
+                                    "displayMode": "list",
+                                    "placement": "bottom",
+                                    "showLegend": true
+                                },
+                                "tooltip": {
+                                    "hideZeros": false,
+                                    "mode": "multi",
+                                    "sort": "desc"
+                                }
+                            }
+                        },
+                        "version": "13.3.0-38529393499"
+                    }
+                }
+            },
+            "panel-4": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "builder",
+                                                "exemplar": false,
+                                                "expr": "max(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "legendFormat": "Costo",
+                                                "range": true
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "Token costs"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "",
+                    "id": 4,
+                    "links": [],
+                    "title": "Costo maximo de sesion",
+                    "vizConfig": {
+                        "group": "stat",
                         "kind": "VizConfig",
                         "spec": {
                             "fieldConfig": {
@@ -2963,17 +1270,94 @@
                                     "color": {
                                         "mode": "thresholds"
                                     },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 80
+                                            }
+                                        ]
+                                    }
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "colorMode": "value",
+                                "graphMode": "area",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["max"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "auto",
+                                "wideLayout": true
+                            }
+                        },
+                        "version": "13.3.0-38529393499"
+                    }
+                }
+            },
+            "panel-5": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{start_kind}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
                                         },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
+                                        "refId": "Token costs"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Sesiones de voz abiertas en el rango seleccionado. Nuevas (`new`) son sesiones que no existian un momento antes; re-iniciadas (`resumed`) son la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: un mint ocurre tambien en cada reconexion y en el prefetch de la pantalla. Hoy solo emite el cliente nativo.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 5,
+                    "links": [],
+                    "title": "Sesiones abiertas en el rango",
+                    "vizConfig": {
+                        "group": "stat",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "fixedColor": "text",
+                                        "mode": "fixed"
                                     },
+                                    "decimals": 0,
+                                    "min": 0,
+                                    "noValue": "Sin sesiones",
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
@@ -2983,23 +1367,70 @@
                                             }
                                         ]
                                     },
-                                    "unit": "ms",
-                                    "decimals": 0
+                                    "unit": "short"
                                 },
-                                "overrides": []
+                                "overrides": [
+                                    {
+                                        "matcher": {
+                                            "id": "byName",
+                                            "options": "new"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "green",
+                                                    "mode": "fixed"
+                                                }
+                                            },
+                                            {
+                                                "id": "displayName",
+                                                "value": "Nuevas"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "matcher": {
+                                            "id": "byName",
+                                            "options": "resumed"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "orange",
+                                                    "mode": "fixed"
+                                                }
+                                            },
+                                            {
+                                                "id": "displayName",
+                                                "value": "Re-iniciadas"
+                                            }
+                                        ]
+                                    }
+                                ]
                             },
                             "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [],
-                                "zebraStriping": false
+                                "colorMode": "value",
+                                "graphMode": "none",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "value_and_name",
+                                "wideLayout": true
                             }
                         },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             },
-            "panel-27": {
+            "panel-6": {
                 "kind": "Panel",
                 "spec": {
                     "data": {
@@ -3018,10 +1449,179 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment=\"$Scope\", mode=\"text\"}[$__range]))",
+                                                "expr": "sum by(auth_method) (count_over_time(business_user_accounts_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
-                                                "legendFormat": "{{bucket}} / {{platform}}",
+                                                "legendFormat": "{{auth_method}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Cuentas nuevas creadas por metodo de autenticacion dentro en el rango seleccionado seleccionado (business.user_accounts.created_count).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 6,
+                    "links": [],
+                    "title": "Altas de cuenta por metodo de autenticacion",
+                    "vizConfig": {
+                        "group": "piechart",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "fixedColor": "#73BF69",
+                                        "mode": "palette-classic"
+                                    },
+                                    "custom": {
+                                        "hideFrom": {
+                                            "legend": false,
+                                            "tooltip": false,
+                                            "viz": false
+                                        }
+                                    },
+                                    "min": 0,
+                                    "unit": "short"
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "displayLabels": ["name", "value", "percent"],
+                                "legend": {
+                                    "displayMode": "table",
+                                    "overflow": "ellipsis",
+                                    "placement": "right",
+                                    "showLegend": true,
+                                    "values": ["value", "percent"]
+                                },
+                                "pieType": "pie",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "sort": "desc",
+                                "tooltip": {
+                                    "hideZeros": false,
+                                    "mode": "single",
+                                    "sort": "desc"
+                                }
+                            }
+                        },
+                        "version": "13.3.0-38529393499"
+                    }
+                }
+            },
+            "panel-7": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "builder",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "legendFormat": "__auto",
+                                                "range": true
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "",
+                    "id": 7,
+                    "links": [],
+                    "title": "Maximo costo de usuario",
+                    "vizConfig": {
+                        "group": "stat",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 80
+                                            }
+                                        ]
+                                    }
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "colorMode": "value",
+                                "graphMode": "area",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "auto",
+                                "wideLayout": true
+                            }
+                        },
+                        "version": "13.3.0-38529393499"
+                    }
+                }
+            },
+            "panel-8": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
+                                                "format": "table",
+                                                "instant": true,
+                                                "legendFormat": "__auto",
                                                 "range": false
                                             },
                                             "version": "v0"
@@ -3033,29 +1633,16 @@
                             "queryOptions": {},
                             "transformations": [
                                 {
-                                    "group": "reduce",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "labelsToFields": true,
-                                            "reducers": ["max"]
-                                        }
-                                    }
-                                },
-                                {
                                     "group": "organize",
                                     "kind": "Transformation",
                                     "spec": {
                                         "options": {
                                             "excludeByName": {
-                                                "Field": true
+                                                "Time": true
                                             },
-                                            "includeByName": {},
-                                            "indexByName": {},
                                             "renameByName": {
-                                                "Max": "Turnos",
-                                                "bucket": "Bucket (ms)",
-                                                "platform": "Plataforma"
+                                                "Value": "Consumo (USD)",
+                                                "user_hash": "Usuario"
                                             }
                                         }
                                     }
@@ -3063,10 +1650,10 @@
                             ]
                         }
                     },
-                    "description": "Turnos de texto por rango de tiempo hasta la primera respuesta, incluidos los anonimos (los percentiles solo usan autenticados). Es la metrica confiable: el inicio es el envio del mensaje.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada turno produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 27,
+                    "description": "",
+                    "id": 8,
                     "links": [],
-                    "title": "Primera respuesta (texto) por bucket",
+                    "title": "Consumo total por usuario",
                     "vizConfig": {
                         "group": "table",
                         "kind": "VizConfig",
@@ -3081,12 +1668,13 @@
                                         "cellOptions": {
                                             "type": "auto"
                                         },
-                                        "filterable": false,
                                         "footer": {
                                             "reducers": []
                                         },
-                                        "inspect": false
+                                        "inspect": false,
+                                        "wrapText": false
                                     },
+                                    "fieldMinMax": false,
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
@@ -3095,133 +1683,23 @@
                                                 "value": 0
                                             }
                                         ]
-                                    },
-                                    "unit": "short",
-                                    "decimals": 0
+                                    }
                                 },
                                 "overrides": []
                             },
                             "options": {
                                 "cellHeight": "sm",
                                 "showHeader": true,
-                                "sortBy": [],
+                                "sortBy": [
+                                    {
+                                        "desc": true,
+                                        "displayName": "Consumo (USD)"
+                                    }
+                                ],
                                 "zebraStriping": false
                             }
                         },
-                        "version": "13.3.0-36394719073"
-                    }
-                }
-            },
-            "panel-28": {
-                "kind": "Panel",
-                "spec": {
-                    "data": {
-                        "kind": "QueryGroup",
-                        "spec": {
-                            "queries": [
-                                {
-                                    "kind": "PanelQuery",
-                                    "spec": {
-                                        "hidden": false,
-                                        "query": {
-                                            "datasource": {
-                                                "name": "grafanacloud-prom"
-                                            },
-                                            "group": "prometheus",
-                                            "kind": "DataQuery",
-                                            "spec": {
-                                                "editorMode": "code",
-                                                "exemplar": false,
-                                                "expr": "sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment=\"$Scope\", mode=\"voice\"}[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{bucket}} / {{platform}}",
-                                                "range": false
-                                            },
-                                            "version": "v0"
-                                        },
-                                        "refId": "A"
-                                    }
-                                }
-                            ],
-                            "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "reduce",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "labelsToFields": true,
-                                            "reducers": ["max"]
-                                        }
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Field": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "Max": "Turnos",
-                                                "bucket": "Bucket (ms)",
-                                                "platform": "Plataforma"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "description": "Aproximado: el inicio del turno de voz no es exacto. El timer arranca en `endAudioStream()`, que se llama al silenciar el mic, al tipear o al salir de la pantalla, y en manos libres el fin del turno lo decide el VAD de Gemini sin avisarnos: no sabemos cuando termino de hablar el usuario. Leerlo como orden de magnitud, nunca combinado con texto.\n\nTurnos de voz por rango de tiempo hasta la primera respuesta, incluidos los anonimos.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada turno produce exactamente una, asi que no hay extrapolacion ni decimales.",
-                    "id": 28,
-                    "links": [],
-                    "title": "Primera respuesta (voz, aproximado) por bucket",
-                    "vizConfig": {
-                        "group": "table",
-                        "kind": "VizConfig",
-                        "spec": {
-                            "fieldConfig": {
-                                "defaults": {
-                                    "color": {
-                                        "mode": "thresholds"
-                                    },
-                                    "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
-                                        },
-                                        "filterable": false,
-                                        "footer": {
-                                            "reducers": []
-                                        },
-                                        "inspect": false
-                                    },
-                                    "thresholds": {
-                                        "mode": "absolute",
-                                        "steps": [
-                                            {
-                                                "color": "green",
-                                                "value": 0
-                                            }
-                                        ]
-                                    },
-                                    "unit": "short",
-                                    "decimals": 0
-                                },
-                                "overrides": []
-                            },
-                            "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true,
-                                "sortBy": [],
-                                "zebraStriping": false
-                            }
-                        },
-                        "version": "13.3.0-36394719073"
+                        "version": "13.3.0-38529393499"
                     }
                 }
             }
@@ -3493,177 +1971,6 @@
                             },
                             "title": "Creacion de movimientos"
                         }
-                    },
-                    {
-                        "kind": "RowsLayoutRow",
-                        "spec": {
-                            "collapse": false,
-                            "layout": {
-                                "kind": "GridLayout",
-                                "spec": {
-                                    "items": [
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-18"
-                                                },
-                                                "height": 7,
-                                                "width": 6,
-                                                "x": 0,
-                                                "y": 0
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-19"
-                                                },
-                                                "height": 7,
-                                                "width": 6,
-                                                "x": 6,
-                                                "y": 0
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-20"
-                                                },
-                                                "height": 7,
-                                                "width": 12,
-                                                "x": 12,
-                                                "y": 0
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-21"
-                                                },
-                                                "height": 8,
-                                                "width": 12,
-                                                "x": 0,
-                                                "y": 7
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-25"
-                                                },
-                                                "height": 8,
-                                                "width": 12,
-                                                "x": 12,
-                                                "y": 7
-                                            }
-                                        }
-                                    ]
-                                }
-                            },
-                            "title": "Salud operativa"
-                        }
-                    },
-                    {
-                        "kind": "RowsLayoutRow",
-                        "spec": {
-                            "collapse": false,
-                            "layout": {
-                                "kind": "GridLayout",
-                                "spec": {
-                                    "items": [
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-22"
-                                                },
-                                                "height": 8,
-                                                "width": 24,
-                                                "x": 0,
-                                                "y": 0
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-23"
-                                                },
-                                                "height": 6,
-                                                "width": 12,
-                                                "x": 0,
-                                                "y": 8
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-26"
-                                                },
-                                                "height": 6,
-                                                "width": 12,
-                                                "x": 12,
-                                                "y": 8
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-27"
-                                                },
-                                                "height": 8,
-                                                "width": 12,
-                                                "x": 0,
-                                                "y": 14
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-28"
-                                                },
-                                                "height": 8,
-                                                "width": 12,
-                                                "x": 12,
-                                                "y": 14
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-24"
-                                                },
-                                                "height": 9,
-                                                "width": 24,
-                                                "x": 0,
-                                                "y": 22
-                                            }
-                                        }
-                                    ]
-                                }
-                            },
-                            "title": "Latencia (p50/p95/p99)"
-                        }
                     }
                 ]
             }
@@ -3687,83 +1994,84 @@
                 "1d"
             ],
             "fiscalYearStartMonth": 0,
-            "from": "now-12h",
+            "from": "now-3d",
             "hideTimepicker": false,
             "timezone": "browser",
             "to": "now"
         },
-        "title": "User accounts created by auth method",
+        "title": "WalletBot | Metricas de uso",
         "variables": [
             {
                 "kind": "QueryVariable",
                 "spec": {
+                    "allowCustomValue": true,
                     "current": {
                         "text": "production",
                         "value": "production"
                     },
+                    "definition": "label_values(deployment_environment)",
                     "description": "Entorno de despliegue (deployment_environment) del que vienen las metricas",
                     "hide": "dontHide",
+                    "includeAll": false,
                     "label": "Scope",
+                    "multi": false,
                     "name": "Scope",
+                    "options": [],
                     "query": {
-                        "kind": "DataQuery",
-                        "group": "prometheus",
-                        "version": "v0",
                         "datasource": {
                             "name": "grafanacloud-prom"
                         },
+                        "group": "prometheus",
+                        "kind": "DataQuery",
                         "spec": {
                             "qryType": 1,
                             "query": "label_values(deployment_environment)",
                             "refId": "PrometheusVariableQueryEditor-VariableQuery"
-                        }
+                        },
+                        "version": "v0"
                     },
-                    "definition": "label_values(deployment_environment)",
-                    "regex": "",
-                    "sort": "alphabeticalAsc",
                     "refresh": "onDashboardLoad",
-                    "options": [],
-                    "multi": false,
-                    "includeAll": false,
-                    "allowCustomValue": true,
+                    "regex": "",
+                    "regexApplyTo": "value",
                     "skipUrlSync": false,
-                    "regexApplyTo": "value"
+                    "sort": "alphabeticalAsc"
                 }
             },
             {
                 "kind": "QueryVariable",
                 "spec": {
-                    "name": "model",
-                    "label": "Modelo",
-                    "description": "Modelo de Gemini Live con el que se etiquetaron las metricas del agente",
-                    "hide": "dontHide",
-                    "refresh": "onDashboardLoad",
-                    "skipUrlSync": false,
-                    "query": {
-                        "kind": "DataQuery",
-                        "group": "prometheus",
-                        "version": "v0",
-                        "datasource": {
-                            "name": "grafanacloud-prom"
-                        },
-                        "spec": {
-                            "qryType": 1,
-                            "query": "label_values({__name__=~\"agent_session_cost_usd|agent_user_monthly_cost_usd\",deployment_environment=\"$Scope\"}, model)",
-                            "refId": "PrometheusVariableQueryEditor-VariableQuery"
-                        }
-                    },
-                    "regex": "",
-                    "sort": "alphabeticalAsc",
-                    "definition": "label_values({__name__=~\"agent_session_cost_usd|agent_user_monthly_cost_usd\",deployment_environment=\"$Scope\"}, model)",
-                    "options": [],
-                    "multi": true,
-                    "includeAll": true,
                     "allValue": ".*",
                     "allowCustomValue": true,
                     "current": {
-                        "text": ["All"],
-                        "value": ["$__all"]
-                    }
+                        "text": "All",
+                        "value": "$__all"
+                    },
+                    "definition": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
+                    "description": "Modelo de Gemini Live con el que se etiquetaron las metricas del agente",
+                    "hide": "dontHide",
+                    "includeAll": true,
+                    "label": "Modelo",
+                    "multi": true,
+                    "name": "model",
+                    "options": [],
+                    "query": {
+                        "datasource": {
+                            "name": "grafanacloud-prom"
+                        },
+                        "group": "prometheus",
+                        "kind": "DataQuery",
+                        "spec": {
+                            "qryType": 1,
+                            "query": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
+                            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+                        },
+                        "version": "v0"
+                    },
+                    "refresh": "onDashboardLoad",
+                    "regex": "",
+                    "regexApplyTo": "value",
+                    "skipUrlSync": false,
+                    "sort": "alphabeticalAsc"
                 }
             }
         ]
