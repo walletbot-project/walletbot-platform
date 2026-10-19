@@ -75,6 +75,26 @@ const transaction = (currency: string) => ({
     updatedAt: 10n,
 })
 
+// A second row under account `a`'s id is corrupt data: every lookup of `a`
+// throws. It stands in for a bug, the one way a batch can still fail now that
+// rows the server can't store are resolved inside the batch.
+async function duplicateAccount(t: Awaited<ReturnType<typeof fixture>>['t']) {
+    await t.run(async (ctx) => {
+        await ctx.db.insert('accounts', {
+            userId,
+            id: 'a',
+            name: 'Cash copy',
+            currency: 'ARS',
+            color: '#000000',
+            icon: 'wallet',
+            isArchived: false,
+            createdAt: 1n,
+            updatedAt: 1n,
+            seq: 1n,
+        })
+    })
+}
+
 async function backendMetrics(t: Awaited<ReturnType<typeof fixture>>['t']) {
     return await t.run(async (ctx) =>
         (await ctx.db.query('telemetryMetrics').take(20)).map((m) => ({
@@ -149,30 +169,32 @@ describe('push telemetry', { timeout: 30000 }, () => {
             expectedServerSeq: 1n,
             upserts: { categories: [category] },
         })
+        await duplicateAccount(t)
         await authed.mutation(api.v1.sync.mutations.push, {
             ...client,
             expectedServerSeq: 2n,
-            upserts: { transactions: [transaction('USD')] },
+            upserts: { transactions: [transaction('ARS')] },
         })
         expect(await latencySamples(t)).toEqual([])
     })
 
     it('rolls back a failed batch but commits its error telemetry', async () => {
         const { t, authed } = await fixture()
-        // The category is applied before the transaction fails validation,
-        // so it proves the whole batch rolled back, not just the bad row.
+        await duplicateAccount(t)
+        // The category is applied before the transaction hits the corrupt
+        // account, so it proves the whole batch rolled back, not just one row.
         const result = await authed.mutation(api.v1.sync.mutations.push, {
             ...client,
             expectedServerSeq: 2n,
             upserts: {
                 categories: [category],
-                transactions: [transaction('USD')],
+                transactions: [transaction('ARS')],
             },
         })
         expect(result).toEqual({
             ok: false,
             error: 'push_failed',
-            reason: 'validation',
+            reason: 'unknown',
         })
         expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(2n)
         await t.run(async (ctx) => {
@@ -189,7 +211,7 @@ describe('push telemetry', { timeout: 30000 }, () => {
                 name: 'sync.errors.count',
                 attributes: {
                     direction: 'push',
-                    reason: 'validation',
+                    reason: 'unknown',
                     platform: 'android',
                 },
             },

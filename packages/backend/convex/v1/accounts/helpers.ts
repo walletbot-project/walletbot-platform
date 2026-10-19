@@ -1,6 +1,7 @@
 import { internal } from '../../_generated/api'
 import type { Doc, Id } from '../../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../../_generated/server'
+import { nextSeq } from '../../sync/helpers'
 
 // Business rule: within a user's accounts, name+currency must be unique
 // (case/whitespace-insensitive), but the same name is allowed across
@@ -88,17 +89,20 @@ export async function resolveAccountId(
 // schedules the — possibly multi-batch — transaction migration that repoints
 // its history onto `winner` and eventually deletes it, writing a merge
 // tombstone. See `v1/accounts/internal.ts:mergeTransactionBatch`.
+//
+// The archive gets its own seq, later than the push that caused it: the
+// pushing device acks the push's seq as already known, so a change stamped
+// with that same seq would never reach it.
 async function mergeAccount(
     ctx: MutationCtx,
     userId: string,
-    seq: bigint,
     loser: Doc<'accounts'>,
     winner: Doc<'accounts'>,
 ): Promise<void> {
     await ctx.db.patch(loser._id, {
         isArchived: true,
         updatedAt: BigInt(Date.now()),
-        seq,
+        seq: await nextSeq(ctx, userId),
     })
     await ctx.scheduler.runAfter(
         0,
@@ -128,7 +132,6 @@ async function mergeAccount(
 export async function reconcileAccountDuplicates(
     ctx: MutationCtx,
     userId: string,
-    seq: bigint,
     currency: string,
     name: string,
 ): Promise<void> {
@@ -150,6 +153,6 @@ export async function reconcileAccountDuplicates(
 
     for (const loser of group) {
         if (loser._id === winner._id) continue
-        await mergeAccount(ctx, userId, seq, loser, winner)
+        await mergeAccount(ctx, userId, loser, winner)
     }
 }

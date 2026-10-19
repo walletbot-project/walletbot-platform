@@ -1,8 +1,13 @@
-import { ConvexError, v } from 'convex/values'
+import { type Infer, v } from 'convex/values'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { internalMutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
+import type {
+    syncConflictReason,
+    syncConflictResolution,
+} from '../../schema/sync'
+import { nextSeq } from '../../sync/helpers'
 import {
     tagAggregateAttach,
     tagAggregateDeleteTransaction,
@@ -19,22 +24,6 @@ import {
 } from '../accounts/helpers'
 import { pushTombstones, pushUpserts } from './validators'
 
-// Marks the ~15 sync validation throws below (bad currency change, tag
-// self-parent, missing account/category, transfer/balance_adjustment
-// validation, join-row mismatches) so `push` can classify them as
-// `reason: 'validation'` for `sync.errors.count`. A `ConvexError` because
-// the throw crosses the `ctx.runMutation` boundary into `push`, and only a
-// `ConvexError`'s `data` survives that — a plain subclass's identity doesn't.
-export const SYNC_VALIDATION_ERROR = 'sync_validation'
-class SyncValidationError extends ConvexError<{
-    kind: typeof SYNC_VALIDATION_ERROR
-    message: string
-}> {
-    constructor(message: string) {
-        super({ kind: SYNC_VALIDATION_ERROR, message })
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Push batch application.
 //
@@ -42,6 +31,14 @@ class SyncValidationError extends ConvexError<{
 // counter. `push` (mutations.ts) owns auth, the version floor and the CAS;
 // this sub-transaction owns the counter bump and every write, so a throw here
 // rolls back the whole batch while `push` still commits its telemetry.
+//
+// No row the device sends can make the batch throw. A batch that fails is
+// retried with the same rows forever and blocks every later change on that
+// device, so a row the server can't store as sent is resolved in place: it
+// is repaired, replaced by the server's copy, or deleted (see
+// `recordConflict`). Whatever the server changed goes out at a later seq
+// than the push, because the device acks the push's own seq as known and
+// would never pull a change stamped with it. Only a bug still throws.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type AccountUpsert = {
@@ -176,6 +173,72 @@ async function clearTombstone(
     if (existing) await ctx.db.delete(existing._id)
 }
 
+// Deleting an account, category or tag leaves the rows that point at it in
+// place: the server hard-deletes the parent but never cascades, and another
+// device may have written a child while offline. That child is still the
+// user's, and a tombstone scoped to this user proves the parent was too, so
+// the reference is kept.
+async function wasDeleted(
+    ctx: MutationCtx,
+    userId: string,
+    tableName: SyncedTableName,
+    entityId: string,
+): Promise<boolean> {
+    const tomb = await ctx.db
+        .query('tombstones')
+        .withIndex('by_user_table_entity', (q) =>
+            q
+                .eq('userId', userId)
+                .eq('tableName', tableName)
+                .eq('entityId', entityId),
+        )
+        .unique()
+    return tomb !== null
+}
+
+type SyncConflict = {
+    tableName: SyncedTableName
+    entityId: string
+    reason: Infer<typeof syncConflictReason>
+    resolution: Infer<typeof syncConflictResolution>
+}
+
+// Logs a row the server resolved instead of storing it as sent, and keeps a
+// lasting record of it in `syncConflicts`, since a device lost data.
+async function recordConflict(
+    ctx: MutationCtx,
+    userId: string,
+    conflict: SyncConflict,
+): Promise<void> {
+    console.warn('sync conflict resolved', { userId, ...conflict })
+    const now = Date.now()
+    const existing = await ctx.db
+        .query('syncConflicts')
+        .withIndex('by_user_table_entity', (q) =>
+            q
+                .eq('userId', userId)
+                .eq('tableName', conflict.tableName)
+                .eq('entityId', conflict.entityId),
+        )
+        .unique()
+    if (existing) {
+        await ctx.db.patch(existing._id, {
+            reason: conflict.reason,
+            resolution: conflict.resolution,
+            count: existing.count + 1,
+            lastSeenAt: now,
+        })
+    } else {
+        await ctx.db.insert('syncConflicts', {
+            userId,
+            ...conflict,
+            count: 1,
+            firstSeenAt: now,
+            lastSeenAt: now,
+        })
+    }
+}
+
 // Key used to reconcile name+currency duplicates after a batch of account
 // upserts has been fully applied. Returned only for active accounts —
 // archived ones don't participate in the uniqueness rule.
@@ -193,11 +256,16 @@ async function applyAccountUpsert(
             q.eq('userId', userId).eq('id', payload.id),
         )
         .unique()
+    // An account's currency is fixed once set, because its movements are in
+    // it. A device that sent another one keeps the rest of its edit and gets
+    // the stored currency back.
+    const currency = existing?.currency ?? payload.currency
+    const currencyKept = currency !== payload.currency
     const doc: Omit<Doc<'accounts'>, '_id' | '_creationTime'> = {
         userId,
         id: payload.id,
         name: payload.name,
-        currency: payload.currency,
+        currency,
         description: payload.description,
         color: payload.color,
         icon: payload.icon,
@@ -205,26 +273,29 @@ async function applyAccountUpsert(
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
-        seq,
+        seq: currencyKept ? await nextSeq(ctx, userId) : seq,
     }
     if (existing) {
-        if (existing.currency !== payload.currency) {
-            throw new SyncValidationError(
-                `account ${payload.id}: currency cannot change once set`,
-            )
-        }
         await ctx.db.replace(existing._id, doc)
     } else {
         await ctx.db.insert('accounts', doc)
     }
     await clearTombstone(ctx, userId, 'accounts', payload.id)
+    if (currencyKept) {
+        await recordConflict(ctx, userId, {
+            tableName: 'accounts',
+            entityId: payload.id,
+            reason: 'account_currency_changed',
+            resolution: 'repaired',
+        })
+    }
 
     // Name+currency uniqueness (WAL-148) is enforced by merging duplicates
     // rather than rejecting the write — see reconcileAccountDuplicates,
     // called once per unique (currency, name) after every upsert in this
     // push has been applied.
     if (payload.isArchived) return null
-    return { currency: payload.currency, name: payload.name }
+    return { currency, name: payload.name }
 }
 
 async function applyCategoryUpsert(
@@ -260,33 +331,42 @@ async function applyCategoryUpsert(
     await clearTombstone(ctx, userId, 'categories', payload.id)
 }
 
+// Why a tag can't keep the parent it was sent with: itself, or a parent
+// that is gone (deleted on another device, or never pushed). A parent in
+// this same chunk counts as present wherever it sits in the chunk.
+async function tagParentConflict(
+    ctx: MutationCtx,
+    userId: string,
+    payload: TagUpsert,
+    batchTagIds: ReadonlySet<string>,
+): Promise<SyncConflict['reason'] | null> {
+    if (!payload.parentId) return null
+    if (payload.parentId === payload.id) return 'tag_self_parent'
+    if (batchTagIds.has(payload.parentId)) return null
+    const parent = await ctx.db
+        .query('tags')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', payload.parentId as string),
+        )
+        .unique()
+    return parent ? null : 'tag_parent_missing'
+}
+
 async function applyTagUpsert(
     ctx: MutationCtx,
     userId: string,
     seq: bigint,
     payload: TagUpsert,
+    batchTagIds: ReadonlySet<string>,
 ): Promise<void> {
-    if (payload.parentId === payload.id) {
-        throw new SyncValidationError(
-            `tag ${payload.id}: cannot be its own parent`,
-        )
-    }
-    if (payload.parentId) {
-        // Parent must exist and belong to the user. We don't fail if the
-        // parent is also in this chunk's upserts — Convex sees inserts
-        // immediately within the same transaction.
-        const parent = await ctx.db
-            .query('tags')
-            .withIndex('by_user_id', (q) =>
-                q.eq('userId', userId).eq('id', payload.parentId as string),
-            )
-            .unique()
-        if (!parent) {
-            throw new SyncValidationError(
-                `tag ${payload.id}: parent ${payload.parentId} not found`,
-            )
-        }
-    }
+    // A tag that can't keep its parent moves to the root.
+    const parentConflict = await tagParentConflict(
+        ctx,
+        userId,
+        payload,
+        batchTagIds,
+    )
+    const parentId = parentConflict ? undefined : payload.parentId
 
     const existing = await ctx.db
         .query('tags')
@@ -299,19 +379,20 @@ async function applyTagUpsert(
         id: payload.id,
         name: payload.name,
         description: payload.description,
-        parentId: payload.parentId,
+        parentId,
         color: payload.color,
         // A client without positions omits it: keep the stored one, unless
         // the tag moved to another parent, where it no longer applies.
-        position:
-            payload.position ??
-            (existing?.parentId === payload.parentId
-                ? existing?.position
-                : undefined),
+        position: parentConflict
+            ? undefined
+            : (payload.position ??
+              (existing?.parentId === parentId
+                  ? existing?.position
+                  : undefined)),
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
-        seq,
+        seq: parentConflict ? await nextSeq(ctx, userId) : seq,
     }
     if (existing) {
         await ctx.db.replace(existing._id, doc)
@@ -319,6 +400,104 @@ async function applyTagUpsert(
         await ctx.db.insert('tags', doc)
     }
     await clearTombstone(ctx, userId, 'tags', payload.id)
+    if (parentConflict) {
+        await recordConflict(ctx, userId, {
+            tableName: 'tags',
+            entityId: payload.id,
+            reason: parentConflict,
+            resolution: 'repaired',
+        })
+    }
+}
+
+async function findAccount(
+    ctx: MutationCtx,
+    userId: string,
+    accountId: string,
+): Promise<Doc<'accounts'> | null> {
+    return await ctx.db
+        .query('accounts')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', accountId),
+        )
+        .unique()
+}
+
+// Why a transaction can't be stored as sent, if it can't. An account the
+// user never had can't be proven to be theirs, so unlike a deleted one it
+// can't be kept as a reference.
+async function transactionConflict(
+    ctx: MutationCtx,
+    userId: string,
+    payload: TransactionUpsert,
+    accountId: string,
+    toAccountId: string | undefined,
+): Promise<SyncConflict['reason'] | null> {
+    const account = await findAccount(ctx, userId, accountId)
+    if (account) {
+        if (account.currency !== payload.currency) {
+            return 'transaction_currency_mismatch'
+        }
+    } else if (!(await wasDeleted(ctx, userId, 'accounts', accountId))) {
+        return 'transaction_account_missing'
+    }
+
+    if (payload.type === 'transfer') {
+        if (
+            toAccountId === undefined ||
+            toAccountId === accountId ||
+            payload.toAmount === undefined
+        ) {
+            return 'transaction_invalid_transfer'
+        }
+        const toAccount = await findAccount(ctx, userId, toAccountId)
+        if (toAccount) {
+            if (
+                payload.toCurrency &&
+                payload.toCurrency !== toAccount.currency
+            ) {
+                return 'transaction_currency_mismatch'
+            }
+        } else if (!(await wasDeleted(ctx, userId, 'accounts', toAccountId))) {
+            return 'transaction_account_missing'
+        }
+    }
+
+    if (
+        payload.type === 'balance_adjustment' &&
+        payload.balanceAfter === undefined
+    ) {
+        return 'transaction_invalid_adjustment'
+    }
+    return null
+}
+
+// A transaction the server can't store as sent loses the device's change:
+// the server's own copy goes back out, or, with no copy to fall back to, the
+// row is deleted. The device pulls either over the copy it just acked.
+async function rejectTransaction(
+    ctx: MutationCtx,
+    userId: string,
+    payload: TransactionUpsert,
+    existing: Doc<'transactions'> | null,
+    reason: SyncConflict['reason'],
+): Promise<void> {
+    const seq = await nextSeq(ctx, userId)
+    if (existing) {
+        await ctx.db.patch(existing._id, { seq })
+    } else {
+        await applyTombstone(ctx, userId, seq, {
+            tableName: 'transactions',
+            entityId: payload.id,
+            deletedAt: payload.updatedAt,
+        })
+    }
+    await recordConflict(ctx, userId, {
+        tableName: 'transactions',
+        entityId: payload.id,
+        reason,
+        resolution: existing ? 'reverted' : 'dropped',
+    })
 }
 
 async function applyTransactionUpsert(
@@ -327,93 +506,66 @@ async function applyTransactionUpsert(
     seq: bigint,
     payload: TransactionUpsert,
 ): Promise<void> {
-    // A merged-away account id (WAL-148 auto-merge) still needs to resolve
-    // to its live replacement: a dirty local row created before the device
-    // learned about the merge, or a device that hasn't pulled the merge
-    // tombstone yet, can otherwise push a reference to an id that no longer
-    // exists.
-    const accountId = await resolveAccountId(ctx, userId, payload.accountId)
-    const account = await ctx.db
-        .query('accounts')
-        .withIndex('by_user_id', (q) =>
-            q.eq('userId', userId).eq('id', accountId),
-        )
-        .unique()
-    if (!account) {
-        throw new SyncValidationError(
-            `transaction ${payload.id}: accountId ${payload.accountId} not found`,
-        )
-    }
-    if (account.currency !== payload.currency) {
-        throw new SyncValidationError(
-            `transaction ${payload.id}: currency ${payload.currency} does not match account ${payload.accountId} currency ${account.currency}`,
-        )
-    }
-
-    if (payload.categoryId) {
-        const cat = await ctx.db
-            .query('categories')
-            .withIndex('by_user_id', (q) =>
-                q.eq('userId', userId).eq('id', payload.categoryId),
-            )
-            .unique()
-        if (!cat) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: categoryId ${payload.categoryId} not found`,
-            )
-        }
-    }
-
-    let toAccountId: string | undefined
-    if (payload.type === 'transfer') {
-        if (!payload.toAccountId) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: transfer requires toAccountId`,
-            )
-        }
-        toAccountId = await resolveAccountId(ctx, userId, payload.toAccountId)
-        if (toAccountId === accountId) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: source and destination accounts must differ`,
-            )
-        }
-        const toAcc = await ctx.db
-            .query('accounts')
-            .withIndex('by_user_id', (q) =>
-                q.eq('userId', userId).eq('id', toAccountId as string),
-            )
-            .unique()
-        if (!toAcc) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: toAccountId ${payload.toAccountId} not found`,
-            )
-        }
-        if (payload.toCurrency && payload.toCurrency !== toAcc.currency) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: toCurrency ${payload.toCurrency} does not match account ${payload.toAccountId} currency ${toAcc.currency}`,
-            )
-        }
-        if (payload.toAmount === undefined) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: transfer requires toAmount`,
-            )
-        }
-    }
-
-    if (payload.type === 'balance_adjustment') {
-        if (payload.balanceAfter === undefined) {
-            throw new SyncValidationError(
-                `transaction ${payload.id}: balance_adjustment requires balanceAfter`,
-            )
-        }
-    }
-
     const existing = await ctx.db
         .query('transactions')
         .withIndex('by_user_id', (q) =>
             q.eq('userId', userId).eq('id', payload.id),
         )
         .unique()
+
+    // A merged-away account id (WAL-148 auto-merge) still needs to resolve
+    // to its live replacement: a dirty local row created before the device
+    // learned about the merge, or a device that hasn't pulled the merge
+    // tombstone yet, can otherwise push a reference to an id that no longer
+    // exists.
+    const accountId = await resolveAccountId(ctx, userId, payload.accountId)
+    const toAccountId =
+        payload.type === 'transfer' && payload.toAccountId
+            ? await resolveAccountId(ctx, userId, payload.toAccountId)
+            : undefined
+
+    const conflict = await transactionConflict(
+        ctx,
+        userId,
+        payload,
+        accountId,
+        toAccountId,
+    )
+    if (conflict) {
+        await rejectTransaction(ctx, userId, payload, existing, conflict)
+        return
+    }
+
+    // A category the user never had is dropped from the movement, which
+    // keeps everything else. A deleted one stays referenced, like an account.
+    let categoryId = payload.categoryId
+    if (categoryId) {
+        const category = await ctx.db
+            .query('categories')
+            .withIndex('by_user_id', (q) =>
+                q.eq('userId', userId).eq('id', payload.categoryId),
+            )
+            .unique()
+        if (
+            !category &&
+            !(await wasDeleted(ctx, userId, 'categories', categoryId))
+        ) {
+            categoryId = ''
+            await recordConflict(ctx, userId, {
+                tableName: 'transactions',
+                entityId: payload.id,
+                reason: 'transaction_category_missing',
+                resolution: 'repaired',
+            })
+        }
+    }
+
+    // A merge redirect or a dropped category means the server stores what
+    // the device didn't send.
+    const rewritten =
+        accountId !== payload.accountId ||
+        (toAccountId !== undefined && toAccountId !== payload.toAccountId) ||
+        categoryId !== payload.categoryId
 
     const doc: Omit<Doc<'transactions'>, '_id' | '_creationTime'> = {
         userId,
@@ -426,7 +578,7 @@ async function applyTransactionUpsert(
         dateConfirmed: payload.dateConfirmed ?? true,
         timeStatus: payload.timeStatus ?? existing?.timeStatus ?? 'none',
         accountId,
-        categoryId: payload.categoryId,
+        categoryId,
         amount: payload.amount,
         currency: payload.currency,
         toAccountId,
@@ -439,7 +591,7 @@ async function applyTransactionUpsert(
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
-        seq,
+        seq: rewritten ? await nextSeq(ctx, userId) : seq,
     }
 
     if (existing) {
@@ -453,41 +605,57 @@ async function applyTransactionUpsert(
     await clearTombstone(ctx, userId, 'transactions', payload.id)
 }
 
+// A join the server can't store is deleted instead, so the device pulls the
+// tombstone and drops its own copy.
+async function dropTransactionTag(
+    ctx: MutationCtx,
+    userId: string,
+    payload: TransactionTagUpsert,
+    reason: SyncConflict['reason'],
+): Promise<void> {
+    await applyTombstone(ctx, userId, await nextSeq(ctx, userId), {
+        tableName: 'transactionTags',
+        entityId: payload.id,
+        deletedAt: payload.updatedAt,
+    })
+    await recordConflict(ctx, userId, {
+        tableName: 'transactionTags',
+        entityId: payload.id,
+        reason,
+        resolution: 'dropped',
+    })
+}
+
 async function applyTransactionTagUpsert(
     ctx: MutationCtx,
     userId: string,
     seq: bigint,
     payload: TransactionTagUpsert,
 ): Promise<void> {
-    // Defensive ID format check (spec §"Safeguards contra joins duplicados").
-    const expected = `${payload.transactionId}__${payload.tagId}`
-    if (payload.id !== expected) {
-        throw new SyncValidationError(
-            `invalid_join_id: transactionTags.id must equal "<transactionId>__<tagId>" (expected ${expected}, got ${payload.id})`,
-        )
+    // Defensive ID format check (spec §"Safeguards contra joins duplicados"):
+    // a join under any other id would duplicate the canonical one.
+    if (payload.id !== `${payload.transactionId}__${payload.tagId}`) {
+        await dropTransactionTag(ctx, userId, payload, 'join_invalid_id')
+        return
     }
 
+    // A join can't outlive its transaction or its tag, e.g. one deleted on
+    // another device while this one was offline.
     const txn = await ctx.db
         .query('transactions')
         .withIndex('by_user_id', (q) =>
             q.eq('userId', userId).eq('id', payload.transactionId),
         )
         .unique()
-    if (!txn) {
-        throw new SyncValidationError(
-            `transactionTag ${payload.id}: transactionId ${payload.transactionId} not found`,
-        )
-    }
     const tag = await ctx.db
         .query('tags')
         .withIndex('by_user_id', (q) =>
             q.eq('userId', userId).eq('id', payload.tagId),
         )
         .unique()
-    if (!tag) {
-        throw new SyncValidationError(
-            `transactionTag ${payload.id}: tagId ${payload.tagId} not found`,
-        )
+    if (!txn || !tag) {
+        await dropTransactionTag(ctx, userId, payload, 'join_parent_missing')
+        return
     }
 
     const existing = await ctx.db
@@ -837,7 +1005,6 @@ export const applyPushBatch = internalMutation({
             await reconcileAccountDuplicates(
                 ctx,
                 userId,
-                newSeq,
                 key.currency,
                 key.name,
             )
@@ -845,8 +1012,9 @@ export const applyPushBatch = internalMutation({
         for (const u of args.upserts.categories ?? []) {
             await applyCategoryUpsert(ctx, userId, newSeq, u)
         }
+        const batchTagIds = new Set((args.upserts.tags ?? []).map((u) => u.id))
         for (const u of args.upserts.tags ?? []) {
-            await applyTagUpsert(ctx, userId, newSeq, u)
+            await applyTagUpsert(ctx, userId, newSeq, u, batchTagIds)
         }
         // Rules before their occurrences: a transaction carries `recurrenceId`.
         for (const u of args.upserts.recurrences ?? []) {

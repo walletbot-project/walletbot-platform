@@ -1,4 +1,4 @@
-import { ConvexError, v } from 'convex/values'
+import { v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import { mutation } from '../../_generated/server'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
@@ -9,7 +9,6 @@ import {
     type SyncErrorReason,
 } from '../../telemetry/metrics'
 import { requireAuth } from '../../users/helpers'
-import { SYNC_VALIDATION_ERROR } from './internal'
 import { pushTombstones, pushUpserts } from './validators'
 
 const PUSH_FAILED = 'push_failed'
@@ -27,13 +26,6 @@ const batchRowCount = (args: PushArgs): number =>
         args.tombstones?.length ?? 0,
     )
 
-const isSyncValidationError = (error: unknown): boolean =>
-    error instanceof ConvexError &&
-    typeof error.data === 'object' &&
-    error.data !== null &&
-    'kind' in error.data &&
-    error.data.kind === SYNC_VALIDATION_ERROR
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Push handler.
 //
@@ -41,7 +33,9 @@ const isSyncValidationError = (error: unknown): boolean =>
 // counter. Failure modes, all returned as data except auth:
 //  - `client_outdated` → client halts sync and shows the update prompt.
 //  - `cursor_mismatch` → client must drain pull and retry (recoverable).
-//  - `push_failed` → the batch threw (validation or bug). The batch runs in a
+//  - `push_failed` → the batch threw. A row the server can't store is
+//    resolved inside the batch instead (internal.ts), so this is a bug and
+//    its reason is always `unknown`. The batch runs in a
 //    `ctx.runMutation` sub-transaction, so none of its writes commit; only
 //    this mutation's telemetry does. Returned instead of rethrown because a
 //    rethrow would roll the telemetry back too. Clients from before this
@@ -136,9 +130,7 @@ export const push = mutation({
                 },
             )
         } catch (error) {
-            const reason: SyncErrorReason = isSyncValidationError(error)
-                ? 'validation'
-                : 'unknown'
+            const reason: SyncErrorReason = 'unknown'
             // Caught, so Convex no longer logs it as a failed call.
             console.error('sync push batch failed', {
                 userId,

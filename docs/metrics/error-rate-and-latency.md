@@ -245,9 +245,11 @@ outer layer is:
   ([docs](https://docs.convex.dev/api/interfaces/server.GenericMutationCtx#runmutation)).
   `push` then records the error and returns
   `{ ok: false, error: 'push_failed', reason }` instead of rethrowing. No
-  business write from a failed batch commits, only the telemetry. Validation
-  throws are a `ConvexError` with `kind: 'sync_validation'`, because only a
-  `ConvexError`'s data survives the `runMutation` boundary. Covered by
+  business write from a failed batch commits, only the telemetry. Since
+  issue #319 no row the device sends makes the batch throw: the server
+  resolves it inside the batch (`docs/data-model.md`, "Conflictos que
+  resuelve el servidor"). A `push_failed` is therefore a bug, its `reason` is
+  always `unknown`, and `validation` is no longer emitted. Covered by
   `convex/sync/pushTelemetry.test.ts`.
   *Contract:* `push_failed` is a new, additive `ok: false` variant. Native
   binaries from before it treat any unknown `ok: false` as a failed round
