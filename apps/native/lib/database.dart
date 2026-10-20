@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'data/occurrence.dart';
+import 'data/search_fold.dart';
 
 part 'database.g.dart';
 
@@ -663,6 +664,7 @@ class AppDatabase extends _$AppDatabase {
       name: name,
       native: const DriftNativeOptions(
         databaseDirectory: getApplicationSupportDirectory,
+        setup: registerSearchFunctions,
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:app/data/data.dart';
 import 'package:app/data/recurrence.dart';
+import 'package:app/data/search_fold.dart';
 import 'package:app/database.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
@@ -22,7 +23,9 @@ void main() {
   late String foodId;
 
   setUp(() async {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
+    db = AppDatabase.forTesting(
+      NativeDatabase.memory(setup: registerSearchFunctions),
+    );
     repos = AppRepositories(db);
     cashId = await repos.accounts.create(name: 'Cash', currency: 'ARS');
     bankId = await repos.accounts.create(name: 'Bank', currency: 'ARS');
@@ -270,6 +273,85 @@ void main() {
         const TransactionFilter(search: 'ingredients'),
       );
       expect(descriptionSearch.map((t) => t.name), ['Groceries']);
+    });
+
+    test('search ignores accents and case', () async {
+      await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'CAFÉ con leche',
+        amountCents: BigInt.from(300),
+        currency: 'ARS',
+      );
+      await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'Piña colada',
+        amountCents: BigInt.from(400),
+        currency: 'ARS',
+      );
+      await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'Cuota credito',
+        amountCents: BigInt.from(500),
+        currency: 'ARS',
+      );
+
+      Future<List<String>> names(String search) async => [
+        for (final t in await repos.transactions.list(
+          TransactionFilter(search: search),
+        ))
+          t.name,
+      ];
+
+      expect(await names('cafe'), ['CAFÉ con leche']);
+      expect(await names('Café'), ['CAFÉ con leche']);
+      expect(await names('pina'), ['Piña colada']);
+      expect(await names('PIÑA'), ['Piña colada']);
+      expect(await names('crédito'), ['Cuota credito']);
+    });
+
+    test('search matches account and category names', () async {
+      final savingsId = await repos.accounts.create(
+        name: 'Ahorro Crédito',
+        currency: 'ARS',
+      );
+      final educationId = await repos.categories.create(name: 'Educación');
+      await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: educationId,
+        name: 'Books',
+        amountCents: BigInt.from(1500),
+        currency: 'ARS',
+      );
+      await repos.transactions.addTransfer(
+        fromAccountId: cashId,
+        toAccountId: savingsId,
+        name: 'Move',
+        amountCents: BigInt.from(1000),
+        currency: 'ARS',
+        toAmountCents: BigInt.from(1000),
+        toCurrency: 'ARS',
+      );
+      await repos.transactions.addExpense(
+        accountId: savingsId,
+        categoryId: foodId,
+        name: 'Lunch',
+        amountCents: BigInt.from(700),
+        currency: 'ARS',
+      );
+
+      Future<Set<String>> names(String search) async => {
+        for (final t in await repos.transactions.list(
+          TransactionFilter(search: search),
+        ))
+          t.name,
+      };
+
+      expect(await names('educacion'), {'Books'});
+      expect(await names('ahorro credito'), {'Move', 'Lunch'});
+      expect(await names('food'), {'Lunch'});
     });
 
     test('tag match any/all and includeSubtags', () async {
