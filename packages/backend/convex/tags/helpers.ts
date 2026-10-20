@@ -118,11 +118,10 @@ export async function tagAggregateReplaceTransaction(
             )
             continue
         }
-        await transactionsByTag.replaceOrInsert(
-            ctx,
-            entry(join, oldDoc.date),
-            { namespace: tagNamespace(join.userId, join.tagId), key: newDoc.date },
-        )
+        await transactionsByTag.replaceOrInsert(ctx, entry(join, oldDoc.date), {
+            namespace: tagNamespace(join.userId, join.tagId),
+            key: newDoc.date,
+        })
     }
 }
 
