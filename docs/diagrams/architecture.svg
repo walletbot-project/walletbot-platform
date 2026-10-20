@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1000" viewBox="0 0 1900 1000">
+    <defs>
+        <style>
+            text {
+                font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                fill: #1c1a16;
+            }
+            .group-title { font-size: 20px; font-weight: 700; }
+            .group-sub { font-size: 13px; fill: #5f5a50; }
+            .card-title { font-size: 17px; font-weight: 700; }
+            .card-sub { font-size: 12.5px; fill: #5f5a50; }
+            .block-title { font-size: 14px; font-weight: 600; }
+            .block-sub { font-size: 12px; fill: #5f5a50; }
+            .label { font-size: 13px; font-weight: 600; }
+            .label-sub { font-size: 12px; fill: #5f5a50; }
+            .voice { fill: #4b2a7b; }
+            .clients-ink { fill: #24467a; }
+            .backend-ink { fill: #2b5b34; }
+            .step-num { font-size: 12px; font-weight: 700; fill: #ffffff; }
+            .clients-block { fill: #f6f9fd; stroke: #d3dff0; stroke-width: 1; }
+            .backend-block { fill: #ffffff; stroke: #c8dcc4; stroke-width: 1; }
+            .service { fill: #f7f6f3; stroke: #cdc7ba; stroke-width: 1.2; }
+            .ws { stroke: #3a3730; stroke-width: 1.8; fill: none; }
+            .https { stroke: #8a8478; stroke-width: 1.6; stroke-dasharray: 6 5; fill: none; }
+            .inner { stroke: #8aa0c2; stroke-width: 1.4; fill: none; }
+            .voice-ws { stroke: #6d3fb0; stroke-width: 2; fill: none; }
+            .voice-https { stroke: #6d3fb0; stroke-width: 2; stroke-dasharray: 6 5; fill: none; }
+        </style>
+        <marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#3a3730" />
+        </marker>
+        <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#8a8478" />
+        </marker>
+        <marker id="arrow-inner" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#8aa0c2" />
+        </marker>
+        <marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" />
+        </marker>
+    </defs>
+
+    <rect width="1900" height="1000" fill="#ffffff" />
+
+    <rect x="380" y="40" width="680" height="104" rx="14" fill="#f5f0fc" stroke="#6d3fb0" stroke-width="1.6" />
+    <g data-icon="googlegemini" transform="translate(624 65)" fill="#8E75B2"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" /></g>
+    <text x="658" y="83" class="card-title voice">Google Gemini Live</text>
+    <text x="720" y="110" text-anchor="middle" class="card-sub">Gemini 3.8 Live · voz en tiempo real y llamadas a herramientas</text>
+
+    <rect x="40" y="230" width="540" height="682" rx="18" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.4" />
+    <text x="64" y="265" class="group-title clients-ink">Clientes</text>
+
+    <rect x="60" y="280" width="500" height="376" rx="12" fill="#ffffff" stroke="#c5d4ea" stroke-width="1.2" />
+    <g data-icon="flutter" transform="translate(80 297) scale(1.25)" fill="#02569B"><path d="M14.314 0L2.3 12 6 15.7 21.684.013h-7.357zm.014 11.072L7.857 17.53l6.47 6.47H21.7l-6.46-6.468 6.46-6.46h-7.37z" /></g>
+    <text x="120" y="309" class="card-title">App móvil</text>
+    <text x="120" y="329" class="card-sub">Flutter · Android e iOS</text>
+    <rect x="436" y="294" width="104" height="26" rx="13" fill="#e3ecf8" />
+    <text x="488" y="311.5" text-anchor="middle" class="block-sub clients-ink" font-weight="600">offline-first</text>
+
+    <rect x="80" y="348" width="216" height="52" rx="8" class="clients-block" />
+    <text x="188" y="370" text-anchor="middle" class="block-title">Interfaz</text>
+    <text x="188" y="388" text-anchor="middle" class="block-sub">pantallas y formularios</text>
+
+    <rect x="312" y="348" width="228" height="52" rx="8" class="clients-block" />
+    <text x="426" y="370" text-anchor="middle" class="block-title">Herramientas</text>
+    <text x="426" y="388" text-anchor="middle" class="block-sub">del asistente, en el dispositivo</text>
+
+    <line x1="188" y1="400" x2="188" y2="428" class="inner" marker-end="url(#arrow-inner)" />
+    <line x1="426" y1="400" x2="426" y2="428" class="inner" marker-end="url(#arrow-inner)" />
+
+    <rect x="80" y="428" width="460" height="52" rx="8" fill="#e9f0fa" stroke="#b9cbe6" stroke-width="1" />
+    <text x="310" y="450" text-anchor="middle" class="block-title">Base local SQLite (Drift)</text>
+    <text x="310" y="468" text-anchor="middle" class="block-sub">fuente de verdad en el dispositivo · migraciones versionadas</text>
+
+    <line x1="310" y1="480" x2="310" y2="508" class="inner" marker-start="url(#arrow-inner)" marker-end="url(#arrow-inner)" />
+
+    <rect x="80" y="508" width="460" height="52" rx="8" class="clients-block" />
+    <text x="310" y="530" text-anchor="middle" class="block-title">Motor de sincronización</text>
+    <text x="310" y="548" text-anchor="middle" class="block-sub">push al escribir · pull cuando cambia el contador del servidor</text>
+
+    <line x1="310" y1="560" x2="310" y2="588" class="inner" marker-start="url(#arrow-inner)" marker-end="url(#arrow-inner)" />
+
+    <rect x="80" y="588" width="460" height="52" rx="8" class="clients-block" />
+    <text x="310" y="610" text-anchor="middle" class="block-title">Cliente Convex propio en Dart</text>
+    <text x="310" y="628" text-anchor="middle" class="block-sub">protocolo de Convex sobre WebSocket</text>
+
+    <rect x="60" y="676" width="500" height="216" rx="12" fill="#ffffff" stroke="#c5d4ea" stroke-width="1.2" />
+    <g data-icon="react" transform="translate(80 693) scale(1.25)" fill="#61DAFB"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z" /></g>
+    <text x="120" y="705" class="card-title">App web</text>
+    <text x="120" y="725" class="card-sub">React · Vite · Cloudflare Pages</text>
+
+    <rect x="80" y="744" width="216" height="52" rx="8" class="clients-block" />
+    <text x="188" y="766" text-anchor="middle" class="block-title">Interfaz</text>
+    <text x="188" y="784" text-anchor="middle" class="block-sub">y panel de administración</text>
+
+    <rect x="312" y="744" width="228" height="52" rx="8" class="clients-block" />
+    <text x="426" y="766" text-anchor="middle" class="block-title">Herramientas</text>
+    <text x="426" y="784" text-anchor="middle" class="block-sub">del asistente, en el navegador</text>
+
+    <line x1="188" y1="796" x2="188" y2="824" class="inner" marker-end="url(#arrow-inner)" />
+    <line x1="426" y1="796" x2="426" y2="824" class="inner" marker-end="url(#arrow-inner)" />
+
+    <rect x="80" y="824" width="460" height="52" rx="8" class="clients-block" />
+    <text x="310" y="846" text-anchor="middle" class="block-title">Cliente Convex (React)</text>
+    <text x="310" y="864" text-anchor="middle" class="block-sub">sin base local · lee y escribe directo en el backend</text>
+
+    <rect x="820" y="230" width="500" height="682" rx="18" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.4" />
+    <g data-icon="convex" transform="translate(844 254) scale(1.25)" fill="#EE342F"><path d="M15.09 18.916c3.488-.387 6.776-2.246 8.586-5.348-.857 7.673-9.247 12.522-16.095 9.545a3.47 3.47 0 0 1-1.547-1.314c-1.539-2.417-2.044-5.492-1.318-8.282 2.077 3.584 6.3 5.78 10.374 5.399m-10.501-7.65c-1.414 3.266-1.475 7.092.258 10.24-6.1-4.59-6.033-14.41-.074-18.953a3.44 3.44 0 0 1 1.893-.707c2.825-.15 5.695.942 7.708 2.977-4.09.04-8.073 2.66-9.785 6.442m11.757-5.437C14.283 2.951 11.053.992 7.515.933c6.84-3.105 15.253 1.929 16.17 9.37a3.6 3.6 0 0 1-.334 2.02c-1.278 2.594-3.647 4.607-6.416 5.352 2.029-3.763 1.778-8.36-.589-11.847" /></g>
+    <text x="884" y="265" class="group-title backend-ink">Backend</text>
+    <text x="884" y="285" class="group-sub">Convex Cloud</text>
+
+    <rect x="840" y="300" width="220" height="64" rx="10" class="backend-block" />
+    <text x="950" y="326" text-anchor="middle" class="block-title">Tokens de voz</text>
+    <text x="950" y="345" text-anchor="middle" class="block-sub">prompt, herramientas y contexto</text>
+
+    <rect x="1080" y="300" width="220" height="64" rx="10" class="backend-block" />
+    <text x="1190" y="326" text-anchor="middle" class="block-title">Endpoints HTTP</text>
+    <text x="1190" y="345" text-anchor="middle" class="block-sub">config, auth y webhooks</text>
+
+    <rect x="840" y="384" width="220" height="64" rx="10" class="backend-block" />
+    <text x="950" y="410" text-anchor="middle" class="block-title">Funciones v1</text>
+    <text x="950" y="429" text-anchor="middle" class="block-sub">queries, mutations y actions</text>
+
+    <rect x="1080" y="384" width="220" height="64" rx="10" class="backend-block" />
+    <text x="1190" y="410" text-anchor="middle" class="block-title">Sincronización</text>
+    <text x="1190" y="429" text-anchor="middle" class="block-sub">push, pull y versión mínima</text>
+
+    <rect x="840" y="468" width="460" height="64" rx="10" fill="#e4f0e2" stroke="#a6c8a2" stroke-width="1" />
+    <text x="1070" y="494" text-anchor="middle" class="block-title">Base de datos reactiva</text>
+    <text x="1070" y="513" text-anchor="middle" class="block-sub">transaccional · avisa cada cambio a los clientes suscriptos</text>
+
+    <rect x="840" y="552" width="220" height="64" rx="10" class="backend-block" />
+    <text x="950" y="578" text-anchor="middle" class="block-title">Autenticación</text>
+    <text x="950" y="597" text-anchor="middle" class="block-sub">Better Auth y JWT para móvil</text>
+
+    <rect x="1080" y="552" width="220" height="64" rx="10" class="backend-block" />
+    <text x="1190" y="578" text-anchor="middle" class="block-title">Feature flags</text>
+    <text x="1190" y="597" text-anchor="middle" class="block-sub">global y overrides por usuario</text>
+
+    <rect x="840" y="636" width="220" height="64" rx="10" class="backend-block" />
+    <text x="950" y="662" text-anchor="middle" class="block-title">Workflows durables</text>
+    <text x="950" y="681" text-anchor="middle" class="block-sub">generación de recurrencias</text>
+
+    <rect x="1080" y="636" width="220" height="64" rx="10" class="backend-block" />
+    <text x="1190" y="662" text-anchor="middle" class="block-title">Agregados</text>
+    <text x="1190" y="681" text-anchor="middle" class="block-sub">saldos, etiquetas y latencia</text>
+
+    <rect x="840" y="720" width="220" height="64" rx="10" class="backend-block" />
+    <text x="950" y="746" text-anchor="middle" class="block-title">Crons</text>
+    <text x="950" y="765" text-anchor="middle" class="block-sub">cotizaciones y retención</text>
+
+    <rect x="1080" y="720" width="220" height="64" rx="10" class="backend-block" />
+    <text x="1190" y="746" text-anchor="middle" class="block-title">Telemetría</text>
+    <text x="1190" y="765" text-anchor="middle" class="block-sub">métricas por OTLP cada 5 min</text>
+
+    <rect x="840" y="804" width="460" height="64" rx="10" class="backend-block" />
+    <text x="1070" y="830" text-anchor="middle" class="block-title">Agente de WhatsApp</text>
+    <text x="1070" y="849" text-anchor="middle" class="block-sub">Gemini 3 Flash · herramientas que corren en el servidor</text>
+
+    <rect x="1480" y="300" width="380" height="88" rx="12" class="service" />
+    <g data-icon="grafana" transform="translate(1500 328) scale(1.3333)" fill="#F46800"><path d="M23.02 10.59a8.578 8.578 0 0 0-.862-3.034 8.911 8.911 0 0 0-1.789-2.445c.337-1.342-.413-2.505-.413-2.505-1.292-.08-2.113.4-2.416.62-.052-.02-.102-.044-.154-.064-.22-.089-.446-.172-.677-.247-.231-.073-.47-.14-.711-.197a9.867 9.867 0 0 0-.875-.161C14.557.753 12.94 0 12.94 0c-1.804 1.145-2.147 2.744-2.147 2.744l-.018.093c-.098.029-.2.057-.298.088-.138.042-.275.094-.413.143-.138.055-.275.107-.41.166a8.869 8.869 0 0 0-1.557.87l-.063-.029c-2.497-.955-4.716.195-4.716.195-.203 2.658.996 4.33 1.235 4.636a11.608 11.608 0 0 0-.607 2.635C1.636 12.677.953 15.014.953 15.014c1.926 2.214 4.171 2.351 4.171 2.351.003-.002.006-.002.006-.005.285.509.615.994.986 1.446.156.19.32.371.488.548-.704 2.009.099 3.68.099 3.68 2.144.08 3.553-.937 3.849-1.173a9.784 9.784 0 0 0 3.164.501h.08l.055-.003.107-.002.103-.005.003.002c1.01 1.44 2.788 1.646 2.788 1.646 1.264-1.332 1.337-2.653 1.337-2.94v-.058c0-.02-.003-.039-.003-.06.265-.187.52-.387.758-.6a7.875 7.875 0 0 0 1.415-1.7c1.43.083 2.437-.885 2.437-.885-.236-1.49-1.085-2.216-1.264-2.354l-.018-.013-.016-.013a.217.217 0 0 1-.031-.02c.008-.092.016-.18.02-.27.011-.162.016-.323.016-.48v-.253l-.005-.098-.008-.135a1.891 1.891 0 0 0-.01-.13c-.003-.042-.008-.083-.013-.125l-.016-.124-.018-.122a6.215 6.215 0 0 0-2.032-3.73 6.015 6.015 0 0 0-3.222-1.46 6.292 6.292 0 0 0-.85-.048l-.107.002h-.063l-.044.003-.104.008a4.777 4.777 0 0 0-3.335 1.695c-.332.4-.592.84-.768 1.297a4.594 4.594 0 0 0-.312 1.817l.003.091c.005.055.007.11.013.164a3.615 3.615 0 0 0 .698 1.82 3.53 3.53 0 0 0 1.827 1.282c.33.098.66.14.971.137.039 0 .078 0 .114-.002l.063-.003c.02 0 .041-.003.062-.003.034-.002.065-.007.099-.01.007 0 .018-.003.028-.003l.031-.005.06-.008a1.18 1.18 0 0 0 .112-.02c.036-.008.072-.013.109-.024a2.634 2.634 0 0 0 .914-.415c.028-.02.056-.041.085-.065a.248.248 0 0 0 .039-.35.244.244 0 0 0-.309-.06l-.078.042c-.09.044-.184.083-.283.116a2.476 2.476 0 0 1-.475.096c-.028.003-.054.006-.083.006l-.083.002c-.026 0-.054 0-.08-.002l-.102-.006h-.012l-.024.006c-.016-.003-.031-.003-.044-.006-.031-.002-.06-.007-.091-.01a2.59 2.59 0 0 1-.724-.213 2.557 2.557 0 0 1-.667-.438 2.52 2.52 0 0 1-.805-1.475 2.306 2.306 0 0 1-.029-.444l.006-.122v-.023l.002-.031c.003-.021.003-.04.005-.06a3.163 3.163 0 0 1 1.352-2.29 3.12 3.12 0 0 1 .937-.43 2.946 2.946 0 0 1 .776-.101h.06l.07.002.045.003h.026l.07.005a4.041 4.041 0 0 1 1.635.49 3.94 3.94 0 0 1 1.602 1.662 3.77 3.77 0 0 1 .397 1.414l.005.076.003.075c.002.026.002.05.002.075 0 .024.003.052 0 .07v.065l-.002.073-.008.174a6.195 6.195 0 0 1-.08.639 5.1 5.1 0 0 1-.267.927 5.31 5.31 0 0 1-.624 1.13 5.052 5.052 0 0 1-3.237 2.014 4.82 4.82 0 0 1-.649.066l-.039.003h-.287a6.607 6.607 0 0 1-1.716-.265 6.776 6.776 0 0 1-3.4-2.274 6.75 6.75 0 0 1-.746-1.15 6.616 6.616 0 0 1-.714-2.596l-.005-.083-.002-.02v-.056l-.003-.073v-.096l-.003-.104v-.07l.003-.163c.008-.22.026-.45.054-.678a8.707 8.707 0 0 1 .28-1.355c.128-.444.286-.872.473-1.277a7.04 7.04 0 0 1 1.456-2.1 5.925 5.925 0 0 1 .953-.763c.169-.111.343-.213.524-.306.089-.05.182-.091.273-.135.047-.02.093-.042.138-.062a7.177 7.177 0 0 1 .714-.267l.145-.045c.049-.015.098-.026.148-.041.098-.029.197-.052.296-.076.049-.013.1-.02.15-.033l.15-.032.151-.028.076-.013.075-.01.153-.024c.057-.01.114-.013.171-.023l.169-.021c.036-.003.073-.008.106-.01l.073-.008.036-.003.042-.002c.057-.003.114-.008.171-.01l.086-.006h.023l.037-.003.145-.007a7.999 7.999 0 0 1 1.708.125 7.917 7.917 0 0 1 2.048.68 8.253 8.253 0 0 1 1.672 1.09l.09.077.089.078c.06.052.114.107.171.159.057.052.112.106.166.16.052.055.107.107.159.164a8.671 8.671 0 0 1 1.41 1.978c.012.026.028.052.04.078l.04.078.075.156c.023.051.05.1.07.153l.065.15a8.848 8.848 0 0 1 .45 1.34.19.19 0 0 0 .201.142.186.186 0 0 0 .172-.184c.01-.246.002-.532-.024-.856z" /></g>
+    <text x="1546" y="336" class="card-title">Grafana Cloud</text>
+    <text x="1546" y="358" class="card-sub">métricas de negocio, uso, latencia y errores</text>
+
+    <rect x="1480" y="420" width="380" height="88" rx="12" class="service" />
+    <g data-icon="resend" transform="translate(1500 448) scale(1.3333)" fill="#1c1a16"><path d="M14.679 0c4.648 0 7.413 2.765 7.413 6.434s-2.765 6.434-7.413 6.434H12.33L24 24h-8.245l-8.88-8.44c-.636-.588-.93-1.273-.93-1.86 0-.831.587-1.565 1.713-1.883l4.574-1.224c1.737-.465 2.936-1.81 2.936-3.572 0-2.153-1.761-3.4-3.939-3.4H0V0z" /></g>
+    <text x="1546" y="456" class="card-title">Resend</text>
+    <text x="1546" y="478" class="card-sub">envío y recepción de emails</text>
+
+    <rect x="1480" y="540" width="380" height="88" rx="12" class="service" />
+    <text x="1500" y="576" class="card-title">DolarAPI · Frankfurter</text>
+    <text x="1500" y="598" class="card-sub">cotizaciones de monedas</text>
+
+    <rect x="1480" y="660" width="380" height="88" rx="12" class="service" />
+    <g data-icon="whatsapp" transform="translate(1500 688) scale(1.3333)" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></g>
+    <text x="1546" y="696" class="card-title">WhatsApp Business Platform</text>
+    <text x="1546" y="718" class="card-sub">API oficial de Meta para el chat por WhatsApp</text>
+
+    <rect x="1480" y="780" width="380" height="88" rx="12" class="service" />
+    <g data-icon="googlegemini" transform="translate(1500 808) scale(1.3333)" fill="#8E75B2"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" /></g>
+    <text x="1546" y="816" class="card-title">Gemini 3 Flash</text>
+    <text x="1546" y="838" class="card-sub">modelo de texto del asistente de WhatsApp</text>
+
+    <line x1="540" y1="614" x2="820" y2="614" class="ws" marker-start="url(#arrow-dark)" marker-end="url(#arrow-dark)" />
+    <text x="700" y="582" text-anchor="middle" class="label">WebSocket</text>
+    <text x="700" y="600" text-anchor="middle" class="label-sub">push / pull de cambios</text>
+    <text x="700" y="634" text-anchor="middle" class="label-sub">y suscripción al contador</text>
+
+    <line x1="540" y1="850" x2="820" y2="850" class="ws" marker-start="url(#arrow-dark)" marker-end="url(#arrow-dark)" />
+    <text x="700" y="818" text-anchor="middle" class="label">WebSocket</text>
+    <text x="700" y="836" text-anchor="middle" class="label-sub">consultas reactivas</text>
+    <text x="700" y="870" text-anchor="middle" class="label-sub">y mutaciones</text>
+
+    <line x1="1320" y1="344" x2="1480" y2="344" class="https" marker-end="url(#arrow-gray)" />
+    <text x="1400" y="336" text-anchor="middle" class="label-sub">OTLP</text>
+
+    <line x1="1320" y1="464" x2="1480" y2="464" class="https" marker-start="url(#arrow-gray)" marker-end="url(#arrow-gray)" />
+    <text x="1400" y="456" text-anchor="middle" class="label-sub">API y webhooks</text>
+
+    <line x1="1320" y1="584" x2="1480" y2="584" class="https" marker-end="url(#arrow-gray)" />
+    <text x="1400" y="576" text-anchor="middle" class="label-sub">consulta por cron</text>
+
+    <line x1="1320" y1="704" x2="1480" y2="704" class="https" marker-start="url(#arrow-gray)" marker-end="url(#arrow-gray)" />
+    <text x="1400" y="696" text-anchor="middle" class="label-sub">webhook · Graph API</text>
+
+    <line x1="1320" y1="824" x2="1480" y2="824" class="https" marker-end="url(#arrow-gray)" />
+    <text x="1400" y="816" text-anchor="middle" class="label-sub">API de Gemini</text>
+
+    <line x1="580" y1="332" x2="840" y2="332" class="voice-ws" marker-end="url(#arrow-voice)" />
+    <circle cx="700" cy="332" r="10" fill="#6d3fb0" />
+    <text x="700" y="336.5" text-anchor="middle" class="step-num">1</text>
+    <text x="700" y="314" text-anchor="middle" class="label voice">pide el token efímero</text>
+
+    <line x1="1010" y1="300" x2="1010" y2="144" class="voice-https" marker-end="url(#arrow-voice)" />
+    <circle cx="1010" cy="187" r="10" fill="#6d3fb0" />
+    <text x="1010" y="191.5" text-anchor="middle" class="step-num">2</text>
+    <text x="1028" y="183" class="label voice">Convex crea el token</text>
+    <text x="1028" y="201" class="label-sub">HTTPS con la clave de la API</text>
+
+    <line x1="480" y1="230" x2="480" y2="144" class="voice-ws" marker-start="url(#arrow-voice)" marker-end="url(#arrow-voice)" />
+    <circle cx="480" cy="187" r="10" fill="#6d3fb0" />
+    <text x="480" y="191.5" text-anchor="middle" class="step-num">3</text>
+    <text x="462" y="174" text-anchor="end" class="label voice">Sesión de voz directa</text>
+    <text x="462" y="192" text-anchor="end" class="label-sub">WebSocket con el token efímero</text>
+    <text x="462" y="210" text-anchor="end" class="label-sub">audio y llamadas a herramientas</text>
+
+    <line x1="40" y1="960" x2="90" y2="960" class="ws" marker-end="url(#arrow-dark)" />
+    <text x="100" y="964.5" class="label-sub">WebSocket</text>
+    <line x1="200" y1="960" x2="250" y2="960" class="https" marker-end="url(#arrow-gray)" />
+    <text x="260" y="964.5" class="label-sub">HTTPS</text>
+    <line x1="340" y1="960" x2="390" y2="960" class="voice-ws" marker-end="url(#arrow-voice)" />
+    <text x="400" y="964.5" class="label-sub">Sesión de voz, en el orden de los pasos 1 a 3. La clave de la API nunca sale del backend.</text>
+</svg>
