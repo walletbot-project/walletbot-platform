@@ -11,6 +11,7 @@ import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -331,7 +332,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     }
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.6,
+      initialChildSize: detailSheetInitialSize(context),
       minChildSize: 0.3,
       maxChildSize: 0.95,
       builder: _buildSheetBody,
