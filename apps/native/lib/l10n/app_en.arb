@@ -741,5 +741,8 @@
   "aiConsentDecline": "Not now",
   "aiConsentAccept": "Agree and continue",
   "aiConsentFailed": "We could not record your permission. Check your connection and try again.",
-  "aiConsentDeclined": "You need to agree before the assistant can run."
+  "aiConsentDeclined": "You need to agree before the assistant can run.",
+  "assistantBannerTitle": "Meet Gaston",
+  "assistantBannerMessage": "I'm here to help you track your expenses",
+  "assistantBannerAction": "Talk to Gaston"
 }

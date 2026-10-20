@@ -2254,4 +2254,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aiConsentDeclined =>
       'You need to agree before the assistant can run.';
+
+  @override
+  String get assistantBannerTitle => 'Meet Gaston';
+
+  @override
+  String get assistantBannerMessage =>
+      'I\'m here to help you track your expenses';
+
+  @override
+  String get assistantBannerAction => 'Talk to Gaston';
 }

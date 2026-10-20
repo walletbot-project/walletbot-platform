@@ -3,6 +3,7 @@ import 'package:app/auth/auth_controller.dart';
 import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
+import 'package:app/components/assistant_banner.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/feedback/feedback_sheet.dart';
 import 'package:app/components/dashboard/dashboard_section.dart';
@@ -22,9 +23,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.onOpenActivity});
+  const HomeScreen({
+    super.key,
+    required this.onOpenActivity,
+    required this.onOpenAssistant,
+  });
 
   final ValueChanged<TransactionFilter> onOpenActivity;
+  final VoidCallback onOpenAssistant;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -203,6 +209,10 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             const AppConfigBannerList(placement: 'home', bottomSpacing: 16),
+            if (context.watch<AppConfigController>().isFlagEnabled(
+              'assistantBanner',
+            ))
+              AssistantBanner(onOpen: widget.onOpenAssistant),
             DashboardSection(
               editing: _editing,
               onStartEditing: () => setState(() => _editing = true),

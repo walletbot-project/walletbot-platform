@@ -714,7 +714,10 @@ class _AppMainState extends State<AppMain> {
             key: _tabStackKey,
             index: selectedIndex,
             children: [
-              HomeScreen(onOpenActivity: _openActivityWithFilter),
+              HomeScreen(
+                onOpenActivity: _openActivityWithFilter,
+                onOpenAssistant: _openVoice,
+              ),
               ActivityScreen(
                 initialFilter: _activityFilter,
                 filterRevision: _activityFilterRevision,
