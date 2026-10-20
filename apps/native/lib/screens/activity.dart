@@ -288,6 +288,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void didUpdateWidget(ActivityScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.filterRevision == oldWidget.filterRevision) return;
+    _nav?.noteActivityFilterReplaced(_filter);
     _filter = widget.initialFilter;
     // Another surface asked for a filtered list: the list is the point, so
     // an open detail closes.
@@ -323,6 +324,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void _applyPendingFilter() {
     final pending = _nav?.takePendingActivityFilter();
     if (pending == null || !mounted) return;
+    _nav?.noteActivityFilterReplaced(_filter);
     setState(() {
       _filter = pending;
       _detailTransactionId = null;
