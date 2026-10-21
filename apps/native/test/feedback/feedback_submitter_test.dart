@@ -99,7 +99,47 @@ void main() {
     // A local account has no identity, so this is what the server's rate
     // limiter keys on.
     expect(args['deviceId'], 'device-1');
+    expect(args.containsKey('localAccountId'), isFalse);
   });
+
+  test(
+    'resolves the local account before the first call and sends it',
+    () async {
+      final convex = _FakeConvex([
+        '{"ok":true,"uploadUrl":"https://example.convex.cloud/upload/1"}',
+        '{"ok":true}',
+      ]);
+      var callsWhenResolved = -1;
+
+      await FeedbackSubmitter(
+        clientInfo: _clientInfo,
+        mutation: convex.mutation,
+        httpClient: _FakeHttp(),
+        resolveLocalAccountId: () async {
+          callsWhenResolved = convex.calls.length;
+          return 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        },
+      ).submit(
+        message: 'hi',
+        attachments: [
+          FeedbackAttachment(
+            name: 'a.png',
+            size: 1,
+            openRead: () => Stream.value(const [1]),
+          ),
+        ],
+        locale: 'en',
+      );
+
+      // Before the upload URL too: a remote session that authenticates while
+      // this waits gets the user's rate limit there instead of the device's.
+      expect(callsWhenResolved, 0);
+      expect(
+        convex.calls.last.args['localAccountId'],
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      );
+    },
+  );
 
   test('a rate-limited upload URL never reaches the submit call', () async {
     final convex = _FakeConvex(['{"ok":false,"error":"rate_limited"}']);

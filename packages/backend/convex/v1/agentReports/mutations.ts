@@ -8,7 +8,7 @@ import {
     normalizeReport,
 } from '../../agentReports/utils'
 import { requireAdmin } from '../../featureFlags/helpers'
-import { resolveSubmitter } from '../../feedback/helpers'
+import { resolveSubmitter, submitterFields } from '../../feedback/helpers'
 import { recordAgentReportSubmitted } from '../../telemetry/metrics'
 import { requireAuth } from '../../users/helpers'
 
@@ -20,7 +20,8 @@ import { requireAuth } from '../../users/helpers'
  * and they must still be able to flag a response. An unauthenticated caller
  * identifies itself with `deviceId` and gets the tighter limit in
  * `agentReports/rateLimits.ts`; a signed-in caller's identity always wins over
- * any `deviceId` it also sends.
+ * any `deviceId` it also sends. A local account's `localAccountId` is stored
+ * as `appUserId`, exactly as feedback stores it.
  */
 
 export const submit = mutation({
@@ -38,9 +39,15 @@ export const submit = mutation({
         locale: v.optional(v.string()),
         /** Required when the caller has no identity (native local account). */
         deviceId: v.optional(v.string()),
+        /** The active local account, for attribution only. */
+        localAccountId: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<AgentReportResult> => {
-        const submitter = await resolveSubmitter(ctx, args.deviceId)
+        const submitter = await resolveSubmitter(
+            ctx,
+            args.deviceId,
+            args.localAccountId,
+        )
         if (!submitter) return { ok: false, error: 'unidentified_client' }
 
         // Validated BEFORE the limit is consumed, matching feedback's ordering:
@@ -64,9 +71,7 @@ export const submit = mutation({
             ...(args.occurredAt !== undefined
                 ? { occurredAt: args.occurredAt }
                 : {}),
-            ...(submitter.kind === 'user'
-                ? { userId: submitter.userId }
-                : { deviceId: submitter.deviceId }),
+            ...submitterFields(submitter),
             platform: args.platform,
             appVersion: args.appVersion,
             locale: args.locale,

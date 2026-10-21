@@ -70,6 +70,40 @@ class AuthController extends ChangeNotifier {
     return null;
   }
 
+  /// Feedback and agent reports accept anonymous callers, so the server
+  /// cannot tell a local account from a remote one whose Convex session has
+  /// not authenticated yet. Returns the active local account's id for the
+  /// server to record. For a remote account, first waits up to [timeout] for
+  /// the session to authenticate, then lets the caller send regardless: a
+  /// broken session must still be reportable.
+  Future<String?> localAccountIdForSubmission({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final active = activeAccount;
+    if (active == null) return null;
+    if (active.type == AccountType.local) return active.localAccountId;
+    if (_convexAuthenticated ||
+        active.sessionToken == null ||
+        active.requiresReauth ||
+        active.serverDeleted) {
+      return null;
+    }
+    final authenticated = Completer<void>();
+    void onChange() {
+      if (_convexAuthenticated && !authenticated.isCompleted) {
+        authenticated.complete();
+      }
+    }
+
+    addListener(onChange);
+    try {
+      await authenticated.future.timeout(timeout, onTimeout: () {});
+    } finally {
+      removeListener(onChange);
+    }
+    return null;
+  }
+
   Future<void> load() async {
     final raw = await _storage.read(key: _accountsKey);
     if (raw != null && raw.isNotEmpty) {

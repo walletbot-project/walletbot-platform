@@ -6,8 +6,12 @@ import { v } from 'convex/values'
  *
  * Reachable by signed-in users AND by native local-only accounts, which have no
  * backend user at all — so the submitter is recorded as EITHER `userId` or
- * `deviceId`, never both. `platform` / `appVersion` / `locale` are evidence
- * about the client that sent it, exactly as `legalAcceptances` records them.
+ * `deviceId`, never both. A device row also carries `appUserId` when the
+ * client named its active local account, so a row with neither `userId` nor
+ * `appUserId` came from a remote account whose session had not authenticated
+ * (or from a client older than that field). `platform` / `appVersion` /
+ * `locale` are evidence about the client that sent it, exactly as
+ * `legalAcceptances` records them.
  *
  * Attachments live in their own table (`feedbackAttachments`) rather than as an
  * array on this row, so the cleanup cron can answer "is this stored file
@@ -19,6 +23,8 @@ export const feedback = defineTable({
     userId: v.optional(v.string()),
     /** Set instead of `userId` for a native local-only account. */
     deviceId: v.optional(v.string()),
+    /** `local:<localAccountId>`, client-asserted, joins with `appUsers`. */
+    appUserId: v.optional(v.string()),
     /** 'web' | 'android' | 'ios' | 'macos' | 'unknown' — evidence, not a gate. */
     platform: v.string(),
     appVersion: v.optional(v.string()),
@@ -28,6 +34,7 @@ export const feedback = defineTable({
 })
     .index('by_createdAt', ['createdAt'])
     .index('by_userId', ['userId'])
+    .index('by_appUserId', ['appUserId'])
 
 /**
  * Frontier of the orphan-attachment sweep (`feedback/internal.ts`): every stored

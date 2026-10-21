@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:app/app_config/client_info.dart';
+import 'package:app/auth/auth_controller.dart';
 import 'package:app/components/feedback/support_email_dialog.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/feedback/feedback_limits.dart';
@@ -33,6 +34,9 @@ Future<void> showFeedbackSheet(
     submitter: FeedbackSubmitter(
       clientInfo: clientInfo,
       client: context.read<ConvexClient>(),
+      resolveLocalAccountId: context
+          .read<AuthController>()
+          .localAccountIdForSubmission,
     ),
     clientInfo: clientInfo,
     locale: locale,

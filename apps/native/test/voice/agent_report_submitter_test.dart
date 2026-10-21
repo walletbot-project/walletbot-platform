@@ -68,6 +68,32 @@ void main() {
     expect(call.args['platform'], 'android');
     expect(call.args['appVersion'], '0.3.1');
     expect(call.args['locale'], 'es-AR');
+    expect(call.args.containsKey('localAccountId'), isFalse);
+  });
+
+  test('resolves the local account before the call and sends it', () async {
+    final convex = _FakeConvex(['{"ok":true}']);
+    var callsWhenResolved = -1;
+    final submitter = AgentReportSubmitter(
+      clientInfo: _clientInfo,
+      mutation: convex.mutation,
+      resolveLocalAccountId: () async {
+        callsWhenResolved = convex.calls.length;
+        return 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      },
+    );
+
+    await submitter.submit(
+      reason: 'offensive',
+      scope: AgentReportScope.session,
+      locale: 'es-AR',
+    );
+
+    expect(callsWhenResolved, 0);
+    expect(
+      convex.calls.single.args['localAccountId'],
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
   });
 
   test('omits the empty optionals rather than sending blanks', () async {

@@ -1,4 +1,5 @@
 import 'package:app/app_config/client_info.dart';
+import 'package:app/auth/auth_controller.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/adaptive_modal.dart';
@@ -57,6 +58,9 @@ Future<bool> showReportResponseSheet(
       submitter: AgentReportSubmitter(
         clientInfo: clientInfo,
         client: context.read<ConvexClient>(),
+        resolveLocalAccountId: context
+            .read<AuthController>()
+            .localAccountIdForSubmission,
       ),
       locale: locale,
       reportedText: reportedText,

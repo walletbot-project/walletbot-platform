@@ -8,7 +8,8 @@ import { v } from 'convex/values'
  * or flagging features ... without needing to exit the app") and by Apple's
  * guidelines 1.2 / 4.7.1. Reachable by signed-in users AND by native local-only
  * accounts, so the reporter is recorded as EITHER `userId` or `deviceId`, never
- * both — the same convention `feedback` uses.
+ * both. A device row that named its local account also carries `appUserId`.
+ * This is the same convention `feedback` uses.
  *
  * `reportedText` is a snapshot of the flagged turn as it was rendered, not a
  * pointer. `voiceSessionEvents` stores transcript *deltas* rather than whole
@@ -36,6 +37,8 @@ export const agentReports = defineTable({
     userId: v.optional(v.string()),
     /** Set instead of `userId` for a native local-only account. */
     deviceId: v.optional(v.string()),
+    /** `local:<localAccountId>`, client-asserted, joins with `appUsers`. */
+    appUserId: v.optional(v.string()),
     /** 'web' | 'android' | 'ios' | 'macos' | 'unknown' — evidence, not a gate. */
     platform: v.string(),
     appVersion: v.optional(v.string()),
@@ -50,4 +53,5 @@ export const agentReports = defineTable({
     // The moderation queue's only read path: oldest pending first.
     .index('by_status_and_createdAt', ['status', 'createdAt'])
     .index('by_userId', ['userId'])
+    .index('by_appUserId', ['appUserId'])
     .index('by_createdAt', ['createdAt'])
