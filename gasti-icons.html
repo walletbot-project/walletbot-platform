@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gasti icons</title>
+<style>
+body { margin: 0; background: #fff; }
+#icons { max-width: 800px; min-height: 100vh; margin: 0 auto; box-sizing: border-box; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 48px; padding: 48px 16px; }
+.icon { width: 112px; height: 112px; border-radius: 32px; display: grid; place-items: center; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="icons"></div>
+<script>
+const f = (n) => Math.round(n * 100) / 100
+const stops = (list) => list
+    .map(([o, c, a = 1]) => `<stop offset="${o}" stop-color="${c}"${a < 1 ? ` stop-opacity="${a}"` : ''}/>`)
+    .join('')
+const lin = (id, [x1, y1, x2, y2], list, user = false) =>
+    `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${user ? ' gradientUnits="userSpaceOnUse"' : ''}>${stops(list)}</linearGradient>`
+const rad = (id, [cx, cy, r], list) =>
+    `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops(list)}</radialGradient>`
+const bars = (list, cy, w, attrs = '') => list
+    .map(([x, h]) => `<rect x="${f(x - w / 2)}" y="${f(cy - h / 2)}" width="${w}" height="${h}" rx="${w / 2}"${attrs}/>`)
+    .join('')
+
+const AMBER = [[0, '#fff5d9'], [0.5, '#ffcb73'], [1, '#f0a01c']]
+const TEAL = [[0, '#3fe0cd'], [0.5, '#00978a'], [1, '#005c54']]
+const MIC_TEAL = [[0, '#007a70'], [0.3, '#5fdccd'], [0.42, '#b8faf1'], [0.62, '#2cc4b3'], [1, '#005c54']]
+const MIC_WHITE = [[0, '#a9e9df'], [0.35, '#ffffff'], [0.7, '#e3f8f4'], [1, '#9fdcd2']]
+
+const BADGE = {
+    deep: 'radial-gradient(circle at 30% 22%, #17a597 0%, #05665d 48%, #023b36 100%)',
+    light: 'linear-gradient(150deg, #a4f5ea 0%, #6de7d8 52%, #4ccfbf 100%)',
+    pearl: 'linear-gradient(160deg, #ffffff 0%, #f1fcf9 50%, #d6f4ee 100%)',
+    night: 'radial-gradient(circle at 50% 30%, #11524b 0%, #082f2b 55%, #031917 100%)',
+    amber: 'linear-gradient(150deg, #ffe6b0 0%, #ffcb73 50%, #f2a93a 100%)',
+    teal: 'linear-gradient(150deg, #2ccab8 0%, #00897d 48%, #00534c 100%)',
+}
+const PEARL_BORDER = 'rgba(0,106,97,.14)'
+const FLAT = {
+    deep: '#00675e',
+    brand: '#6de7d8',
+    white: '#ffffff',
+    night: '#12201e',
+    amber: '#ffcb73',
+    teal: '#00897d',
+}
+
+const BUBBLE = 'M18 7H30A12 12 0 0 1 42 19V22A12 12 0 0 1 30 34H18A12 12 0 0 1 6 22V19A12 12 0 0 1 18 7Z'
+const TAIL = 'M10.5 28.5L8.6 40.4C8.4 41.8 9.9 42.6 11 41.7L21.5 33Z'
+const DOTS = [16.5, 24, 31.5]
+const MIC_HEAD = 'M24 5A8 8 0 0 1 32 13V22A8 8 0 0 1 16 22V13A8 8 0 0 1 24 5Z'
+const MIC_STAND = 'M10 22A14 14 0 0 0 38 22M24 36V42M17 42H31'
+const ORB_BARS = [[14.8, 7], [19.4, 13], [24, 19], [28.6, 13], [33.2, 7]]
+const WAVE_BARS = [[15, 5], [19.5, 10], [24, 14], [28.5, 10], [33, 5]]
+const RECEIPT = 'M13 6H35A2 2 0 0 1 37 8V41L32.67 38L28.33 41L24 38L19.67 41L15.33 38L11 41V8A2 2 0 0 1 13 6Z'
+const STACK = [29, 25.4, 21.8, 18.2]
+const SHOULDERS = 'M7 48V44A10 10 0 0 1 17 34H31A10 10 0 0 1 41 44V48Z'
+const cuteEyes = (y, xs, rx, ry, color) => xs
+    .map((x) =>
+        `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${color}"/>` +
+        `<circle cx="${f(x + rx * 0.35)}" cy="${f(y - ry * 0.35)}" r="${f(rx * 0.38)}" fill="#fff"/>` +
+        `<circle cx="${f(x - rx * 0.3)}" cy="${f(y + ry * 0.4)}" r="${f(rx * 0.18)}" fill="#fff"/>`)
+    .join('')
+const blush = (y, xs, rx = 1.8, ry = 1) => xs
+    .map((x) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="#ff8a8a" fill-opacity=".6"/>`)
+    .join('')
+const NB_EYES = {
+    open: cuteEyes(22, [20.8, 28.8], 2.2, 2.8, '#03302c'),
+    happy: '<path d="M18.8 22.5Q20.8 19.8 22.8 22.5M26.8 22.5Q28.8 19.8 30.8 22.5" stroke="#03302c" stroke-width="1.7" stroke-linecap="round"/>',
+}
+const NB_MOUTH = {
+    smile: '<path d="M22.8 26.6Q24.8 28.3 26.8 26.6" stroke="#03302c" stroke-width="1.5" stroke-linecap="round"/>',
+    open: '<path d="M22.8 26.2H26.8A2 2 0 0 1 22.8 26.2Z" fill="#03302c"/>',
+}
+const NB_LABEL = {
+    strip: (ink) => `<rect x="17.5" y="11" width="14" height="4" rx="2" fill="${ink}" fill-opacity=".9"/>`,
+    mic: (ink) =>
+        `<rect x="23.2" y="8.8" width="3.2" height="5.4" rx="1.6" fill="${ink}"/>` +
+        `<path d="M21.8 12.2A3 3 0 0 0 27.8 12.2M24.8 15.2V16.4" stroke="${ink}" stroke-width="1.1" stroke-linecap="round"/>`,
+    bars: (ink) => `<g fill="${ink}">${bars([[20.8, 1.6], [22.8, 3], [24.8, 4.4], [26.8, 3], [28.8, 1.6]], 13, 1.3)}</g>`,
+    bubble: (ink, dot) =>
+        `<rect x="20.3" y="9.3" width="9" height="6" rx="3" fill="${ink}"/>` +
+        `<path d="M21.8 14.6L21.2 17L24.2 15Z" fill="${ink}"/>` +
+        [22.6, 24.8, 27].map((x) => `<circle cx="${x}" cy="12.3" r=".75" fill="${dot}"/>`).join(''),
+}
+const notebook = (u, { dx = 0, dy = 0, label = 'strip', eyes = 'open', mouth = 'smile', cover = TEAL, pages = '#e6fffb', ink = '#e6fffb', dot = '#00675e' } = {}) =>
+    `<defs>${lin(`${u}c`, [12, 7, 37, 41], cover, true)}</defs>` +
+    `<g transform="translate(${dx} ${dy})">` +
+    '<ellipse cx="19.5" cy="41.6" rx="3" ry="1.6" fill="#00453f"/><ellipse cx="30" cy="41.6" rx="3" ry="1.6" fill="#00453f"/>' +
+    `<rect x="14" y="8" width="25" height="33" rx="5" fill="${pages}"/>` +
+    `<rect x="12" y="7" width="25" height="33" rx="5" fill="url(#${u}c)"/>` +
+    [11, 16, 21, 26, 31, 36].map((y) => `<rect x="9.5" y="${y}" width="5" height="2.2" rx="1.1" fill="#00453f"/>`).join('') +
+    NB_LABEL[label](ink, dot) +
+    NB_EYES[eyes] +
+    blush(27, [17.6, 32]) +
+    NB_MOUTH[mouth] +
+    '</g>'
+const WHITE_COVER = [[0, '#ffffff'], [1, '#d9f4ef']]
+const coinSide = (c) => `M10 ${c}A14 5 0 0 0 38 ${c}V${f(c + 3.6)}A14 5 0 0 1 10 ${f(c + 3.6)}Z`
+
+const icons = [
+    {
+        badge: BADGE.deep,
+        svg: (u) =>
+            `<defs>${lin(`${u}m`, [16, 0, 32, 0], [[0, '#007a70'], [0.3, '#7ff0e2'], [0.42, '#e6fffb'], [0.6, '#5fdccd'], [1, '#005c54']], true)}` +
+            `${lin(`${u}b`, [16, 0, 32, 0], [[0, '#b57408'], [0.35, '#ffcb73'], [0.45, '#fff0c9'], [0.65, '#ffcb73'], [1, '#c98510']], true)}` +
+            `${lin(`${u}s`, [0, 8, 0, 44], [[0, '#e6fffb'], [1, '#8ff5e8']], true)}</defs>` +
+            `<path d="${MIC_STAND}" stroke="url(#${u}s)" stroke-width="3" stroke-linecap="round"/>` +
+            `<path d="${MIC_HEAD}" fill="url(#${u}m)"/>` +
+            `<rect x="16" y="17" width="16" height="3.2" fill="url(#${u}b)"/>` +
+            `<path d="M20.5 10H27.5M19.5 13.5H28.5" stroke="#00504a" stroke-opacity=".35" stroke-width="1.2" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.light,
+        svg: (u) =>
+            `<defs>${lin(`${u}f`, [0, 0, 1, 1], [[0, '#fff3cc'], [0.45, '#ffd47e'], [1, '#ec9a17']])}` +
+            `${lin(`${u}i`, [1, 1, 0, 0], [[0, '#ffeab5'], [1, '#ffcd70']])}</defs>` +
+            `<circle cx="24.6" cy="26.8" r="17" fill="#b0700a"/>` +
+            `<circle cx="23" cy="25" r="17" fill="url(#${u}f)"/>` +
+            `<circle cx="23" cy="25" r="12.8" fill="url(#${u}i)" stroke="#cf870c" stroke-opacity=".5" stroke-width="1.2"/>` +
+            `<path d="M9.4 18.7A15 15 0 0 1 17.9 10.9" stroke="#fff" stroke-opacity=".85" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<ellipse cx="16.4" cy="28.4" rx="2.1" ry="1.25" fill="#ff8a5c" fill-opacity=".45"/>` +
+            `<ellipse cx="29.6" cy="28.4" rx="2.1" ry="1.25" fill="#ff8a5c" fill-opacity=".45"/>` +
+            `<ellipse cx="18.9" cy="23.2" rx="1.9" ry="2.6" fill="#3a2800"/>` +
+            `<ellipse cx="27.1" cy="23.2" rx="1.9" ry="2.6" fill="#3a2800"/>` +
+            `<circle cx="19.5" cy="22.2" r=".7" fill="#fff"/><circle cx="27.7" cy="22.2" r=".7" fill="#fff"/>` +
+            `<path d="M19.4 28.2Q23 31.6 26.6 28.2" stroke="#3a2800" stroke-width="2" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [6, 7, 40, 42], TEAL, true)}` +
+            `${lin(`${u}h`, [0, 0, 0, 1], [[0, '#ffffff', 0.75], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}s`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="${BUBBLE}" fill="url(#${u}b)"/>` +
+            `<path d="${TAIL}" fill="url(#${u}b)"/>` +
+            `<rect x="10" y="9.4" width="28" height="9" rx="4.5" fill="url(#${u}h)"/>` +
+            DOTS.map((x) => `<circle cx="${x}" cy="20.5" r="2.9" fill="url(#${u}s)"/>`).join(''),
+    },
+    {
+        badge: BADGE.night,
+        svg: (u) =>
+            `<defs>${rad(`${u}o`, [0.3, 0.24, 0.8], [[0, '#e9fffc'], [0.14, '#9af5ea'], [0.45, '#1fb5a5'], [1, '#03403a']])}` +
+            `${rad(`${u}a`, [0.82, 0.86, 0.62], [[0, '#ffcb73', 0.9], [1, '#ffcb73', 0]])}` +
+            `${rad(`${u}c`, [0.12, 0.82, 0.55], [[0, '#9be7ff', 0.55], [1, '#9be7ff', 0]])}</defs>` +
+            `<circle cx="24" cy="24" r="17" fill="url(#${u}o)"/>` +
+            `<circle cx="24" cy="24" r="17" fill="url(#${u}a)"/>` +
+            `<circle cx="24" cy="24" r="17" fill="url(#${u}c)"/>` +
+            `<circle cx="24" cy="24" r="16.4" stroke="#fff" stroke-opacity=".3" stroke-width=".8"/>` +
+            `<g fill="#00332e" fill-opacity=".28" transform="translate(0 .8)">${bars(ORB_BARS, 24, 3.2)}</g>` +
+            `<g fill="#fff">${bars(ORB_BARS, 24, 3.2)}</g>` +
+            `<ellipse cx="17.5" cy="14.2" rx="5.4" ry="3" transform="rotate(-32 17.5 14.2)" fill="#fff" fill-opacity=".55"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        svg: (u) =>
+            `<defs>${lin(`${u}p`, [0, 0, 0, 1], [[0, '#effffc'], [1, '#bff4eb']])}` +
+            `${lin(`${u}w`, [6, 15, 42, 40], TEAL, true)}` +
+            `${lin(`${u}h`, [0, 0, 0, 1], [[0, '#ffffff', 0.5], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}t`, [0, 22.5, 0, 33.5], [[0, '#00756b'], [1, '#004a43']], true)}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<g transform="rotate(-8 23 14.5)"><rect x="11" y="8" width="24" height="13" rx="2.5" fill="url(#${u}p)"/>` +
+            `<circle cx="23" cy="14.5" r="3" stroke="#5fc9bb" stroke-width="1.4"/></g>` +
+            `<rect x="6" y="15" width="36" height="25" rx="6" fill="url(#${u}w)"/>` +
+            `<rect x="9" y="17" width="30" height="5" rx="2.5" fill="url(#${u}h)"/>` +
+            `<rect x="29" y="22.5" width="15" height="11" rx="5.5" fill="url(#${u}t)"/>` +
+            `<circle cx="36.5" cy="28" r="2.6" fill="url(#${u}a)"/>`,
+    },
+    {
+        badge: BADGE.teal,
+        svg: (u) =>
+            `<defs>${lin(`${u}p`, [0, 0, 0, 1], [[0, '#ffffff'], [1, '#d7f7f1']])}</defs>` +
+            `<path d="${RECEIPT}" transform="translate(.8 1.2)" fill="#00302b" fill-opacity=".3"/>` +
+            `<path d="${RECEIPT}" fill="url(#${u}p)"/>` +
+            `<path d="M16 13H32M16 18H28M16 23H30" stroke="#8cc9c1" stroke-width="2" stroke-linecap="round"/>` +
+            `<path d="M16 30H24" stroke="#00675e" stroke-width="2.6" stroke-linecap="round"/>` +
+            `<path d="M28 30H32" stroke="#f5b13d" stroke-width="2.6" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.light,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [0, 13, 0, 27], [[0, '#00756b'], [1, '#00453f']], true)}` +
+            `${lin(`${u}c`, [0, 24, 0, 38], [[0, '#0b8f83'], [1, '#004d46']], true)}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M10 27A14 14 0 0 1 38 27" stroke="url(#${u}b)" stroke-width="3.6" stroke-linecap="round"/>` +
+            `<path d="M10.5 37Q11 43 19 42.5" stroke="#00453f" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<rect x="6" y="24" width="9" height="14" rx="4.5" fill="url(#${u}c)"/>` +
+            `<rect x="33" y="24" width="9" height="14" rx="4.5" fill="url(#${u}c)"/>` +
+            `<rect x="12.5" y="25.5" width="3.5" height="11" rx="1.75" fill="url(#${u}a)"/>` +
+            `<rect x="32" y="25.5" width="3.5" height="11" rx="1.75" fill="url(#${u}a)"/>` +
+            `<rect x="7.8" y="26" width="1.6" height="8" rx=".8" fill="#fff" fill-opacity=".5"/>` +
+            `<rect x="34.8" y="26" width="1.6" height="8" rx=".8" fill="#fff" fill-opacity=".5"/>` +
+            `<circle cx="20.5" cy="42.4" r="2.2" fill="url(#${u}a)"/>`,
+    },
+    {
+        badge: BADGE.deep,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [6, 7, 40, 42], [[0, '#ffffff'], [1, '#cdf3ec']], true)}` +
+            `${lin(`${u}w`, [0, 13, 0, 28], [[0, '#13b3a2'], [1, '#00675e']], true)}</defs>` +
+            `<path d="${BUBBLE}" fill="url(#${u}b)"/>` +
+            `<path d="${TAIL}" fill="url(#${u}b)"/>` +
+            `<g fill="url(#${u}w)">${bars(WAVE_BARS, 20.5, 2.8)}</g>`,
+    },
+    {
+        badge: BADGE.night,
+        svg: (u) =>
+            `<defs>${lin(`${u}s`, [10, 0, 38, 0], [[0, '#9a5f08'], [0.3, '#ffd47e'], [0.6, '#e59a1a'], [1, '#9a5f08']], true)}` +
+            `${lin(`${u}f`, [0, 0, 1, 1], [[0, '#fff3cc'], [0.5, '#ffd47e'], [1, '#f0a01c']])}</defs>` +
+            '<g transform="translate(24 25.4) scale(1.25) translate(-24 -25.4)">' +
+            STACK.map((c, i) =>
+                `<path d="${coinSide(c)}" fill="url(#${u}s)"/>` +
+                `<ellipse cx="24" cy="${c}" rx="14" ry="5" fill="url(#${u}f)"/>` +
+                (i === STACK.length - 1
+                    ? `<ellipse cx="24" cy="${c}" rx="10" ry="3.4" stroke="#d48a0c" stroke-opacity=".6" stroke-width="1.1"/>` +
+                      `<path d="M14.5 ${f(c - 1.8)}A11 3.9 0 0 1 22 ${f(c - 3.9)}" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-linecap="round"/>`
+                    : '')).join('') +
+            '</g>',
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [8, 11, 40, 39], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.55], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M24 7V11" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="5.5" r="2.6" fill="url(#${u}a)"/>` +
+            `<rect x="5" y="21" width="4" height="10" rx="2" fill="#00675e"/>` +
+            `<rect x="39" y="21" width="4" height="10" rx="2" fill="#00675e"/>` +
+            `<rect x="8" y="11" width="32" height="28" rx="9" fill="url(#${u}h)"/>` +
+            `<rect x="11" y="13.5" width="26" height="6" rx="3" fill="url(#${u}g)"/>` +
+            `<rect x="12" y="19" width="24" height="14" rx="7" fill="#03302c"/>` +
+            `<rect x="16.5" y="22.5" width="4" height="7" rx="2" fill="#9af5ea"/>` +
+            `<rect x="27.5" y="22.5" width="4" height="7" rx="2" fill="#9af5ea"/>`,
+    },
+    {
+        badge: BADGE.deep,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [0, 0, 1, 1], [[0, '#ffffff'], [0.55, '#d3f5ef'], [1, '#a9e9df']])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M24 10V5.5" stroke="#c9fff8" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="4.6" r="2.6" fill="url(#${u}a)"/>` +
+            `<circle cx="7.5" cy="26" r="3.2" fill="#8ff5e8"/>` +
+            `<circle cx="40.5" cy="26" r="3.2" fill="#8ff5e8"/>` +
+            `<circle cx="24" cy="26" r="16" fill="url(#${u}h)"/>` +
+            `<rect x="13" y="19.5" width="22" height="13" rx="6.5" fill="#03302c"/>` +
+            `<circle cx="19" cy="26" r="2.6" fill="#6de7d8"/><circle cx="29" cy="26" r="2.6" fill="#6de7d8"/>` +
+            `<circle cx="19.8" cy="25.2" r=".8" fill="#fff"/><circle cx="29.8" cy="25.2" r=".8" fill="#fff"/>`,
+    },
+    {
+        badge: BADGE.night,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [11, 11, 37, 34], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.5], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M8.5 23A15.5 15.5 0 0 1 39.5 23" stroke="#c9fff8" stroke-width="2.6" stroke-linecap="round"/>` +
+            `<rect x="11" y="11" width="26" height="23" rx="8" fill="url(#${u}h)"/>` +
+            `<rect x="14" y="13.5" width="20" height="5" rx="2.5" fill="url(#${u}g)"/>` +
+            `<rect x="14.5" y="17.5" width="19" height="11" rx="5.5" fill="#03302c"/>` +
+            `<rect x="18.5" y="20.5" width="3.4" height="5" rx="1.7" fill="#ffcb73"/>` +
+            `<rect x="26.1" y="20.5" width="3.4" height="5" rx="1.7" fill="#ffcb73"/>` +
+            `<rect x="6" y="18" width="6" height="11" rx="3" fill="#c9fff8"/>` +
+            `<rect x="36" y="18" width="6" height="11" rx="3" fill="#c9fff8"/>` +
+            `<path d="M9 29Q10 37 18 36.5" stroke="#c9fff8" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="19" cy="36.4" r="2" fill="url(#${u}a)"/>`,
+    },
+    {
+        badge: BADGE.teal,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [0, 0, 0, 1], [[0, '#ffffff'], [1, '#cfefe9']])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<circle cx="24" cy="7.5" r="5.2" fill="url(#${u}a)"/>` +
+            `<circle cx="24" cy="7.5" r="3.4" stroke="#d48a0c" stroke-opacity=".6" stroke-width="1"/>` +
+            `<rect x="6" y="21" width="3.5" height="9" rx="1.75" fill="#00453f"/>` +
+            `<rect x="38.5" y="21" width="3.5" height="9" rx="1.75" fill="#00453f"/>` +
+            `<rect x="9" y="12" width="30" height="27" rx="9" fill="url(#${u}h)"/>` +
+            `<rect x="18" y="11" width="12" height="2.6" rx="1.3" fill="#00453f"/>` +
+            `<rect x="13" y="19" width="22" height="13" rx="6.5" fill="#03302c"/>` +
+            `<rect x="18" y="22.5" width="3.6" height="6" rx="1.8" fill="#6de7d8"/>` +
+            `<rect x="26.4" y="22.5" width="3.6" height="6" rx="1.8" fill="#6de7d8"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [6, 7, 40, 42], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.5], [1, '#ffffff', 0]])}</defs>` +
+            `<path d="M24 7V4.6" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="3.6" r="2" fill="#e6fffb"/>` +
+            `<path d="${BUBBLE}" fill="url(#${u}b)"/>` +
+            `<path d="${TAIL}" fill="url(#${u}b)"/>` +
+            `<rect x="12" y="8.6" width="24" height="3.6" rx="1.8" fill="url(#${u}g)"/>` +
+            `<rect x="11" y="13" width="26" height="15" rx="7.5" fill="#03302c"/>` +
+            `<circle cx="18.5" cy="20.5" r="2.8" fill="#9af5ea"/><circle cx="29.5" cy="20.5" r="2.8" fill="#9af5ea"/>` +
+            `<circle cx="19.4" cy="19.6" r=".8" fill="#fff"/><circle cx="30.4" cy="19.6" r=".8" fill="#fff"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [7, 12, 41, 40], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.55], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M17 12L14 6M31 12L34 6" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="14" cy="6" r="2" fill="url(#${u}a)"/><circle cx="34" cy="6" r="2" fill="url(#${u}a)"/>` +
+            `<rect x="7" y="12" width="34" height="28" rx="10" fill="url(#${u}h)"/>` +
+            `<rect x="10" y="14.5" width="28" height="5" rx="2.5" fill="url(#${u}g)"/>` +
+            `<rect x="11" y="19" width="26" height="16" rx="7" fill="#03302c"/>` +
+            `<path d="M15.5 27Q18 23.5 20.5 27M27.5 27Q30 23.5 32.5 27" stroke="#9af5ea" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<path d="M20.5 30.5Q24 33 27.5 30.5" stroke="#9af5ea" stroke-width="1.8" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [7, 12, 41, 40], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.55], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M17 12L14 6M31 12L34 6" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="14" cy="6" r="2" fill="url(#${u}a)"/><circle cx="34" cy="6" r="2" fill="url(#${u}a)"/>` +
+            `<rect x="7" y="12" width="34" height="28" rx="10" fill="url(#${u}h)"/>` +
+            `<rect x="10" y="14.5" width="28" height="5" rx="2.5" fill="url(#${u}g)"/>` +
+            `<rect x="11" y="19" width="26" height="16" rx="7" fill="#03302c"/>` +
+            `<path d="M15.5 25.5Q18 22 20.5 25.5M27.5 25.5Q30 22 32.5 25.5" stroke="#9af5ea" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<ellipse cx="15.5" cy="29.5" rx="2.3" ry="1.3" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<ellipse cx="32.5" cy="29.5" rx="2.3" ry="1.3" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<path d="M20 28.5H28A4 4 0 0 1 20 28.5Z" fill="#9af5ea"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [7, 12, 41, 40], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.55], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M17 12L14 6M31 12L34 6" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="14" cy="6" r="2" fill="#e6fffb"/><circle cx="34" cy="6" r="2" fill="#e6fffb"/>` +
+            `<rect x="7" y="12" width="34" height="28" rx="10" fill="url(#${u}h)"/>` +
+            `<rect x="10" y="14.5" width="28" height="5" rx="2.5" fill="url(#${u}g)"/>` +
+            `<rect x="11" y="19" width="26" height="16" rx="7" fill="#03302c"/>` +
+            `<ellipse cx="18" cy="25.5" rx="2.2" ry="2.8" fill="#9af5ea"/>` +
+            `<circle cx="18.8" cy="24.6" r=".7" fill="#fff"/>` +
+            `<path d="M27.5 26Q30 22.5 32.5 26" stroke="#9af5ea" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<ellipse cx="15" cy="30" rx="2" ry="1.1" fill="#ff8a8a" fill-opacity=".5"/>` +
+            `<ellipse cx="33" cy="30" rx="2" ry="1.1" fill="#ff8a8a" fill-opacity=".5"/>` +
+            `<path d="M18.5 29.5Q24 34 29.5 29.5" stroke="#9af5ea" stroke-width="2" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.night,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [7, 12, 41, 40], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.55], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M17 12L14 6M31 12L34 6" stroke="#c9fff8" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="14" cy="6" r="2" fill="url(#${u}a)"/><circle cx="34" cy="6" r="2" fill="url(#${u}a)"/>` +
+            `<rect x="7" y="12" width="34" height="28" rx="10" fill="url(#${u}h)"/>` +
+            `<rect x="10" y="14.5" width="28" height="5" rx="2.5" fill="url(#${u}g)"/>` +
+            `<rect x="11" y="19" width="26" height="16" rx="7" fill="#03302c"/>` +
+            `<circle cx="18" cy="26" r="3.6" fill="#9af5ea"/><circle cx="30" cy="26" r="3.6" fill="#9af5ea"/>` +
+            `<circle cx="19.3" cy="24.6" r="1.2" fill="#fff"/><circle cx="31.3" cy="24.6" r="1.2" fill="#fff"/>` +
+            `<circle cx="17" cy="27.2" r=".6" fill="#fff"/><circle cx="29" cy="27.2" r=".6" fill="#fff"/>` +
+            `<ellipse cx="14.2" cy="30.8" rx="1.8" ry="1" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<ellipse cx="33.8" cy="30.8" rx="1.8" ry="1" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<path d="M22 31Q24 32.8 26 31" stroke="#9af5ea" stroke-width="1.6" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.deep,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [0, 0, 1, 1], [[0, '#ffffff'], [0.55, '#d3f5ef'], [1, '#a9e9df']])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M24 13V7.5" stroke="#c9fff8" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="6" r="2.6" fill="url(#${u}a)"/>` +
+            `<circle cx="6.5" cy="27" r="3" fill="url(#${u}a)"/>` +
+            `<circle cx="41.5" cy="27" r="3" fill="url(#${u}a)"/>` +
+            `<rect x="6" y="13" width="36" height="28" rx="14" fill="url(#${u}h)"/>` +
+            `<rect x="11" y="19" width="26" height="16" rx="8" fill="#03302c"/>` +
+            `<path d="M15.5 25.5Q18 22 20.5 25.5M27.5 25.5Q30 22 32.5 25.5" stroke="#9af5ea" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<ellipse cx="15.5" cy="29.5" rx="2.3" ry="1.3" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<ellipse cx="32.5" cy="29.5" rx="2.3" ry="1.3" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<path d="M20 28.5H28A4 4 0 0 1 20 28.5Z" fill="#9af5ea"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [4, 13, 36, 40], TEAL, true)}` +
+            `${lin(`${u}g`, [0, 0, 0, 1], [[0, '#ffffff', 0.55], [1, '#ffffff', 0]])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M14 13L11.5 7M26 13L28.5 7" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="11.5" cy="7" r="2" fill="url(#${u}a)"/><circle cx="28.5" cy="7" r="2" fill="url(#${u}a)"/>` +
+            `<path d="M35 31Q41 30 41.5 21" stroke="#00756b" stroke-width="3.2" stroke-linecap="round"/>` +
+            `<circle cx="41.8" cy="18.6" r="3" fill="#13b3a2"/>` +
+            `<rect x="4" y="13" width="32" height="27" rx="10" fill="url(#${u}h)"/>` +
+            `<rect x="7" y="15.5" width="26" height="5" rx="2.5" fill="url(#${u}g)"/>` +
+            `<rect x="8" y="20" width="24" height="15" rx="7" fill="#03302c"/>` +
+            `<path d="M12 27.5Q14.5 24 17 27.5M23 27.5Q25.5 24 28 27.5" stroke="#9af5ea" stroke-width="2.2" stroke-linecap="round"/>` +
+            `<path d="M16.5 29.5H23.5A3.5 3.5 0 0 1 16.5 29.5Z" fill="#9af5ea"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [13, 0, 35, 0], MIC_TEAL, true)}` +
+            `${lin(`${u}s`, [0, 8, 0, 44], [[0, '#00897d'], [1, '#00534c']], true)}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M9 21A15 15 0 0 0 39 21M24 36V42M17 42H31" stroke="url(#${u}s)" stroke-width="3" stroke-linecap="round"/>` +
+            `<circle cx="9" cy="19.5" r="2.6" fill="url(#${u}a)"/><circle cx="39" cy="19.5" r="2.6" fill="url(#${u}a)"/>` +
+            `<rect x="13" y="4" width="22" height="27" rx="11" fill="url(#${u}h)"/>` +
+            `<rect x="16.5" y="10" width="15" height="12" rx="6" fill="#03302c"/>` +
+            `<path d="M18.8 16.5Q20.5 14 22.2 16.5M25.8 16.5Q27.5 14 29.2 16.5" stroke="#9af5ea" stroke-width="1.8" stroke-linecap="round"/>` +
+            `<path d="M21.5 18.2H26.5A2.5 2.5 0 0 1 21.5 18.2Z" fill="#9af5ea"/>` +
+            `<rect x="14.5" y="23.4" width="19" height="2.6" rx="1.3" fill="url(#${u}a)"/>`,
+    },
+    {
+        badge: BADGE.deep,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [13, 0, 35, 0], MIC_WHITE, true)}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M24 8V4.6" stroke="#c9fff8" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="3.8" r="2.2" fill="url(#${u}a)"/>` +
+            `<path d="M9 22A15 15 0 0 0 39 22M24 37V42.5M17 42.5H31" stroke="#8ff5e8" stroke-width="3" stroke-linecap="round"/>` +
+            `<rect x="13" y="8" width="22" height="24" rx="11" fill="url(#${u}h)"/>` +
+            `<rect x="16.5" y="13" width="15" height="11" rx="5.5" fill="#03302c"/>` +
+            `<circle cx="20.5" cy="18.2" r="1.9" fill="#6de7d8"/><circle cx="27.5" cy="18.2" r="1.9" fill="#6de7d8"/>` +
+            `<circle cx="21.2" cy="17.5" r=".6" fill="#fff"/><circle cx="28.2" cy="17.5" r=".6" fill="#fff"/>` +
+            `<path d="M22.2 21.3Q24 22.6 25.8 21.3" stroke="#6de7d8" stroke-width="1.4" stroke-linecap="round"/>` +
+            `<ellipse cx="18" cy="27" rx="1.8" ry="1" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<ellipse cx="30" cy="27" rx="1.8" ry="1" fill="#ff8a8a" fill-opacity=".55"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [13, 0, 35, 0], MIC_TEAL, true)}</defs>` +
+            `<path d="M13.5 23Q8.5 25 9 30.5M34.5 20Q40 18.5 40.3 11.5M24 31V41M16.5 42H31.5" stroke="#00675e" stroke-width="2.8" stroke-linecap="round"/>` +
+            `<circle cx="9" cy="32" r="2.4" fill="#e6fffb"/><circle cx="40.5" cy="9.4" r="2.6" fill="#e6fffb"/>` +
+            `<rect x="13" y="5" width="22" height="26" rx="11" fill="url(#${u}h)"/>` +
+            `<rect x="16.5" y="11" width="15" height="12" rx="6" fill="#03302c"/>` +
+            `<path d="M18.8 17.5Q20.5 15 22.2 17.5M25.8 17.5Q27.5 15 29.2 17.5" stroke="#9af5ea" stroke-width="1.8" stroke-linecap="round"/>` +
+            `<path d="M21.5 19.2H26.5A2.5 2.5 0 0 1 21.5 19.2Z" fill="#9af5ea"/>` +
+            `<ellipse cx="18.5" cy="26.3" rx="1.8" ry="1" fill="#ff8a8a" fill-opacity=".55"/>` +
+            `<ellipse cx="29.5" cy="26.3" rx="1.8" ry="1" fill="#ff8a8a" fill-opacity=".55"/>`,
+    },
+    {
+        badge: BADGE.night,
+        svg: (u) =>
+            `<defs>${lin(`${u}d`, [18.5, 0, 29.5, 0], [[0, '#004d46'], [0.35, '#13b3a2'], [0.7, '#00675e'], [1, '#003a35']], true)}` +
+            `${lin(`${u}r`, [17.5, 0, 30.5, 0], [[0, '#b57408'], [0.35, '#ffcb73'], [0.45, '#fff0c9'], [0.65, '#ffcb73'], [1, '#c98510']], true)}` +
+            `${rad(`${u}b`, [0.35, 0.3, 0.75], [[0, '#e6fffb'], [0.3, '#9af5ea'], [0.7, '#1fb5a5'], [1, '#00675e']])}</defs>` +
+            `<path d="M18.5 27H29.5L27 42A2.5 2.5 0 0 1 24.5 44H23.5A2.5 2.5 0 0 1 21 42Z" fill="url(#${u}d)"/>` +
+            `<rect x="17.5" y="25" width="13" height="4" rx="2" fill="url(#${u}r)"/>` +
+            `<circle cx="24" cy="15.5" r="11.5" fill="url(#${u}b)"/>` +
+            `<ellipse cx="19" cy="8.5" rx="3.5" ry="2" transform="rotate(-25 19 8.5)" fill="#fff" fill-opacity=".6"/>` +
+            `<rect x="15" y="11" width="18" height="10" rx="5" fill="#03302c"/>` +
+            `<path d="M17.8 17Q19.5 14.6 21.2 17M26.8 17Q28.5 14.6 30.2 17" stroke="#9af5ea" stroke-width="1.8" stroke-linecap="round"/>` +
+            `<path d="M22.5 18.5Q24 19.6 25.5 18.5" stroke="#9af5ea" stroke-width="1.4" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.teal,
+        svg: (u) =>
+            `<defs>${lin(`${u}h`, [13, 0, 35, 0], MIC_WHITE, true)}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="M13.5 23Q9.5 24.5 9.5 29M34.5 23Q38.5 24.5 38.5 29M19.5 34V39.5M28.5 34V39.5" stroke="#e6fffb" stroke-width="2.6" stroke-linecap="round"/>` +
+            `<circle cx="9.5" cy="30.5" r="2.2" fill="url(#${u}a)"/><circle cx="38.5" cy="30.5" r="2.2" fill="url(#${u}a)"/>` +
+            `<ellipse cx="18.6" cy="41.2" rx="3" ry="1.8" fill="url(#${u}a)"/><ellipse cx="29.4" cy="41.2" rx="3" ry="1.8" fill="url(#${u}a)"/>` +
+            `<rect x="13" y="5" width="22" height="29" rx="11" fill="url(#${u}h)"/>` +
+            `<rect x="16.5" y="11" width="15" height="12" rx="6" fill="#03302c"/>` +
+            `<circle cx="20.5" cy="16.8" r="1.9" fill="#6de7d8"/><circle cx="27.5" cy="16.8" r="1.9" fill="#6de7d8"/>` +
+            `<circle cx="21.2" cy="16.1" r=".6" fill="#fff"/><circle cx="28.2" cy="16.1" r=".6" fill="#fff"/>` +
+            `<path d="M21.5 19.4H26.5A2.5 2.5 0 0 1 21.5 19.4Z" fill="#6de7d8"/>` +
+            `<rect x="15" y="27" width="18" height="2.6" rx="1.3" fill="url(#${u}a)"/>`,
+    },
+    {
+        badge: FLAT.deep,
+        svg: () =>
+            `<path d="M24 11V6" stroke="#fff" stroke-width="3" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="5" r="2.6" fill="#ffcb73"/>` +
+            `<rect x="8" y="11" width="32" height="28" rx="10" fill="#fff"/>` +
+            `<circle cx="18" cy="21" r="2.6" fill="#00675e"/><circle cx="30" cy="21" r="2.6" fill="#00675e"/>` +
+            `<g fill="#00675e">${bars([[17, 2.4], [20.5, 5], [24, 7.5], [27.5, 5], [31, 2.4]], 30.5, 2.2)}</g>`,
+    },
+    {
+        badge: FLAT.brand,
+        svg: () =>
+            `<rect x="17" y="8" width="14" height="22" rx="7" fill="#003732"/>` +
+            `<circle cx="21.5" cy="17" r="1.6" fill="#6de7d8"/><circle cx="26.5" cy="17" r="1.6" fill="#6de7d8"/>` +
+            `<path d="M24 30V38M18.5 38H29.5M14.47 13.5A11 11 0 0 0 14.47 24.5M10.14 11A16 16 0 0 0 10.14 27M33.53 13.5A11 11 0 0 1 33.53 24.5M37.86 11A16 16 0 0 1 37.86 27" stroke="#003732" stroke-width="2.6" stroke-linecap="round"/>`,
+    },
+    {
+        badge: FLAT.night,
+        svg: () =>
+            `<path d="M24 22V15.6" stroke="#6de7d8" stroke-width="2.6" stroke-linecap="round"/>` +
+            `<path d="M19.76 8.76A6 6 0 0 1 28.24 8.76M16.93 5.93A10 10 0 0 1 31.07 5.93" stroke="#ffcb73" stroke-width="2.4" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="13" r="2.6" fill="#ffcb73"/>` +
+            `<rect x="10" y="22" width="28" height="20" rx="8" fill="#6de7d8"/>` +
+            `<circle cx="19" cy="31" r="2.4" fill="#12201e"/><circle cx="29" cy="31" r="2.4" fill="#12201e"/>`,
+    },
+    {
+        badge: FLAT.white,
+        border: PEARL_BORDER,
+        svg: () =>
+            `<path d="M24 8V5.4M10 22A14 14 0 0 0 38 22M24 36V42M17 42H31" stroke="#00675e" stroke-width="3" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="4" r="2.2" fill="#f5a524"/>` +
+            `<rect x="15" y="8" width="18" height="24" rx="9" fill="#00675e"/>` +
+            `<rect x="19" y="16" width="3" height="5" rx="1.5" fill="#fff"/><rect x="26" y="16" width="3" height="5" rx="1.5" fill="#fff"/>`,
+    },
+    {
+        badge: FLAT.amber,
+        svg: () =>
+            `<g fill="#00675e">${bars([[8, 10], [14, 18], [34, 18], [40, 10]], 24, 3.6)}</g>` +
+            `<path d="M24 11V7.5" stroke="#00675e" stroke-width="2.4" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="6" r="2" fill="#00675e"/>` +
+            `<rect x="19" y="11" width="10" height="26" rx="5" fill="#00675e"/>` +
+            `<circle cx="22" cy="19.5" r="1.4" fill="#ffcb73"/><circle cx="26" cy="19.5" r="1.4" fill="#ffcb73"/>`,
+    },
+    {
+        badge: FLAT.teal,
+        svg: () =>
+            `<path d="${BUBBLE}" fill="#fff"/><path d="${TAIL}" fill="#fff"/>` +
+            `<circle cx="18" cy="16.5" r="2.2" fill="#00897d"/><circle cx="30" cy="16.5" r="2.2" fill="#00897d"/>` +
+            `<g fill="#00897d">${bars([[19, 2], [21.5, 4], [24, 6.5], [26.5, 4], [29, 2]], 25.5, 1.8)}</g>`,
+    },
+    {
+        badge: FLAT.brand,
+        svg: () =>
+            `<path d="M24 10V6" stroke="#003732" stroke-width="2.6" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="4.8" r="2.4" fill="#003732"/>` +
+            `<circle cx="24" cy="25" r="15" fill="#003732"/>` +
+            `<circle cx="18.5" cy="22" r="2.2" fill="#6de7d8"/><circle cx="29.5" cy="22" r="2.2" fill="#6de7d8"/>` +
+            `<path d="M16.5 30.5q1.875-3 3.75 0t3.75 0 3.75 0 3.75 0" stroke="#6de7d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    },
+    {
+        badge: FLAT.night,
+        svg: () =>
+            `<path d="M24 13V9.6" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="8" r="2" fill="#ffcb73"/>` +
+            `<rect x="13" y="13" width="22" height="22" rx="7" fill="#fff"/>` +
+            `<rect x="18" y="19.5" width="3" height="5" rx="1.5" fill="#12201e"/><rect x="27" y="19.5" width="3" height="5" rx="1.5" fill="#12201e"/>` +
+            `<path d="M21 28.5Q24 31 27 28.5" stroke="#12201e" stroke-width="2" stroke-linecap="round"/>` +
+            `<path d="M10.4 17.66A15 15 0 0 0 10.4 30.34M5.87 15.55A20 20 0 0 0 5.87 32.45M37.6 17.66A15 15 0 0 1 37.6 30.34M42.13 15.55A20 20 0 0 1 42.13 32.45" stroke="#ffcb73" stroke-width="2.4" stroke-linecap="round"/>`,
+    },
+    {
+        badge: FLAT.deep,
+        svg: () =>
+            `<rect x="17.5" y="6.5" width="13" height="23" rx="6.5" stroke="#fff" stroke-width="3"/>` +
+            `<g fill="#ffcb73">${bars([[21, 5], [24, 10], [27, 5]], 18, 2)}</g>` +
+            `<path d="M10 21A14 14 0 0 0 38 21M24 35V42M17 42H31" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`,
+    },
+    {
+        badge: FLAT.white,
+        border: PEARL_BORDER,
+        svg: () =>
+            `<path d="M22 14V9.5" stroke="#00675e" stroke-width="3" stroke-linecap="round"/>` +
+            `<circle cx="22" cy="7.5" r="2.2" fill="#f5a524"/>` +
+            `<rect x="9.5" y="14.5" width="25" height="23" rx="8" stroke="#00675e" stroke-width="3"/>` +
+            `<circle cx="17" cy="24" r="2" fill="#00675e"/><circle cx="27" cy="24" r="2" fill="#00675e"/>` +
+            `<path d="M18.5 30Q22 32.5 25.5 30" stroke="#00675e" stroke-width="2.4" stroke-linecap="round"/>` +
+            `<path d="M37.16 17.25A17.5 17.5 0 0 1 37.16 34.75M41.49 14.75A22.5 22.5 0 0 1 41.49 37.25" stroke="#00897d" stroke-width="2.6" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [0, 34, 0, 48], [[0, '#13b3a2'], [1, '#00675e']], true)}` +
+            `${lin(`${u}h`, [0, 0, 0, 1], [[0, '#ffffff'], [1, '#d9f4ef']])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="${SHOULDERS}" fill="url(#${u}b)"/>` +
+            `<circle cx="24" cy="41.5" r="2.2" fill="url(#${u}a)"/>` +
+            `<path d="M24 9V5.5" stroke="#00675e" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="24" cy="4.6" r="2.4" fill="url(#${u}a)"/>` +
+            `<circle cx="9.6" cy="21.5" r="2.8" fill="#00675e"/><circle cx="38.4" cy="21.5" r="2.8" fill="#00675e"/>` +
+            `<rect x="10" y="9" width="28" height="25" rx="12" fill="url(#${u}h)"/>` +
+            `<rect x="13.5" y="14" width="21" height="15" rx="7.5" fill="#03302c"/>` +
+            cuteEyes(21.3, [19, 29], 2.6, 3.2, '#9af5ea') +
+            blush(26, [15.9, 32.1]) +
+            `<path d="M22.6 25.6Q24 26.8 25.4 25.6" stroke="#9af5ea" stroke-width="1.3" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.deep,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [0, 34, 0, 48], [[0, '#e6fffb'], [1, '#b5e9e0']], true)}` +
+            `${lin(`${u}h`, [11, 9, 37, 35], TEAL, true)}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<path d="${SHOULDERS}" fill="url(#${u}b)"/>` +
+            `<circle cx="24" cy="22" r="13" fill="url(#${u}h)"/>` +
+            `<rect x="14.5" y="16.5" width="19" height="13" rx="6.5" fill="#03302c"/>` +
+            `<path d="M17.8 23Q19.5 20.5 21.2 23M26.8 23Q28.5 20.5 30.2 23" stroke="#9af5ea" stroke-width="1.8" stroke-linecap="round"/>` +
+            blush(25.8, [17, 31]) +
+            `<path d="M22 25.2H26A2 2 0 0 1 22 25.2Z" fill="#9af5ea"/>` +
+            `<path d="M9.5 22A14.5 14.5 0 0 1 38.5 22M10 26.5Q11 32 17 32" stroke="#ffcb73" stroke-width="2" stroke-linecap="round"/>` +
+            `<rect x="7.5" y="18.5" width="5" height="8" rx="2.5" fill="url(#${u}a)"/>` +
+            `<rect x="35.5" y="18.5" width="5" height="8" rx="2.5" fill="url(#${u}a)"/>` +
+            `<circle cx="17.8" cy="32" r="1.6" fill="#fff"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [8, 14, 40, 48], [[0, '#3fe0cd'], [0.55, '#00978a'], [1, '#006a61']], true)}</defs>` +
+            `<circle cx="14" cy="15.5" r="3.6" fill="#1fb5a5"/><circle cx="34" cy="15.5" r="3.6" fill="#1fb5a5"/>` +
+            `<circle cx="14" cy="15.5" r="1.7" fill="#ffcb73"/><circle cx="34" cy="15.5" r="1.7" fill="#ffcb73"/>` +
+            `<path d="M8 48V30A16 16 0 0 1 40 30V48Z" fill="url(#${u}b)"/>` +
+            `<ellipse cx="24" cy="44" rx="8" ry="6" fill="#c9fff8" fill-opacity=".45"/>` +
+            `<circle cx="18.5" cy="28" r="3.8" fill="#fff"/><circle cx="29.5" cy="28" r="3.8" fill="#fff"/>` +
+            `<circle cx="19.1" cy="28.6" r="2.4" fill="#03302c"/><circle cx="30.1" cy="28.6" r="2.4" fill="#03302c"/>` +
+            `<circle cx="19.9" cy="27.6" r=".9" fill="#fff"/><circle cx="30.9" cy="27.6" r=".9" fill="#fff"/>` +
+            blush(33.5, [14.2, 33.8], 2.1, 1.2) +
+            `<path d="M21.5 33Q22.75 34.6 24 33Q25.25 34.6 26.5 33" stroke="#03302c" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [0, 34, 0, 48], [[0, '#13b3a2'], [1, '#00675e']], true)}` +
+            `${lin(`${u}h`, [13, 0, 35, 0], MIC_TEAL, true)}` +
+            `${lin(`${u}a`, [17, 0, 31, 0], [[0, '#c98510'], [0.4, '#ffcb73'], [0.5, '#fff0c9'], [0.65, '#ffcb73'], [1, '#c98510']], true)}</defs>` +
+            `<path d="${SHOULDERS}" fill="url(#${u}b)"/>` +
+            `<rect x="13" y="6" width="22" height="28" rx="11" fill="url(#${u}h)"/>` +
+            `<path d="M19 10H29M17 13H31" stroke="#00504a" stroke-opacity=".3" stroke-width="1.1" stroke-linecap="round"/>` +
+            `<rect x="15.5" y="16" width="17" height="12" rx="6" fill="#03302c"/>` +
+            cuteEyes(21.6, [20.2, 27.8], 2.1, 2.6, '#9af5ea') +
+            `<path d="M22.8 25.4Q24 26.4 25.2 25.4" stroke="#9af5ea" stroke-width="1.2" stroke-linecap="round"/>` +
+            blush(30, [18.5, 29.5]) +
+            `<rect x="17" y="32.5" width="14" height="3" rx="1.5" fill="url(#${u}a)"/>`,
+    },
+    {
+        badge: BADGE.teal,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}b`, [0, 34, 0, 48], [[0, '#ffe1a0'], [1, '#f2a93a']], true)}` +
+            `${lin(`${u}h`, [0, 0, 0, 1], [[0, '#ffffff'], [1, '#d9f4ef']])}</defs>` +
+            `<path d="${SHOULDERS}" fill="url(#${u}b)"/>` +
+            `<path d="M24 11V6.5" stroke="#e6fffb" stroke-width="1.8" stroke-linecap="round"/>` +
+            `<path d="M24 7.5C21 4 17 4.5 16 6.5C18 9 22 9.5 24 7.5Z" fill="#c9fff8"/>` +
+            `<path d="M24 6.5C26.5 3 30.5 3 31.5 5C29.5 8 26 8.5 24 6.5Z" fill="#ffcb73"/>` +
+            `<rect x="9" y="11" width="30" height="24" rx="11" fill="url(#${u}h)"/>` +
+            `<rect x="12.5" y="16" width="23" height="14" rx="7" fill="#03302c"/>` +
+            `<path d="M16.8 22.5Q18.7 19.8 20.6 22.5M27.4 22.5Q29.3 19.8 31.2 22.5" stroke="#9af5ea" stroke-width="1.9" stroke-linecap="round"/>` +
+            blush(25.5, [15.8, 32.2]) +
+            `<path d="M21.8 24.8H26.2A2.2 2.2 0 0 1 21.8 24.8Z" fill="#9af5ea"/>`,
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}c`, [12, 7, 37, 41], TEAL, true)}</defs>` +
+            `<ellipse cx="19.5" cy="41.6" rx="3" ry="1.6" fill="#00453f"/><ellipse cx="30" cy="41.6" rx="3" ry="1.6" fill="#00453f"/>` +
+            `<rect x="14" y="8" width="25" height="33" rx="5" fill="#e6fffb"/>` +
+            `<rect x="12" y="7" width="25" height="33" rx="5" fill="url(#${u}c)"/>` +
+            [11, 16, 21, 26, 31, 36].map((y) => `<rect x="9.5" y="${y}" width="5" height="2.2" rx="1.1" fill="#00453f"/>`).join('') +
+            `<rect x="17.5" y="11" width="14" height="4" rx="2" fill="#e6fffb" fill-opacity=".9"/>` +
+            cuteEyes(22, [20.8, 28.8], 2.2, 2.8, '#03302c') +
+            blush(27, [17.6, 32]) +
+            `<path d="M22.8 26.6Q24.8 28.3 26.8 26.6" stroke="#03302c" stroke-width="1.5" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}c`, [0, 0, 0, 1], [[0, '#ffffff'], [1, '#e3f7f3']])}</defs>` +
+            `<ellipse cx="18" cy="42" rx="2.8" ry="1.5" fill="#00675e"/><ellipse cx="29" cy="42" rx="2.8" ry="1.5" fill="#00675e"/>` +
+            `<rect x="10" y="7" width="26" height="34" rx="5" fill="url(#${u}c)"/>` +
+            `<path d="M15 7H17V41H15A5 5 0 0 1 10 36V12A5 5 0 0 1 15 7Z" fill="#00897d"/>` +
+            `<rect x="32.5" y="7" width="1.8" height="34" fill="#00675e"/>` +
+            cuteEyes(21, [22.5, 29], 2, 2.6, '#03302c') +
+            blush(26, [20, 31]) +
+            `<path d="M24.3 25.3Q25.75 26.6 27.2 25.3" stroke="#03302c" stroke-width="1.4" stroke-linecap="round"/>` +
+            `<g transform="rotate(25 39 30)"><rect x="37" y="20" width="4.2" height="15" rx=".8" fill="#00675e"/>` +
+            `<rect x="37" y="17.5" width="4.2" height="3.2" rx="1" fill="#ff8a8a"/>` +
+            `<path d="M37 35L39.1 39.5L41.2 35Z" fill="#fff3d6"/><path d="M38.6 38.4L39.1 39.5L39.6 38.4Z" fill="#03302c"/></g>` +
+            `<circle cx="38.2" cy="31.2" r="1.9" fill="#fff"/>`,
+    },
+    {
+        badge: BADGE.deep,
+        full: true,
+        svg: () =>
+            `<path d="M4.5 14Q14 10 24 14Q34 10 43.5 14V39Q34 35 24 39Q14 35 4.5 39Z" fill="#ffcb73"/>` +
+            `<path d="M7 12Q15.5 8.5 24 12.5V37Q15.5 33.5 7 36.5Z" fill="#ffffff"/>` +
+            `<path d="M41 12Q32.5 8.5 24 12.5V37Q32.5 33.5 41 36.5Z" fill="#e6fffb"/>` +
+            `<path d="M24 12.5V37" stroke="#9fd8cf" stroke-width="1"/>` +
+            `<path d="M25 37.5V43.5L26.6 42L28.2 43.5V37Z" fill="#ff8a8a"/>` +
+            cuteEyes(21.5, [16.5, 31.5], 2.2, 2.8, '#03302c') +
+            blush(26.5, [12.8, 35.2]) +
+            `<path d="M21 26.5Q24 29.5 27 26.5" stroke="#03302c" stroke-width="1.6" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}c`, [10, 10, 38, 41], TEAL, true)}</defs>` +
+            `<ellipse cx="18" cy="42.4" rx="2.8" ry="1.5" fill="#00453f"/><ellipse cx="30" cy="42.4" rx="2.8" ry="1.5" fill="#00453f"/>` +
+            `<rect x="10" y="10" width="28" height="31" rx="5" fill="url(#${u}c)"/>` +
+            `<path d="M15 10H33A5 5 0 0 1 38 15V16H10V15A5 5 0 0 1 15 10Z" fill="#00534c"/>` +
+            [15, 19.5, 24, 28.5, 33].map((x) => `<rect x="${f(x - 1.1)}" y="7.5" width="2.2" height="5.5" rx="1.1" fill="#f5a524"/>`).join('') +
+            `<circle cx="19" cy="25" r="4" fill="#e6fffb" stroke="#03302c" stroke-width="1.3"/><circle cx="29" cy="25" r="4" fill="#e6fffb" stroke="#03302c" stroke-width="1.3"/>` +
+            `<path d="M23 24.5Q24 23.8 25 24.5" stroke="#03302c" stroke-width="1.3" stroke-linecap="round"/>` +
+            cuteEyes(25.2, [19, 29], 1.6, 2, '#03302c') +
+            blush(31.5, [14.5, 33.5]) +
+            `<path d="M21.5 31.5Q24 33.8 26.5 31.5" stroke="#03302c" stroke-width="1.6" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.night,
+        full: true,
+        svg: (u) =>
+            `<defs>${lin(`${u}c`, [0, 0, 0, 1], [[0, '#ffffff'], [1, '#d9f4ef']])}` +
+            `${lin(`${u}a`, [0, 0, 1, 1], AMBER)}</defs>` +
+            `<rect x="12" y="6" width="25" height="33" rx="5" fill="url(#${u}c)"/>` +
+            [10, 15, 20, 25, 30, 35].map((y) => `<rect x="9.5" y="${y}" width="5" height="2.2" rx="1.1" fill="#6de7d8"/>`).join('') +
+            cuteEyes(17.5, [20.5, 28.5], 2.1, 2.7, '#03302c') +
+            blush(22.6, [17.4, 31.6]) +
+            `<path d="M22.8 22.2Q24.5 23.6 26.2 22.2" stroke="#03302c" stroke-width="1.4" stroke-linecap="round"/>` +
+            `<circle cx="30.5" cy="33.5" r="7" fill="url(#${u}a)"/>` +
+            `<circle cx="30.5" cy="33.5" r="4.8" stroke="#d48a0c" stroke-opacity=".6" stroke-width="1"/>` +
+            `<circle cx="23.8" cy="33" r="1.9" fill="#13b3a2"/><circle cx="37.2" cy="32" r="1.9" fill="#13b3a2"/>`,
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) => notebook(u, { label: 'mic' }),
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            notebook(u, { dx: -3, mouth: 'open' }) +
+            `<defs>${rad(`${u}m`, [0.35, 0.3, 0.75], [[0, '#4f7e78'], [0.6, '#00453f'], [1, '#03302c']])}</defs>` +
+            `<path d="M33.5 31Q37 32 38.4 30.2" stroke="#00453f" stroke-width="2" stroke-linecap="round"/>` +
+            `<g transform="rotate(-12 38.5 27)"><path d="M36.6 25.5H40.4L39.4 33.5A.9 .9 0 0 1 37.6 33.5Z" fill="#00453f"/>` +
+            `<rect x="36.2" y="23.6" width="4.6" height="2.2" rx="1.1" fill="#ffcb73"/>` +
+            `<circle cx="38.5" cy="20" r="4" fill="url(#${u}m)"/>` +
+            `<path d="M34.8 19.2H42.2M35.2 21.6H41.8M38.5 16.2V23.8" stroke="#6de7d8" stroke-opacity=".45" stroke-width=".6"/>` +
+            `<ellipse cx="37" cy="18.2" rx="1.3" ry=".8" fill="#fff" fill-opacity=".5"/></g>` +
+            `<circle cx="39" cy="29.5" r="1.9" fill="#00453f"/>`,
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            `<path d="M9.5 20A15 15 0 0 1 39.5 20" stroke="#00453f" stroke-width="2.2" stroke-linecap="round"/>` +
+            notebook(u) +
+            `<rect x="7.5" y="16.5" width="4.5" height="8" rx="2.25" fill="#00453f"/>` +
+            `<rect x="37" y="16.5" width="4.5" height="8" rx="2.25" fill="#00453f"/>` +
+            `<path d="M39.2 24.5Q39 29.5 31 28.6" stroke="#00453f" stroke-width="1.5" stroke-linecap="round"/>` +
+            `<circle cx="30.4" cy="28.6" r="1.5" fill="#ffcb73"/>`,
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            notebook(u, { dx: -3, dy: 2, mouth: 'open' }) +
+            `<rect x="31" y="3.5" width="11" height="8" rx="4" fill="#fff"/>` +
+            `<path d="M33.5 11L32.6 14.2L36.5 11.2Z" fill="#fff"/>` +
+            [33.8, 36.5, 39.2].map((x) => `<circle cx="${x}" cy="7.5" r=".95" fill="#00675e"/>`).join(''),
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            notebook(u, { dx: -3.5, mouth: 'open' }) +
+            `<path d="M37.16 19.6A17.5 17.5 0 0 1 37.16 34.4M40.79 17.91A21.5 21.5 0 0 1 40.79 36.09" stroke="#00453f" stroke-width="2" stroke-linecap="round"/>`,
+    },
+    {
+        badge: BADGE.pearl,
+        border: PEARL_BORDER,
+        full: true,
+        svg: (u) =>
+            `<path d="M24.8 7V3.8" stroke="#00453f" stroke-width="1.8" stroke-linecap="round"/>` +
+            `<circle cx="24.8" cy="3.1" r="1.9" fill="#f5a524"/>` +
+            notebook(u, { label: 'mic' }),
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            notebook(u, { dx: -2, label: 'mic', eyes: 'happy', mouth: 'open' }) +
+            `<path d="M34.5 27Q39.5 26 39.8 20" stroke="#00453f" stroke-width="2" stroke-linecap="round"/>` +
+            `<circle cx="39.9" cy="18.1" r="2.1" fill="#00453f"/>`,
+    },
+    {
+        badge: BADGE.amber,
+        full: true,
+        svg: (u) =>
+            `<path d="M10 18.5A14.5 14.5 0 0 1 39 18.5" stroke="#00453f" stroke-width="2.4" stroke-linecap="round"/>` +
+            notebook(u, { label: 'bars', eyes: 'happy' }) +
+            `<rect x="7.5" y="15" width="5" height="9" rx="2.5" fill="#e6fffb" stroke="#00453f" stroke-width="1"/>` +
+            `<rect x="36.5" y="15" width="5" height="9" rx="2.5" fill="#e6fffb" stroke="#00453f" stroke-width="1"/>`,
+    },
+    {
+        badge: BADGE.light,
+        full: true,
+        svg: (u) =>
+            notebook(u, { dx: -3.5, mouth: 'open' }) +
+            `<path d="M32.5 29A5 5 0 0 0 42.5 29M37.5 34V39.2M34 39.8H41" stroke="#00453f" stroke-width="1.8" stroke-linecap="round"/>` +
+            `<rect x="34.5" y="22" width="6" height="10.5" rx="3" fill="#e6fffb" stroke="#00453f" stroke-width="1.2"/>` +
+            `<rect x="35.1" y="27.2" width="4.8" height="1.8" fill="#ffcb73"/>`,
+    },
+    {
+        badge: BADGE.teal,
+        full: true,
+        svg: (u) => notebook(u, { cover: WHITE_COVER, pages: '#6de7d8', label: 'bubble', ink: '#00897d', dot: '#fff' }),
+    },
+]
+
+document.getElementById('icons').innerHTML = icons
+    .map((icon, i) =>
+        `<div class="icon" style="background:${icon.badge}${icon.border ? `;box-shadow:inset 0 0 0 1px ${icon.border}` : ''}">` +
+        `<svg viewBox="0 0 48 48" width="${icon.full ? 112 : 80}" height="${icon.full ? 112 : 80}" fill="none" aria-hidden="true">${icon.svg(`i${i}`)}</svg></div>`)
+    .join('')
+</script>
+</body>
+</html>

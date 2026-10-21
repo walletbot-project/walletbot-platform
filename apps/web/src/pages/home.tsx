@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth, useUser } from '@/hooks/use-auth'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
+import { AssistantBanner } from '@/pages/home/assistant-banner'
 import { Dashboard, type DashboardWidgetRow } from '@/pages/home/dashboard'
 import { FeedbackSheet } from '@/pages/home/feedback-sheet'
 import { WidgetSheet } from '@/pages/home/widget-sheet'
@@ -90,6 +91,7 @@ export default function Home() {
             />
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="flex flex-col p-4 pb-24">
+                    {flags?.assistantBanner ? <AssistantBanner /> : null}
                     <Dashboard
                         editing={editing}
                         onStartEditing={() => setEditing(true)}

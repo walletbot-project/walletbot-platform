@@ -72,10 +72,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
   GlobalKey _formKey = GlobalKey(debugLabel: 'activityForm');
   MaterialPageRoute<bool?>? _formRoute;
 
+  /// Taken from the filter when the form opens, so changing the filter while
+  /// the form sits in the split pane doesn't move its prefills.
+  TransactionFormPrefill _formPrefill = const TransactionFormPrefill();
+
   void _openTransactionForm() {
     setState(() {
       _formOpen = true;
       _formKey = GlobalKey(debugLabel: 'activityForm');
+      _formPrefill = TransactionFormPrefill.fromFilter(_filter);
       // The pane hosts one occupant at a time.
       _detailTransactionId = null;
       _detailTransferSide = null;
@@ -139,6 +144,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     return TransactionFormScreen(
       key: _formKey,
       onResult: inRoute ? null : _onFormResult,
+      initialType: _formPrefill.type,
+      initialAccountId: _formPrefill.accountId,
+      initialDestinationAccountId: _formPrefill.destinationAccountId,
+      initialCategoryId: _formPrefill.categoryId,
     );
   }
 
@@ -288,6 +297,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void didUpdateWidget(ActivityScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.filterRevision == oldWidget.filterRevision) return;
+    _nav?.noteActivityFilterReplaced(_filter);
     _filter = widget.initialFilter;
     // Another surface asked for a filtered list: the list is the point, so
     // an open detail closes.
@@ -323,6 +333,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void _applyPendingFilter() {
     final pending = _nav?.takePendingActivityFilter();
     if (pending == null || !mounted) return;
+    _nav?.noteActivityFilterReplaced(_filter);
     setState(() {
       _filter = pending;
       _detailTransactionId = null;

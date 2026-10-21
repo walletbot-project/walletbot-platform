@@ -35,6 +35,7 @@ import {
     readFilterSeed,
     readTransactionFormSeed,
     type TransactionTransferSide,
+    transactionFormSeedFromFilter,
     transactionTimeStatus,
 } from './helpers'
 import { TransactionDetail } from './transaction-detail'
@@ -59,7 +60,10 @@ export function Activity() {
 
     // What is open beside the list is the child route's business, not this
     // component's — see `ListDetailLayout`. Opening one is a navigation.
-    const openCreate = () => navigate('/activity/new')
+    const openCreate = () =>
+        navigate('/activity/new', {
+            state: transactionFormSeedFromFilter(filter),
+        })
     const openDetail = (next: {
         id: string
         transferSide?: TransactionTransferSide
@@ -326,8 +330,8 @@ export type ActivityOutletContext = {
 export function TransactionCreateRoute() {
     const navigate = useNavigate()
     const location = useLocation()
-    // Opened from an account/category detail: prefilled, and closing returns
-    // there instead of the activity list.
+    // Opened from an account/category detail or with an active list filter:
+    // prefilled. From a detail, closing returns there instead of the list.
     const seed = readTransactionFormSeed(location.state)
     // The list is query-driven, so a saved transaction shows up on its own.
     const close = () => navigate(seed.returnTo ?? '/activity')
@@ -335,7 +339,9 @@ export function TransactionCreateRoute() {
         <TransactionForm
             onClose={close}
             onSaved={close}
+            initialType={seed.type}
             initialAccountId={seed.accountId}
+            initialDestinationAccountId={seed.destinationAccountId}
             initialCategoryId={seed.categoryId}
         />
     )

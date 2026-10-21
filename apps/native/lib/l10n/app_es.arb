@@ -683,5 +683,8 @@
   "aiConsentDecline": "Ahora no",
   "aiConsentAccept": "Aceptar y continuar",
   "aiConsentFailed": "No se pudo registrar tu permiso. Revisá tu conexión y probá de nuevo.",
-  "aiConsentDeclined": "Necesitás aceptar para que el asistente funcione."
+  "aiConsentDeclined": "Necesitás aceptar para que el asistente funcione.",
+  "assistantBannerTitle": "Conocé a Gaston",
+  "assistantBannerMessage": "Estoy acá para ayudarte con tus gastos",
+  "assistantBannerAction": "Hablar con Gaston"
 }

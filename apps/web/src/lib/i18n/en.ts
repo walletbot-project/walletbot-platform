@@ -56,6 +56,12 @@ export const en: Messages = {
         language: 'Language',
     },
 
+    assistantBanner: {
+        title: 'Meet Gaston',
+        message: "I'm here to help you track your expenses",
+        action: 'Talk to Gaston',
+    },
+
     whatsapp: {
         title: 'WhatsApp',
         subtitle: 'Record expenses by chatting with Gaston',

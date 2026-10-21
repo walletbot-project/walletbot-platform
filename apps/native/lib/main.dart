@@ -697,6 +697,7 @@ class _AppMainState extends State<AppMain> {
       (a) => a.activeAccount?.serverDeleted ?? false,
     );
     final selectedIndex = context.watch<AppNavigation>().index;
+    final canGoBack = context.select<AppNavigation, bool>((n) => n.canGoBack);
     final useRail = windowSizeClassOf(context) != WindowSizeClass.compact;
     final railOnLeft = Directionality.of(context) == TextDirection.ltr;
 
@@ -713,7 +714,10 @@ class _AppMainState extends State<AppMain> {
             key: _tabStackKey,
             index: selectedIndex,
             children: [
-              HomeScreen(onOpenActivity: _openActivityWithFilter),
+              HomeScreen(
+                onOpenActivity: _openActivityWithFilter,
+                onOpenAssistant: _openVoice,
+              ),
               ActivityScreen(
                 initialFilter: _activityFilter,
                 filterRevision: _activityFilterRevision,
@@ -726,71 +730,80 @@ class _AppMainState extends State<AppMain> {
       ],
     );
 
-    return Scaffold(
-      body: useRail
-          ? Row(
-              children: [
-                // The rail sits on the leading edge, so it alone takes that
-                // edge's inset (a landscape nav bar or camera cutout), with
-                // the status bar above it. Its halves and the voice button
-                // then share one inset instead of each rail half applying it
-                // on its own, and the tabs beside it don't apply it again.
-                SafeArea(
-                  left: railOnLeft,
-                  right: !railOnLeft,
-                  child: _AgentCenteredRail(
-                    selectedIndex: selectedIndex,
-                    onDestinationSelected: (value) =>
-                        context.read<AppNavigation>().index = value,
-                    onOpenVoice: _openVoice,
+    // Back walks the tab history before it leaves the app. Pushed routes
+    // (details, forms, the agent) sit above this one and pop first.
+    return PopScope(
+      canPop: !canGoBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        context.read<AppNavigation>().goBack();
+      },
+      child: Scaffold(
+        body: useRail
+            ? Row(
+                children: [
+                  // The rail sits on the leading edge, so it alone takes that
+                  // edge's inset (a landscape nav bar or camera cutout), with
+                  // the status bar above it. Its halves and the voice button
+                  // then share one inset instead of each rail half applying it
+                  // on its own, and the tabs beside it don't apply it again.
+                  SafeArea(
+                    left: railOnLeft,
+                    right: !railOnLeft,
+                    child: _AgentCenteredRail(
+                      selectedIndex: selectedIndex,
+                      onDestinationSelected: (value) =>
+                          context.read<AppNavigation>().index = value,
+                      onOpenVoice: _openVoice,
+                    ),
                   ),
-                ),
-                const VerticalDivider(width: 1, thickness: 1),
-                Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeLeft: railOnLeft,
-                    removeRight: !railOnLeft,
-                    child: tabs,
+                  const VerticalDivider(width: 1, thickness: 1),
+                  Expanded(
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeLeft: railOnLeft,
+                      removeRight: !railOnLeft,
+                      child: tabs,
+                    ),
                   ),
-                ),
-              ],
-            )
-          : tabs,
-      floatingActionButton: useRail
-          ? null
-          : FloatingActionButton(
-              heroTag: 'voiceFab',
-              onPressed: _openVoice,
-              tooltip: context.l10n.voiceCommands,
-              child: const _VoiceFabIcon(),
-            ),
-      bottomNavigationBar: useRail
-          ? null
-          : NavigationBar(
-              selectedIndex: selectedIndex,
-              onDestinationSelected: (value) =>
-                  context.read<AppNavigation>().index = value,
-              destinations: [
-                NavigationDestination(
-                  icon: const Icon(Icons.home_rounded),
-                  label: context.l10n.home,
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.calendar_view_month_rounded),
-                  label: context.l10n.activity,
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.account_balance_rounded),
-                  label: context.l10n.accounts,
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.bookmarks_rounded),
-                  label: context.l10n.insights,
-                ),
-              ],
-            ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+                ],
+              )
+            : tabs,
+        floatingActionButton: useRail
+            ? null
+            : FloatingActionButton(
+                heroTag: 'voiceFab',
+                onPressed: _openVoice,
+                tooltip: context.l10n.voiceCommands,
+                child: const _VoiceFabIcon(),
+              ),
+        bottomNavigationBar: useRail
+            ? null
+            : NavigationBar(
+                selectedIndex: selectedIndex,
+                onDestinationSelected: (value) =>
+                    context.read<AppNavigation>().index = value,
+                destinations: [
+                  NavigationDestination(
+                    icon: const Icon(Icons.home_rounded),
+                    label: context.l10n.home,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.calendar_view_month_rounded),
+                    label: context.l10n.activity,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.account_balance_rounded),
+                    label: context.l10n.accounts,
+                  ),
+                  NavigationDestination(
+                    icon: const Icon(Icons.bookmarks_rounded),
+                    label: context.l10n.insights,
+                  ),
+                ],
+              ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      ),
     );
   }
 }

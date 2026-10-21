@@ -5,6 +5,7 @@ export type FlagKey =
     | 'agentRecordHint'
     | 'aiConsent'
     | 'agentReportButton'
+    | 'assistantBanner'
     | 'debugToolCalls'
     | 'exchangeRates'
     | 'feedback'
@@ -51,6 +52,12 @@ export const KNOWN_FLAGS: {
         description:
             'Show the flag icon on every agent response, the discoverable way to report it (native + web). Off leaves only the long-press action and the overflow menu.',
         enabledByDefault: true,
+    },
+    {
+        key: 'assistantBanner',
+        description:
+            'Show a dismissible banner at the top of the home screen inviting the user to try Gaston, with a button that opens the assistant (native + web). Dismissal is stored per device. Off hides it.',
+        enabledByDefault: false,
     },
     {
         key: 'debugToolCalls',

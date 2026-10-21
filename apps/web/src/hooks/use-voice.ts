@@ -191,9 +191,7 @@ export function useVoice(opts: UseVoiceOpts) {
      * The chat voice note being recorded. It stays on the device until it
      * ends, so a discarded note never reaches Gemini.
      */
-    const noteRef = useRef<{ chunks: string[]; samples: number } | null>(
-        null,
-    )
+    const noteRef = useRef<{ chunks: string[]; samples: number } | null>(null)
     /** Ended notes waiting for a chat socket, oldest first. */
     const pendingNotesRef = useRef<string[][]>([])
     const selectedDeviceIdRef = useRef(selectedDeviceId)
