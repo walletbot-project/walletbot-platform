@@ -454,6 +454,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -578,6 +579,29 @@ jobs:
           name: staging-apk-pr-${{ github.event.pull_request.number }}
           path: apps/native/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 1
+
+      # Each run uploads its own artifact, so every push to the PR leaves the
+      # previous builds behind under the same name until retention expires —
+      # testers can't tell which one is current. Once the new APK is uploaded,
+      # delete this PR's artifacts from any other run.
+      - name: Delete previous staging APK artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: staging-apk-pr-${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          ids="$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" \
+            --jq ".artifacts[] | select(.workflow_run.id != $RUN_ID) | .id")"
+
+          if [ -z "$ids" ]; then
+            echo "No previous artifacts named $ARTIFACT_NAME found"
+          fi
+
+          for id in $ids; do
+            echo "Deleting artifact $id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+          done
 
       - uses: ./.github/actions/sticky-pr-comment
         with:
