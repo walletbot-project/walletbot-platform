@@ -33,6 +33,28 @@ enum _LoginPath { remote, local }
 /// form; the other two replace it entirely until the user navigates back.
 enum _RemoteFlow { credentials, forgotPassword, verifyPending }
 
+/// An error message in the sign-in screen's own look: a floating, rounded card
+/// tinted with the theme's error colours, instead of the default flat bar.
+SnackBar _errorSnackBar(ColorScheme colors, String message) => SnackBar(
+  behavior: SnackBarBehavior.floating,
+  backgroundColor: colors.errorContainer,
+  margin: const EdgeInsets.all(16),
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(16),
+    side: BorderSide(color: colors.error.withValues(alpha: 0.5)),
+  ),
+  content: Row(
+    children: [
+      Icon(Icons.error_outline_rounded, color: colors.onErrorContainer),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Text(message, style: TextStyle(color: colors.onErrorContainer)),
+      ),
+    ],
+  ),
+);
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.canDismiss = false, this.promotion});
 
@@ -130,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     final auth = context.read<AuthController>();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -163,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.accountAlreadyAdded));
     } on AccountExistsException {
       // Registering an existing address used to land on the verify-pending
       // screen waiting for mail the backend never sends. Say what happened
@@ -184,6 +207,16 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       );
+    } on LocalAccountClaimedException {
+      // An earlier attempt of this backup already created an online account
+      // for it (with another email or login). Only that account can finish it,
+      // so sign-in is where this goes on.
+      if (mounted) {
+        setState(() => _emailMode = _EmailAuthMode.signIn);
+      }
+      messenger.showSnackBar(
+        _errorSnackBar(colors, l10n.promoteAccountClaimed),
+      );
     } on EmailNotVerifiedException {
       // The backend already (re-)sent the verification email on this attempt.
       if (mounted) {
@@ -196,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_emailMode == _EmailAuthMode.signIn) {
         // Repeat attempt (e.g. tapped "I verified" too early): say so.
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.emailStillNotVerified)),
+          _errorSnackBar(colors, l10n.emailStillNotVerified),
         );
       }
     } catch (e) {
@@ -208,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
           : _emailMode == _EmailAuthMode.signIn
           ? l10n.emailSignInFailedGoogleHint
           : l10n.emailAuthFailed(_emailMode.actionLabel(l10n), e);
-      messenger.showSnackBar(SnackBar(content: Text(message)));
+      messenger.showSnackBar(_errorSnackBar(colors, message));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -331,6 +364,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     try {
       await context.read<AuthController>().signInWithApple(
         rejectExisting: widget.canDismiss && !_promoting,
@@ -341,19 +375,19 @@ class _LoginScreenState extends State<LoginScreen> {
       // Dismissing Apple's sheet is a choice, not a failure.
       if (e.code != AuthorizationErrorCode.canceled) {
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.appleSignInFailed(e))),
+          _errorSnackBar(colors, l10n.appleSignInFailed(e)),
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.accountAlreadyAdded));
     } on AccountExistsException {
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.promoteAccountExists));
+    } on LocalAccountClaimedException {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.promoteAccountExists)),
+        _errorSnackBar(colors, l10n.promoteAccountClaimed),
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.appleSignInFailed(e))),
-      );
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.appleSignInFailed(e)));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -363,6 +397,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     try {
       await context.read<AuthController>().signInWithGoogle(
         rejectExisting: widget.canDismiss && !_promoting,
@@ -373,18 +408,20 @@ class _LoginScreenState extends State<LoginScreen> {
       // The user dismissing the Google sheet isn't an error worth surfacing.
       if (e.code != GoogleSignInExceptionCode.canceled) {
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.googleSignInFailed(e))),
+          _errorSnackBar(colors, l10n.googleSignInFailed(e)),
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.accountAlreadyAdded));
     } on AccountExistsException {
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.promoteAccountExists));
+    } on LocalAccountClaimedException {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.promoteAccountExists)),
+        _errorSnackBar(colors, l10n.promoteAccountClaimed),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.googleSignInFailed(e))),
+        _errorSnackBar(colors, l10n.googleSignInFailed(e)),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

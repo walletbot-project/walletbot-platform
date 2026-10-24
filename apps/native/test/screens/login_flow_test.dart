@@ -413,19 +413,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('promoting: an existing address drops the user into sign-in', (
-    tester,
+  Future<void> promoteWithRefusal(
+    WidgetTester tester,
+    Map<String, String> error,
   ) async {
     final auth = AuthController(
       awaitFrame: () async {},
       httpClient: MockClient(
-        (_) async => http.Response(
-          jsonEncode({
-            'code': 'account_exists',
-            'message': 'Ya existe una cuenta con ese correo.',
-          }),
-          409,
-        ),
+        (_) async => http.Response(jsonEncode(error), 409),
       ),
     );
     final local = await auth.addLocal(name: 'Mine');
@@ -464,9 +459,37 @@ void main() {
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Sign up').last);
     await tester.pumpAndSettle();
+  }
+
+  testWidgets('promoting: an existing address drops the user into sign-in', (
+    tester,
+  ) async {
+    await promoteWithRefusal(tester, {
+      'code': 'account_exists',
+      'message': 'Ya existe una cuenta con ese correo.',
+    });
 
     // Now on sign-in, which a promotion allows for the address it began with.
     expect(find.text('Need an account? Sign up'), findsOneWidget);
     expect(find.textContaining('If you started this backup earlier'), findsOne);
+  });
+
+  testWidgets('promoting: an already-linked account is explained, not dumped', (
+    tester,
+  ) async {
+    await promoteWithRefusal(tester, {
+      'code': 'local_account_claimed',
+      'message': 'Esta cuenta local ya fue vinculada a otra cuenta online.',
+    });
+
+    expect(
+      find.textContaining('already linked to another online account'),
+      findsOne,
+    );
+    // None of the raw response reaches the user.
+    expect(find.textContaining('HTTP 409'), findsNothing);
+    expect(find.textContaining('local_account_claimed'), findsNothing);
+    // And sign-in, where that other account finishes the backup, is offered.
+    expect(find.text('Need an account? Sign up'), findsOneWidget);
   });
 }

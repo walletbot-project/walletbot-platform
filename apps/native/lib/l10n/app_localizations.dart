@@ -2552,6 +2552,12 @@ abstract class AppLocalizations {
   /// **'An account with that email already exists. If you started this backup earlier, verify the email and sign in to finish it; otherwise use a different email.'**
   String get promoteAccountExistsSignIn;
 
+  /// No description provided for @promoteAccountClaimed.
+  ///
+  /// In en, this message translates to:
+  /// **'This account was already linked to another online account. Sign in with that one to finish backing up your data.'**
+  String get promoteAccountClaimed;
+
   /// No description provided for @promoteFailed.
   ///
   /// In en, this message translates to:

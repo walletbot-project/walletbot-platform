@@ -1396,6 +1396,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ya existe una cuenta con ese correo. Si empezaste este respaldo antes, verificá el correo e iniciá sesión para terminarlo; si no, usá otro correo.';
 
   @override
+  String get promoteAccountClaimed =>
+      'Esta cuenta ya quedó vinculada a otra cuenta online. Iniciá sesión con esa para terminar de respaldar tus datos.';
+
+  @override
   String promoteFailed(Object error) {
     return 'No se pudieron respaldar tus datos: $error';
   }

@@ -683,6 +683,14 @@ class AuthController extends ChangeNotifier {
           response.body,
         );
       }
+      if (decoded is Map<String, Object?> &&
+          decoded['code'] == 'local_account_claimed') {
+        throw LocalAccountClaimedException(
+          response.statusCode,
+          decoded,
+          response.body,
+        );
+      }
       throw AuthHttpError(response.statusCode, decoded, response.body);
     }
     return jsonDecode(response.body) as Map<String, Object?>;
@@ -767,4 +775,11 @@ class EmailNotVerifiedException extends AuthHttpError {
 /// either without narrowing it down.
 class AccountExistsException extends AuthHttpError {
   AccountExistsException(super.statusCode, super.body, super.rawBody);
+}
+
+/// A promotion named a local account that is already linked to a different
+/// online account (`local_account_claimed`): an earlier attempt created one
+/// with another email or login. Only that account can finish the backup.
+class LocalAccountClaimedException extends AuthHttpError {
+  LocalAccountClaimedException(super.statusCode, super.body, super.rawBody);
 }
