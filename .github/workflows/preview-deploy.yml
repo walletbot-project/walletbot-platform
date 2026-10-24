@@ -577,7 +577,7 @@ jobs:
         with:
           name: staging-apk-pr-${{ github.event.pull_request.number }}
           path: apps/native/build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 14
+          retention-days: 1
 
       - uses: ./.github/actions/sticky-pr-comment
         with:
