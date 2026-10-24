@@ -76,11 +76,10 @@ void main() {
         expect((await repos.transactions.tagIdsOf(txn)).toSet(), {tag, parent});
 
         await repos.tags.update(tag, parentId: const Value(null));
-        expect(
-          (await repos.transactions.tagIdsOf(txn)).toSet(),
-          {tag, parent},
-          reason: 'backfill is add-only by design',
-        );
+        expect((await repos.transactions.tagIdsOf(txn)).toSet(), {
+          tag,
+          parent,
+        }, reason: 'backfill is add-only by design');
         expect((await repos.tags.getById(tag))!.parentId, isNull);
       },
     );

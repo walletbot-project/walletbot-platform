@@ -45,11 +45,9 @@ void main() {
       final server = FakeConvexServer()..hangNext = 100;
       final h = makeClient(fake, server: server, httpPoster: poster.call);
       final probe = FutureProbe(
-        h.client.query<BigInt>(
-          'v1/sync/queries:getCounter',
-          {'since': BigInt.from(4)},
-          options: const CallOptions(httpFallback: HttpFallback.whenNotReady),
-        ),
+        h.client.query<BigInt>('v1/sync/queries:getCounter', {
+          'since': BigInt.from(4),
+        }, options: const CallOptions(httpFallback: HttpFallback.whenNotReady)),
       );
       fake.flushMicrotasks();
       expect(probe.isDone, isTrue);

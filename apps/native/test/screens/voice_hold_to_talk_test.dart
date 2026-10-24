@@ -159,297 +159,269 @@ void main() {
     expect(find.text('Tap or hold to record a voice note'), findsNothing);
   });
 
-  testWidgets(
-    'holding talks and releasing closes the mic',
-    (tester) async {
-      await tester.pumpWidget(app(_Command()));
-      await tester.pump();
+  testWidgets('holding talks and releasing closes the mic', (tester) async {
+    await tester.pumpWidget(app(_Command()));
+    await tester.pump();
 
-      final gesture = await tester.startGesture(
-        tester.getCenter(composerMic()),
-      );
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.pump();
-      await tester.pump();
-      expect(captureCalls, ['listen']);
-      expect(find.text('Slide up to lock'), findsOneWidget);
-      expect(find.text('Tap or hold to record a voice note'), findsNothing);
-      expect(find.byType(TextField), findsNothing);
+    final gesture = await tester.startGesture(tester.getCenter(composerMic()));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    await tester.pump();
+    expect(captureCalls, ['listen']);
+    expect(find.text('Slide up to lock'), findsOneWidget);
+    expect(find.text('Tap or hold to record a voice note'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
 
-      await gesture.up();
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
-      expect(find.byType(TextField), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await gesture.up();
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'a press shorter than the hold delay is a tap',
-    (tester) async {
-      await tester.pumpWidget(app(_Command()));
-      await tester.pump();
+  testWidgets('a press shorter than the hold delay is a tap', (tester) async {
+    await tester.pumpWidget(app(_Command()));
+    await tester.pump();
 
-      final gesture = await tester.startGesture(
-        tester.getCenter(composerMic()),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(captureCalls, isEmpty);
-      await gesture.up();
-      await tester.pump();
-      await tester.pump();
-      expect(captureCalls, ['listen']);
-      expect(find.text('Pause'), findsOneWidget);
-      expect(find.byTooltip('Send'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    final gesture = await tester.startGesture(tester.getCenter(composerMic()));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(captureCalls, isEmpty);
+    await gesture.up();
+    await tester.pump();
+    await tester.pump();
+    expect(captureCalls, ['listen']);
+    expect(find.text('Pause'), findsOneWidget);
+    expect(find.byTooltip('Send'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'sliding up locks the mic open until the note is sent',
-    (tester) async {
-      await tester.pumpWidget(app(_Command()));
-      await tester.pump();
+  testWidgets('sliding up locks the mic open until the note is sent', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app(_Command()));
+    await tester.pump();
 
-      final gesture = await tester.startGesture(
-        tester.getCenter(composerMic()),
-      );
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.pump();
-      await tester.pump();
-      await gesture.moveBy(const Offset(0, -100));
-      await tester.pump();
-      expect(find.text('Slide up to lock'), findsNothing);
-      expect(find.text('Pause'), findsOneWidget);
+    final gesture = await tester.startGesture(tester.getCenter(composerMic()));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -100));
+    await tester.pump();
+    expect(find.text('Slide up to lock'), findsNothing);
+    expect(find.text('Pause'), findsOneWidget);
 
-      await gesture.up();
-      await settleCapture(tester);
-      expect(captureCalls, ['listen']);
+    await gesture.up();
+    await settleCapture(tester);
+    expect(captureCalls, ['listen']);
 
-      await tester.tap(find.byTooltip('Send'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
-      expect(find.byType(TextField), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await tester.tap(find.byTooltip('Send'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'pausing a locked note keeps its turn open until Send',
-    (tester) async {
-      final command = _Command();
-      await tester.pumpWidget(app(command));
-      await tester.pump();
-      await tester.tap(composerMic());
-      await tester.pump();
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      await tester.pump();
+  testWidgets('pausing a locked note keeps its turn open until Send', (
+    tester,
+  ) async {
+    final command = _Command();
+    await tester.pumpWidget(app(command));
+    await tester.pump();
+    await tester.tap(composerMic());
+    await tester.pump();
+    await tester.pump();
+    command.ready();
+    await tester.pump();
+    await tester.pump();
 
-      await tester.tap(find.text('Pause'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
-      expect(find.text('Resume'), findsOneWidget);
-      expect(command.turnsEnded, 0);
+    await tester.tap(find.text('Pause'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(command.turnsEnded, 0);
 
-      await tester.tap(find.text('Resume'));
-      await tester.pump();
-      await tester.pump();
-      expect(captureCalls, ['listen', 'cancel', 'listen']);
-      expect(command.turnsEnded, 0);
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    await tester.pump();
+    expect(captureCalls, ['listen', 'cancel', 'listen']);
+    expect(command.turnsEnded, 0);
 
-      await tester.tap(find.byTooltip('Send'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel', 'listen', 'cancel']);
-      expect(command.turnsEnded, 1);
-      expect(find.byType(TextField), findsOneWidget);
-      expect(command.modes, isEmpty);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await tester.tap(find.byTooltip('Send'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel', 'listen', 'cancel']);
+    expect(command.turnsEnded, 1);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(command.modes, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'a full note pauses and waits for Send, with Resume disabled',
-    (tester) async {
-      final command = _Command();
-      await tester.pumpWidget(app(command));
-      await tester.pump();
-      await tester.tap(composerMic());
-      await tester.pump();
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      await tester.pump();
+  testWidgets('a full note pauses and waits for Send, with Resume disabled', (
+    tester,
+  ) async {
+    final command = _Command();
+    await tester.pumpWidget(app(command));
+    await tester.pump();
+    await tester.tap(composerMic());
+    await tester.pump();
+    await tester.pump();
+    command.ready();
+    await tester.pump();
+    await tester.pump();
 
-      command.noteFull = true;
-      await messenger.handlePlatformMessage(
-        _capture,
-        const StandardMethodCodec().encodeSuccessEnvelope(
-          Uint8List.fromList([1, 0]),
-        ),
-        (_) {},
-      );
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
-      expect(find.text('5 minute limit'), findsOneWidget);
-      final resume = tester.widget<FilledButton>(
-        find.ancestor(
-          of: find.text('Resume'),
-          matching: find.byWidgetPredicate((w) => w is FilledButton),
-        ),
-      );
-      expect(resume.onPressed, isNull);
-      expect(command.turnsEnded, 0);
+    command.noteFull = true;
+    await messenger.handlePlatformMessage(
+      _capture,
+      const StandardMethodCodec().encodeSuccessEnvelope(
+        Uint8List.fromList([1, 0]),
+      ),
+      (_) {},
+    );
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
+    expect(find.text('5 minute limit'), findsOneWidget);
+    final resume = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('Resume'),
+        matching: find.byWidgetPredicate((w) => w is FilledButton),
+      ),
+    );
+    expect(resume.onPressed, isNull);
+    expect(command.turnsEnded, 0);
 
-      command.noteFull = false;
-      await tester.tap(find.byTooltip('Send'));
-      await settleCapture(tester);
-      expect(command.turnsEnded, 1);
-      expect(find.byType(TextField), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    command.noteFull = false;
+    await tester.tap(find.byTooltip('Send'));
+    await settleCapture(tester);
+    expect(command.turnsEnded, 1);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'Discard drops a locked note without ending its turn',
-    (tester) async {
-      final command = _Command();
-      await tester.pumpWidget(app(command));
-      await tester.pump();
-      await tester.tap(composerMic());
-      await tester.pump();
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      await tester.pump();
-      expect(find.byTooltip('Send'), findsOneWidget);
-      expect(find.text('On a call'), findsNothing);
+  testWidgets('Discard drops a locked note without ending its turn', (
+    tester,
+  ) async {
+    final command = _Command();
+    await tester.pumpWidget(app(command));
+    await tester.pump();
+    await tester.tap(composerMic());
+    await tester.pump();
+    await tester.pump();
+    command.ready();
+    await tester.pump();
+    await tester.pump();
+    expect(find.byTooltip('Send'), findsOneWidget);
+    expect(find.text('On a call'), findsNothing);
 
-      await tester.tap(find.byTooltip('Discard voice note'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
-      expect(command.discards, 1);
-      expect(command.turnsEnded, 0);
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.byTooltip('Discard voice note'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await tester.tap(find.byTooltip('Discard voice note'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
+    expect(command.discards, 1);
+    expect(command.turnsEnded, 0);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byTooltip('Discard voice note'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'the composer enters live mode and X returns to the chat',
-    (tester) async {
-      final command = _Command();
-      await tester.pumpWidget(app(command));
-      await tester.pump();
-      await tester.tap(composerMic());
-      await tester.pump();
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      await tester.tap(find.byTooltip('Send'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
+  testWidgets('the composer enters live mode and X returns to the chat', (
+    tester,
+  ) async {
+    final command = _Command();
+    await tester.pumpWidget(app(command));
+    await tester.pump();
+    await tester.tap(composerMic());
+    await tester.pump();
+    await tester.pump();
+    command.ready();
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
 
-      await tester.tap(find.byTooltip('Start call'));
-      await tester.pump();
-      await tester.pump();
-      expect(command.modes, [VoiceConversationMode.live]);
-      expect(captureCalls, ['listen', 'cancel', 'listen']);
-      expect(find.byTooltip('End call'), findsOneWidget);
-      expect(find.byTooltip('Send'), findsNothing);
-      expect(find.byTooltip('Discard voice note'), findsNothing);
-      expect(find.text('On a call'), findsOneWidget);
-      expect(find.text("I'm listening"), findsOneWidget);
+    await tester.tap(find.byTooltip('Start call'));
+    await tester.pump();
+    await tester.pump();
+    expect(command.modes, [VoiceConversationMode.live]);
+    expect(captureCalls, ['listen', 'cancel', 'listen']);
+    expect(find.byTooltip('End call'), findsOneWidget);
+    expect(find.byTooltip('Send'), findsNothing);
+    expect(find.byTooltip('Discard voice note'), findsNothing);
+    expect(find.text('On a call'), findsOneWidget);
+    expect(find.text("I'm listening"), findsOneWidget);
 
-      await tester.tap(find.text('Pause'));
-      await settleCapture(tester);
-      expect(find.text('Mic paused'), findsOneWidget);
-      expect(find.text('Resume'), findsOneWidget);
+    await tester.tap(find.text('Pause'));
+    await settleCapture(tester);
+    expect(find.text('Mic paused'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('End call'));
-      await settleCapture(tester);
-      expect(command.modes, [
-        VoiceConversationMode.live,
-        VoiceConversationMode.chat,
-      ]);
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.byTooltip('End call'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await tester.tap(find.byTooltip('End call'));
+    await settleCapture(tester);
+    expect(command.modes, [
+      VoiceConversationMode.live,
+      VoiceConversationMode.chat,
+    ]);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byTooltip('End call'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'in live mode, pause mutes and resume reopens the mic',
-    (tester) async {
-      final command = _Command();
-      await tester.pumpWidget(app(command));
-      await tester.pump();
-      await tester.tap(find.text('Start call'));
-      await tester.pump();
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      await tester.pump();
-      expect(find.text("I'm listening"), findsOneWidget);
+  testWidgets('in live mode, pause mutes and resume reopens the mic', (
+    tester,
+  ) async {
+    final command = _Command();
+    await tester.pumpWidget(app(command));
+    await tester.pump();
+    await tester.tap(find.text('Start call'));
+    await tester.pump();
+    await tester.pump();
+    command.ready();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text("I'm listening"), findsOneWidget);
 
-      await tester.tap(find.text('Pause'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
-      expect(find.text('Resume'), findsOneWidget);
-      expect(find.text('Mic paused'), findsOneWidget);
+    await tester.tap(find.text('Pause'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('Mic paused'), findsOneWidget);
 
-      await tester.tap(find.text('Resume'));
-      await tester.pump();
-      await tester.pump();
-      expect(captureCalls, ['listen', 'cancel', 'listen']);
-      expect(find.text('Pause'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    await tester.pump();
+    expect(captureCalls, ['listen', 'cancel', 'listen']);
+    expect(find.text('Pause'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets(
-    'leaving live mode while the mic is still opening closes it',
-    (tester) async {
-      final command = _Command();
-      await tester.pumpWidget(app(command));
-      await tester.pump();
-      await tester.tap(find.text('Start call'));
-      await tester.pump();
-      await tester.pump();
-      command.ready();
-      await tester.pump();
-      await tester.pump();
-      await tester.tap(find.text('Pause'));
-      await settleCapture(tester);
-      expect(captureCalls, ['listen', 'cancel']);
+  testWidgets('leaving live mode while the mic is still opening closes it', (
+    tester,
+  ) async {
+    final command = _Command();
+    await tester.pumpWidget(app(command));
+    await tester.pump();
+    await tester.tap(find.text('Start call'));
+    await tester.pump();
+    await tester.pump();
+    command.ready();
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('Pause'));
+    await settleCapture(tester);
+    expect(captureCalls, ['listen', 'cancel']);
 
-      final permission = Completer<Object?>();
-      messenger.setMockMethodCallHandler(_permission, (_) => permission.future);
-      await tester.tap(find.text('Resume'));
-      await tester.pump();
-      expect(find.text('Getting the mic ready'), findsOneWidget);
+    final permission = Completer<Object?>();
+    messenger.setMockMethodCallHandler(_permission, (_) => permission.future);
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    expect(find.text('Getting the mic ready'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('End call'));
-      await settleCapture(tester);
-      permission.complete({7: 1});
-      await settleCapture(tester);
-      expect(captureCalls.where((call) => call == 'listen'), hasLength(1));
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.text('Pause'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
+    await tester.tap(find.byTooltip('End call'));
+    await settleCapture(tester);
+    permission.complete({7: 1});
+    await settleCapture(tester);
+    expect(captureCalls.where((call) => call == 'listen'), hasLength(1));
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Pause'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets(
     'the keyboard stays up with the mic open, and typing switches to text',
@@ -567,42 +539,40 @@ void main() {
   });
 
   for (final debug in [false, true]) {
-    testWidgets(
-      'tool cards show only with debugToolCalls on (debug: $debug)',
-      (tester) async {
-        final config = AppConfigController(
-          httpClient: MockClient(
-            (_) async => http.Response(
-              jsonEncode({
-                'flags': {'debugToolCalls': debug},
-              }),
-              200,
-            ),
+    testWidgets('tool cards show only with debugToolCalls on (debug: $debug)', (
+      tester,
+    ) async {
+      final config = AppConfigController(
+        httpClient: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'flags': {'debugToolCalls': debug},
+            }),
+            200,
           ),
-        );
-        addTearDown(config.dispose);
-        await config.loadAccount(_localAccount);
-        final command = _Command();
-        await tester.pumpWidget(
-          ChangeNotifierProvider<AppConfigController>.value(
-            value: config,
-            child: app(command),
-          ),
-        );
-        await tester.pump();
-        await tester.tap(find.text('Start call'));
-        await tester.pump();
-        await tester.pump();
-        command.ready();
-        command.controller.add(
-          VoiceToolCallEvent(id: 't1', name: 'get_balance', args: const {}),
-        );
-        await tester.pump();
-        await tester.pump();
-        expect(find.text('get_balance'), debug ? findsOneWidget : findsNothing);
-        await tester.pumpWidget(const SizedBox());
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.android),
-    );
+        ),
+      );
+      addTearDown(config.dispose);
+      await config.loadAccount(_localAccount);
+      final command = _Command();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppConfigController>.value(
+          value: config,
+          child: app(command),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Start call'));
+      await tester.pump();
+      await tester.pump();
+      command.ready();
+      command.controller.add(
+        VoiceToolCallEvent(id: 't1', name: 'get_balance', args: const {}),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('get_balance'), debug ? findsOneWidget : findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   }
 }
