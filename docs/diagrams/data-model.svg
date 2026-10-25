@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
+<title id="title">Modelo de datos</title><desc id="desc">Entidades principales de WalletBot: usuario, cuentas, movimientos, categorías, etiquetas y recurrencias.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1000" height="650" fill="#ffffff" />
+<rect x="15" y="110" width="970" height="480" rx="16" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="33" y="140" text-anchor="start" font-size="20" font-weight="700" fill="#24467a">Datos de cada usuario</text>
+<text x="33" y="160" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Cada fila tiene un id creado en el dispositivo y se sincroniza con la app móvil</text>
+<rect x="400" y="20" width="200" height="62" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="500" y="48" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Usuario</text>
+<text x="500" y="68" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Better Auth</text>
+<rect x="40" y="190" width="230" height="112" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="54" y="215" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">Cuenta</text>
+<path d="M 40 228 H 270" stroke="#d3dff0" stroke-width="1.2" />
+<text x="54" y="250" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">nombre</text>
+<text x="54" y="270" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">moneda</text>
+<text x="54" y="290" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">archivada o no</text>
+<rect x="350" y="190" width="300" height="132" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="364" y="215" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">Movimiento</text>
+<path d="M 350 228 H 650" stroke="#d3dff0" stroke-width="1.2" />
+<text x="364" y="250" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">tipo: gasto, ingreso, transferencia o ajuste</text>
+<text x="364" y="270" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">monto en centavos y moneda</text>
+<text x="364" y="290" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">fecha y estado</text>
+<text x="364" y="310" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">cuenta destino (transferencias)</text>
+<rect x="730" y="190" width="230" height="112" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="744" y="215" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">Categoría</text>
+<path d="M 730 228 H 960" stroke="#d3dff0" stroke-width="1.2" />
+<text x="744" y="250" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">nombre</text>
+<text x="744" y="270" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">color e ícono</text>
+<text x="744" y="290" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">archivada o no</text>
+<rect x="40" y="400" width="230" height="112" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="54" y="425" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">Recurrencia</text>
+<path d="M 40 438 H 270" stroke="#d3dff0" stroke-width="1.2" />
+<text x="54" y="460" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">frecuencia</text>
+<text x="54" y="480" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">fecha de inicio</text>
+<text x="54" y="500" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">fecha de fin</text>
+<rect x="730" y="400" width="230" height="92" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="744" y="425" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">Etiqueta</text>
+<path d="M 730 438 H 960" stroke="#d3dff0" stroke-width="1.2" />
+<text x="744" y="460" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">nombre</text>
+<text x="744" y="480" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">etiqueta padre</text>
+<text x="40" y="570" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">También: filtros guardados, widgets del inicio y memorias del asistente.</text>
+<text x="500" y="625" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">Solo en el servidor: configuración del usuario, cotizaciones, feature flags, WhatsApp y métricas.</text>
+<path d="M 500 82 V 110" fill="none" stroke="#3a3730" stroke-width="1.6" />
+<text x="512" y="102" text-anchor="start" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">1 a N</text>
+<path d="M 270 246 H 350" fill="none" stroke="#3a3730" stroke-width="1.6" />
+<text x="282" y="240" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">1</text>
+<text x="338" y="240" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">N</text>
+<path d="M 730 246 H 650" fill="none" stroke="#3a3730" stroke-width="1.6" />
+<text x="718" y="240" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">1</text>
+<text x="662" y="240" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">N</text>
+<path d="M 270 456 H 420 V 322" fill="none" stroke="#3a3730" stroke-width="1.6" />
+<text x="284" y="450" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">1</text>
+<text x="432" y="342" text-anchor="start" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">N</text>
+<path d="M 580 322 V 446 H 730" fill="none" stroke="#3a3730" stroke-width="1.6" />
+<text x="568" y="342" text-anchor="end" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">N</text>
+<text x="716" y="440" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3730" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">N</text>
+<path d="M 800 492 V 528 H 890 V 492" fill="none" stroke="#3a3730" stroke-width="1.6" />
+<text x="845" y="550" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">subetiquetas</text>
+
+</svg>

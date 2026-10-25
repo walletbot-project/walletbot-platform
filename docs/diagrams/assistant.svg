@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="696" viewBox="0 0 1000 696" role="img" aria-labelledby="title desc">
+<title id="title">Sesión del asistente</title><desc id="desc">El cliente pide un token efímero al backend, abre la sesión directamente con Gemini Live y ejecuta las herramientas en el dispositivo.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1000" height="696" fill="#ffffff" />
+<path d="M 186.66666666666666 100 V 636" stroke="#d6d1c6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" />
+<path d="M 500 100 V 636" stroke="#d6d1c6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" />
+<path d="M 813.3333333333333 100 V 636" stroke="#d6d1c6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" />
+<rect x="71.66666666666666" y="30" width="230" height="70" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="186.66666666666666" y="61" text-anchor="middle" font-size="18" font-weight="700" fill="#24467a">App móvil</text>
+<text x="186.66666666666666" y="83" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">base local SQLite</text>
+<rect x="385" y="30" width="230" height="70" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="500" y="61" text-anchor="middle" font-size="18" font-weight="700" fill="#2b5b34">Backend</text>
+<text x="500" y="83" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">Convex</text>
+<rect x="698.3333333333333" y="30" width="230" height="70" rx="12" fill="#f5f0fc" stroke="#9b7bcd" stroke-width="1.5" />
+<text x="813.3333333333333" y="61" text-anchor="middle" font-size="18" font-weight="700" fill="#4b2a7b">Gemini Live</text>
+<text x="813.3333333333333" y="83" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">Google</text>
+<text x="343.3333333333333" y="134" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Pide un token</text>
+<path d="M 190.66666666666666 151 H 496" fill="none" stroke="#6d3fb0" stroke-width="1.8" marker-end="url(#arrow-voice)" />
+<text x="343.3333333333333" y="170" text-anchor="middle" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">con el contexto del usuario</text>
+<circle cx="166.66666666666666" cy="151" r="12" fill="#6d3fb0" />
+<text x="166.66666666666666" y="156" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+<text x="656.6666666666666" y="204" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Crea el token con la clave de la API</text>
+<path d="M 504 221 H 809.3333333333333" fill="none" stroke="#6d3fb0" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-voice)" />
+<text x="656.6666666666666" y="240" text-anchor="middle" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">fija el prompt y las herramientas</text>
+<circle cx="480" cy="221" r="12" fill="#6d3fb0" />
+<text x="480" y="226" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+<text x="343.3333333333333" y="274" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Token de un solo uso</text>
+<path d="M 496 291 H 190.66666666666666" fill="none" stroke="#8a8478" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-gray)" />
+<text x="499.99999999999994" y="329" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Abre la sesión de voz directamente</text>
+<path d="M 190.66666666666666 346 H 809.3333333333333" fill="none" stroke="#6d3fb0" stroke-width="1.8" marker-end="url(#arrow-voice)" />
+<circle cx="166.66666666666666" cy="346" r="12" fill="#6d3fb0" />
+<text x="166.66666666666666" y="351" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">3</text>
+<text x="499.99999999999994" y="384" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Pide usar una herramienta</text>
+<path d="M 809.3333333333333 401 H 190.66666666666666" fill="none" stroke="#6d3fb0" stroke-width="1.8" marker-end="url(#arrow-voice)" />
+<text x="499.99999999999994" y="420" text-anchor="middle" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">por ejemplo, registrar un gasto</text>
+<path d="M 186.66666666666666 460 H 220.66666666666666 V 482 H 190.66666666666666" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<text x="230.66666666666666" y="456" text-anchor="start" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">La ejecuta sobre la base local</text>
+<text x="230.66666666666666" y="474" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">después se sincroniza como cualquier</text>
+<text x="230.66666666666666" y="490" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">cambio</text>
+<circle cx="166.66666666666666" cy="471" r="12" fill="#3a3730" />
+<text x="166.66666666666666" y="476" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">4</text>
+<text x="499.99999999999994" y="528" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Devuelve el resultado</text>
+<path d="M 190.66666666666666 545 H 809.3333333333333" fill="none" stroke="#6d3fb0" stroke-width="1.8" marker-end="url(#arrow-voice)" />
+<text x="499.99999999999994" y="583" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Responde en audio</text>
+<path d="M 809.3333333333333 600 H 190.66666666666666" fill="none" stroke="#8a8478" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-gray)" />
+<path d="M 30 666 H 74" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<text x="86" y="671" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Pedido</text>
+<path d="M 165.48 666 H 209.48" fill="none" stroke="#6d3fb0" stroke-width="1.8" marker-end="url(#arrow-voice)" />
+<text x="221.48" y="671" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Sesión de voz</text>
+<path d="M 347.02 666 H 391.02" fill="none" stroke="#8a8478" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-gray)" />
+<text x="403.02" y="671" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Respuesta</text>
+</svg>

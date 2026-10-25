@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="310" viewBox="0 0 1140 310" role="img" aria-labelledby="title desc">
+<title id="title">Revisión en las tiendas</title><desc id="desc">Camino de la primera publicación: tres rechazos en App Store hasta la aprobación, y una prueba interna en Google Play antes de producción.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1140" height="310" fill="#ffffff" />
+<rect x="150" y="30" width="170" height="120" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="235" y="96" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Primer envío</text>
+<rect x="350" y="30" width="170" height="120" rx="12" fill="#fdf4ec" stroke="#e0b48a" stroke-width="1.5" />
+<text x="435" y="69.5" text-anchor="middle" font-size="16" font-weight="700" fill="#8a4b14">Rechazo 1</text>
+<text x="435" y="89.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">pidió documentación por</text>
+<text x="435" y="106.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">ser la primera</text>
+<text x="435" y="123.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">publicación</text>
+<rect x="550" y="30" width="170" height="120" rx="12" fill="#fdf4ec" stroke="#e0b48a" stroke-width="1.5" />
+<text x="635" y="69.5" text-anchor="middle" font-size="16" font-weight="700" fill="#8a4b14">Rechazo 2</text>
+<text x="635" y="89.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">pidió aclarar a los</text>
+<text x="635" y="106.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">usuarios el uso de IA y</text>
+<text x="635" y="123.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">la privacidad</text>
+<rect x="750" y="30" width="170" height="120" rx="12" fill="#fdf4ec" stroke="#e0b48a" stroke-width="1.5" />
+<text x="835" y="69.5" text-anchor="middle" font-size="16" font-weight="700" fill="#8a4b14">Rechazo 3</text>
+<text x="835" y="89.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">pidió declarar chat</text>
+<text x="835" y="106.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">entre usuarios, que la</text>
+<text x="835" y="123.5" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">app no tiene</text>
+<rect x="950" y="30" width="170" height="120" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="1035" y="87" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Aprobada</text>
+<text x="1035" y="107" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">en App Store</text>
+<rect x="150" y="190" width="170" height="90" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="235" y="232" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Prueba interna</text>
+<text x="235" y="252" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">unos 10 días</text>
+<rect x="350" y="190" width="170" height="90" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="435" y="232" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Producción</text>
+<text x="435" y="252" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">en Google Play</text>
+<text x="20" y="96" text-anchor="start" font-size="18" font-weight="700" fill="#1c1a16">App Store</text>
+<text x="20" y="241" text-anchor="start" font-size="18" font-weight="700" fill="#1c1a16">Google Play</text>
+<path d="M 320 90 H 350" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 520 90 H 550" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 720 90 H 750" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 920 90 H 950" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 320 235 H 350" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+
+</svg>

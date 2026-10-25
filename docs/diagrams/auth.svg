@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="610" viewBox="0 0 1000 610" role="img" aria-labelledby="title desc">
+<title id="title">Inicio de sesión en la app móvil</title><desc id="desc">La app inicia sesión con Google o Apple, el backend devuelve un JWT y un secreto de sesión, y la app renueva el JWT con ese secreto.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1000" height="610" fill="#ffffff" />
+<path d="M 186.66666666666666 100 V 550" stroke="#d6d1c6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" />
+<path d="M 500 100 V 550" stroke="#d6d1c6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" />
+<path d="M 813.3333333333333 100 V 550" stroke="#d6d1c6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" />
+<rect x="71.66666666666666" y="30" width="230" height="70" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="186.66666666666666" y="61" text-anchor="middle" font-size="18" font-weight="700" fill="#24467a">App móvil</text>
+<text x="186.66666666666666" y="83" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">Flutter</text>
+<rect x="385" y="30" width="230" height="70" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="500" y="61" text-anchor="middle" font-size="18" font-weight="700" fill="#1c1a16">Google · Apple</text>
+<text x="500" y="83" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">SDK nativo</text>
+<rect x="698.3333333333333" y="30" width="230" height="70" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="813.3333333333333" y="61" text-anchor="middle" font-size="18" font-weight="700" fill="#2b5b34">Backend</text>
+<text x="813.3333333333333" y="83" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">Convex + Better Auth</text>
+<text x="343.3333333333333" y="134" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Inicia sesión</text>
+<path d="M 190.66666666666666 151 H 496" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<circle cx="166.66666666666666" cy="151" r="12" fill="#3a3730" />
+<text x="166.66666666666666" y="156" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+<text x="343.3333333333333" y="189" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Token de identidad</text>
+<path d="M 496 206 H 190.66666666666666" fill="none" stroke="#8a8478" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-gray)" />
+<text x="499.99999999999994" y="244" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Envía el token de identidad</text>
+<path d="M 190.66666666666666 261 H 809.3333333333333" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<circle cx="166.66666666666666" cy="261" r="12" fill="#3a3730" />
+<text x="166.66666666666666" y="266" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+<path d="M 813.3333333333333 305 H 779.3333333333333 V 327 H 809.3333333333333" fill="none" stroke="#2b5b34" stroke-width="1.8" marker-end="url(#arrow-backend)" />
+<text x="769.3333333333333" y="301" text-anchor="end" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Lo verifica</text>
+<text x="769.3333333333333" y="319" text-anchor="end" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">crea o carga el usuario</text>
+<circle cx="833.3333333333333" cy="316" r="12" fill="#2b5b34" />
+<text x="833.3333333333333" y="321" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">3</text>
+<text x="499.99999999999994" y="357" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">JWT de 24 h + secreto de sesión</text>
+<path d="M 809.3333333333333 374 H 190.66666666666666" fill="none" stroke="#8a8478" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-gray)" />
+<text x="499.99999999999994" y="393" text-anchor="middle" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">el secreto se guarda cifrado en el dispositivo</text>
+<text x="499.99999999999994" y="427" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Usa el JWT en cada conexión</text>
+<path d="M 190.66666666666666 444 H 809.3333333333333" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<circle cx="166.66666666666666" cy="444" r="12" fill="#3a3730" />
+<text x="166.66666666666666" y="449" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">4</text>
+<text x="499.99999999999994" y="482" text-anchor="middle" font-size="14.5" font-weight="600" fill="#1c1a16" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">Antes de que venza, pide otro</text>
+<path d="M 190.66666666666666 499 H 809.3333333333333" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<text x="499.99999999999994" y="518" text-anchor="middle" font-size="13" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">presentando el secreto de sesión</text>
+<circle cx="166.66666666666666" cy="499" r="12" fill="#3a3730" />
+<text x="166.66666666666666" y="504" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">5</text>
+<path d="M 30 580 H 74" fill="none" stroke="#3a3730" stroke-width="1.8" marker-end="url(#arrow-dark)" />
+<text x="86" y="585" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Pedido</text>
+<path d="M 165.48 580 H 209.48" fill="none" stroke="#8a8478" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#arrow-gray)" />
+<text x="221.48" y="585" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Respuesta</text>
+</svg>
