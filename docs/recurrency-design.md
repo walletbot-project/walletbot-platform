@@ -426,6 +426,10 @@ Drift pasa de `schemaVersion` 4 a 5 y `pubspec` a 0.4.0+9, pero
 `minSupportedVersion` **permanece en 0.3.0**: el despliegue no obliga a actualizar.
 La capacidad de recurrencias se negocia por versión, separada del soporte de sync.
 
+> **Actualización 2026-10-05:** el piso nativo subió a **0.6.0** (R-056 en
+> `docs/riesgos.md`). Los clientes 0.3.x ya no sincronizan y la proyección
+> legacy que se describe abajo quedó como código muerto.
+
 - Un cliente 0.3.x recibe **todos** los movimientos, incluidos los futuros,
   como filas normales, sin reglas ni campos de recurrencia. Sus joins de tags
   también se entregan de inmediato.

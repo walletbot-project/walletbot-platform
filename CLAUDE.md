@@ -160,11 +160,12 @@ version gating is handled.
   bump Drift `schemaVersion` without increasing `minSupportedVersion` when
   the backend provides a tested legacy projection, preserves fields older
   writers omit, and hydrates newly supported data when a device upgrades.
-  Recurrences use this path: 0.3.x remains supported; 0.4.0 adds the capability.
-  For WAL-174, older clients intentionally receive future movements as ordinary
-  rows and may count them early. This accepted limitation needs no publication
-  cron or scheduled delivery; the compatibility guarantee is continued sync
-  without a forced update, not occurrence-aware totals on old binaries.
+  Recurrences used this path: 0.3.x stayed supported while 0.4.0 added the
+  capability, and for WAL-174 those older clients intentionally received future
+  movements as ordinary rows and could count them early (accepted limitation,
+  no publication cron or scheduled delivery). Since 2026-10-05 the floor is
+  0.6.0 on every native platform (R-056), so that legacy projection is now
+  dead code.
   Only genuinely incompatible changes require a coordinated minimum-version
   bump; those clients must fail closed on sync while retaining offline data.
   The version floor is enforced on both sides: the client won't start sync
