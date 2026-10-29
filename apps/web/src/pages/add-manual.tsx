@@ -226,16 +226,21 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
 export function TransactionForm({
     onClose,
     onSaved,
+    initialType = 'income',
     initialAccountId = '',
+    initialDestinationAccountId = '',
     initialCategoryId = '',
 }: {
     onClose: () => void
     onSaved: () => void
     /**
-     * Prefills from an entity detail (an account's or category's sheet). A
-     * type change resets the form back to them.
+     * Prefills from an entity detail (an account's or category's sheet) or
+     * from an active activity filter (`transactionFormSeedFromFilter`). A type
+     * change resets the form back to them.
      */
+    initialType?: MovementType
     initialAccountId?: string
+    initialDestinationAccountId?: string
     initialCategoryId?: string
 }) {
     const t = useT()
@@ -293,7 +298,7 @@ export function TransactionForm({
         createdTags,
     )
 
-    const [type, setType] = useState<MovementType>('income')
+    const [type, setType] = useState<MovementType>(initialType)
     const [amount, setAmount] = useState('0')
     const [destinationAmount, setDestinationAmount] = useState('0')
     const [sourceAmountTouched, setSourceAmountTouched] = useState(false)
@@ -304,7 +309,9 @@ export function TransactionForm({
     const [date, setDate] = useState(today)
     const [time, setTime] = useState('')
     const [accountId, setAccountId] = useState(initialAccountId)
-    const [destinationAccountId, setDestinationAccountId] = useState('')
+    const [destinationAccountId, setDestinationAccountId] = useState(
+        initialDestinationAccountId,
+    )
     const [categoryId, setCategoryId] = useState(initialCategoryId)
     const [tagInput, setTagInput] = useState('')
     const [tags, setTags] = useState<FormTag[]>([])
@@ -341,6 +348,7 @@ export function TransactionForm({
     }, [accounts, accountOptions])
 
     useEffect(() => {
+        if (accounts === undefined) return
         setDestinationAccountId((current) => {
             const fallback = defaultDestinationAccountId(
                 accountId,
@@ -355,7 +363,7 @@ export function TransactionForm({
             }
             return fallback
         })
-    }, [accountId, accountOptions])
+    }, [accounts, accountId, accountOptions])
 
     useEffect(() => {
         if (categories === undefined) return
@@ -388,7 +396,7 @@ export function TransactionForm({
         setDate(today())
         setTime('')
         setAccountId(initialAccountId)
-        setDestinationAccountId('')
+        setDestinationAccountId(initialDestinationAccountId)
         setCategoryId(nextType === 'transfer' ? '' : initialCategoryId)
         setTagInput('')
         setTags([])

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show DateTimeRange;
 
 import '../../database.dart';
 import '../occurrence.dart';
+import '../search_fold.dart';
 import '../models/summaries.dart';
 import '../models/transaction_filter.dart';
 
@@ -141,11 +142,7 @@ void _applySimpleFilter(
 
   final search = filter.search?.trim() ?? '';
   if (search.isNotEmpty) {
-    final escaped = search.replaceAll('%', '%%').replaceAll('_', '__');
-    final pattern = '%${escaped.toLowerCase()}%';
-    query.where(
-      (t) => t.name.lower().like(pattern) | t.description.lower().like(pattern),
-    );
+    query.where((t) => _textMatches(db, t, search));
   }
 
   if (filter.categoryIds.isNotEmpty) {
@@ -266,15 +263,42 @@ Expression<bool> _compileCondition(
       if (value is! String || value.trim().isEmpty) {
         return const Constant(true);
       }
-      final escaped = value.trim().replaceAll('%', '%%').replaceAll('_', '__');
-      final pattern = '%${escaped.toLowerCase()}%';
-      final expression = t.name.lower().like(pattern);
+      final expression = _textMatches(db, t, value.trim());
       return condition.operator == 'not contains'
           ? expression.not()
           : expression;
     default:
       return const Constant(true);
   }
+}
+
+/// Accent- and case-insensitive substring match over the movement's name and
+/// description, its source or destination account name, and its category
+/// name. Never NULL, so `not contains` and NOT groups keep rows whose
+/// description, destination or category is empty.
+Expression<bool> _textMatches(
+  AppDatabase db,
+  $TransactionsTable t,
+  String text,
+) {
+  final escaped = text.replaceAll('%', '%%').replaceAll('_', '__');
+  final pattern = '%${foldForSearch(escaped)}%';
+  final accountMatch = existsQuery(
+    db.select(db.accounts)..where(
+      (a) =>
+          (a.id.equalsExp(t.accountId) | a.id.equalsExp(t.toAccountId)) &
+          searchFold(a.name).like(pattern),
+    ),
+  );
+  final categoryMatch = existsQuery(
+    db.select(db.categories)..where(
+      (c) => c.id.equalsExp(t.categoryId) & searchFold(c.name).like(pattern),
+    ),
+  );
+  return searchFold(t.name).like(pattern) |
+      searchFold(coalesce([t.description, const Constant('')])).like(pattern) |
+      accountMatch |
+      categoryMatch;
 }
 
 Expression<bool> _stringSet(

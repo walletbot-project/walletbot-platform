@@ -71,14 +71,53 @@ export type ActivityFilterSeed = Partial<
     >
 >
 
+type FormMovementType = Exclude<TransactionType, 'balance_adjustment'>
+
+const FORM_MOVEMENT_TYPES: readonly FormMovementType[] = [
+    'income',
+    'expense',
+    'transfer',
+]
+
 /**
- * What an entity detail hands `/activity/new` through router state: the form's
- * prefills plus where to go back to once it closes.
+ * What an entity detail or the activity list hands `/activity/new` through
+ * router state: the form's prefills plus where to go back to once it closes.
  */
 export type TransactionFormSeed = {
+    type?: FormMovementType
     accountId?: string
+    destinationAccountId?: string
     categoryId?: string
     returnTo?: string
+}
+
+/**
+ * The form values an activity filter pins down to exactly one choice, so a
+ * movement added while the filter is on shows up in the filtered list.
+ * Advanced trees and multi-value dimensions prefill nothing. Native:
+ * `TransactionFormPrefill.fromFilter`.
+ */
+export function transactionFormSeedFromFilter(
+    filter: SimpleFilter,
+): TransactionFormSeed {
+    if (filter.advancedRoot) return {}
+    const single = filter.types.length === 1 ? filter.types[0] : undefined
+    const type = FORM_MOVEMENT_TYPES.find((value) => value === single)
+    const accountId =
+        filter.accountIds.length === 1 ? filter.accountIds[0] : undefined
+    // Only a transfer has a destination, so a destination-side account filter
+    // has nothing to fill on any other type.
+    const toDestination = filter.accountDirection === 'destination'
+    return {
+        type,
+        accountId: toDestination ? undefined : accountId,
+        destinationAccountId:
+            toDestination && type === 'transfer' ? accountId : undefined,
+        categoryId:
+            filter.categoryIds.length === 1 && type !== 'transfer'
+                ? filter.categoryIds[0]
+                : undefined,
+    }
 }
 
 /**
@@ -90,8 +129,13 @@ export function readTransactionFormSeed(state: unknown): TransactionFormSeed {
     if (typeof state !== 'object' || state === null) return {}
     const seed: Record<string, unknown> = { ...state }
     return {
+        type: FORM_MOVEMENT_TYPES.find((value) => value === seed.type),
         accountId:
             typeof seed.accountId === 'string' ? seed.accountId : undefined,
+        destinationAccountId:
+            typeof seed.destinationAccountId === 'string'
+                ? seed.destinationAccountId
+                : undefined,
         categoryId:
             typeof seed.categoryId === 'string' ? seed.categoryId : undefined,
         returnTo:

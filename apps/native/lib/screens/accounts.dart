@@ -13,6 +13,7 @@ import 'package:app/screens/create_account.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:app/shared/money.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:drift/drift.dart' show Value;
@@ -570,7 +571,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     // its content scrolls; isScrollControlled on the modal enables the tall sizes.
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.6,
+      initialChildSize: detailSheetInitialSize(context),
       minChildSize: 0.3,
       maxChildSize: 0.95,
       builder: _buildSheetBody,

@@ -44,11 +44,61 @@ Future<bool?> pushTransactionForm(
   );
 }
 
+/// The form values an Activity filter pins down to exactly one choice, so a
+/// movement added while the filter is on shows up in the filtered list.
+/// Advanced trees and multi-value dimensions prefill nothing.
+class TransactionFormPrefill {
+  const TransactionFormPrefill({
+    this.type,
+    this.accountId,
+    this.destinationAccountId,
+    this.categoryId,
+  });
+
+  factory TransactionFormPrefill.fromFilter(TransactionFilter filter) {
+    if (filter.isAdvanced) return const TransactionFormPrefill();
+    final type = filter.types.length == 1
+        ? switch (filter.types.single) {
+            TxnType.income => TransactionFormType.income,
+            TxnType.expense => TransactionFormType.expense,
+            TxnType.transfer => TransactionFormType.transfer,
+            TxnType.balanceAdjustment => null,
+          }
+        : null;
+    final accountId = filter.accountIds.length == 1
+        ? filter.accountIds.single
+        : null;
+    // Only a transfer has a destination, so a destination-side account
+    // filter has nothing to fill on any other type.
+    final toDestination =
+        filter.accountDirection == AccountDirection.destination;
+    return TransactionFormPrefill(
+      type: type,
+      accountId: toDestination ? null : accountId,
+      destinationAccountId:
+          toDestination && type == TransactionFormType.transfer
+          ? accountId
+          : null,
+      categoryId:
+          filter.categoryIds.length == 1 && type != TransactionFormType.transfer
+          ? filter.categoryIds.single
+          : null,
+    );
+  }
+
+  final TransactionFormType? type;
+  final String? accountId;
+  final String? destinationAccountId;
+  final String? categoryId;
+}
+
 class TransactionFormScreen extends StatefulWidget {
   const TransactionFormScreen({
     super.key,
     this.onResult,
+    this.initialType,
     this.initialAccountId,
+    this.initialDestinationAccountId,
     this.initialCategoryId,
   });
 
@@ -57,9 +107,12 @@ class TransactionFormScreen extends StatefulWidget {
   /// was recorded).
   final void Function(bool saved)? onResult;
 
-  /// Prefills opened from an entity detail (account or category sheet).
-  /// Ids that are not among the active accounts/categories are ignored.
+  /// Prefills opened from an entity detail (account or category sheet) or
+  /// from an active Activity filter (see [TransactionFormPrefill]). Ids that
+  /// are not among the active accounts/categories are ignored.
+  final TransactionFormType? initialType;
   final String? initialAccountId;
+  final String? initialDestinationAccountId;
   final String? initialCategoryId;
 
   @override
@@ -73,7 +126,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _titleController = TextEditingController();
   TextEditingController _descriptionController = TextEditingController();
 
-  TransactionFormType _type = TransactionFormType.income;
+  late TransactionFormType _type;
   AppRepositories? _repos;
   List<Account> _accounts = const [];
   List<Category> _categories = const [];
@@ -94,6 +147,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   bool _sourceAmountTouched = false;
   bool _destinationAmountTouched = false;
   String? _transferAccountError;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType ?? TransactionFormType.income;
+  }
 
   @override
   void didChangeDependencies() {
@@ -142,14 +201,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             ),
           )
           .toList();
+      final destination =
+          _selectedDestinationAccount ??
+          _findById(accounts, widget.initialDestinationAccountId, (a) => a.id);
       _selectedAccount = _resolveSelectedAccount(
         current:
             _selectedAccount ??
             _findById(accounts, widget.initialAccountId, (a) => a.id),
         accounts: accounts,
+        avoid: destination,
       );
       _selectedDestinationAccount = _resolveDestinationAccount(
-        current: _selectedDestinationAccount,
+        current: destination,
         accounts: accounts,
         source: _selectedAccount,
       );
@@ -172,15 +235,21 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     return null;
   }
 
+  /// [avoid] is a prefilled transfer destination: the default source skips
+  /// it so the transfer doesn't start out going to its own account.
   Account? _resolveSelectedAccount({
     required Account? current,
     required List<Account> accounts,
+    Account? avoid,
   }) {
     if (accounts.isEmpty) return null;
     if (current != null) {
       for (final account in accounts) {
         if (account.id == current.id) return account;
       }
+    }
+    for (final account in accounts) {
+      if (account.id != avoid?.id) return account;
     }
     return accounts.first;
   }

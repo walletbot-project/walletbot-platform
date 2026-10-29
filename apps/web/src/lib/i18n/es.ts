@@ -58,6 +58,12 @@ export const es = {
         language: 'Idioma',
     },
 
+    assistantBanner: {
+        title: 'Conocé a Gaston',
+        message: 'Estoy acá para ayudarte con tus gastos',
+        action: 'Hablar con Gaston',
+    },
+
     whatsapp: {
         title: 'WhatsApp',
         subtitle: 'Registrá gastos chateando con Gaston',

@@ -345,7 +345,9 @@ it('live mode mutes with Pause and leaves with X, keeping the chat', () => {
         isMicCaptureActive: true,
         isMicOn: true,
     })
-    expect(container.querySelector('button[aria-label="Start call"]')).toBeNull()
+    expect(
+        container.querySelector('button[aria-label="Start call"]'),
+    ).toBeNull()
     expect(byText('On a call')).toBeDefined()
     expect(
         container.querySelector('button[aria-label="Discard voice note"]'),

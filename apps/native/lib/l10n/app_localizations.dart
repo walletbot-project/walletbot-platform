@@ -4061,6 +4061,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You need to agree before the assistant can run.'**
   String get aiConsentDeclined;
+
+  /// No description provided for @assistantBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Meet Gaston'**
+  String get assistantBannerTitle;
+
+  /// No description provided for @assistantBannerMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m here to help you track your expenses'**
+  String get assistantBannerMessage;
+
+  /// No description provided for @assistantBannerAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Talk to Gaston'**
+  String get assistantBannerAction;
 }
 
 class _AppLocalizationsDelegate
