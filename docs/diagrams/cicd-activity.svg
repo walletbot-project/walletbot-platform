@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="520" viewBox="0 0 1080 520" role="img" aria-labelledby="title desc">
+<title id="title">Actividad de CI/CD por mes</title><desc id="desc">Corridas de GitHub Actions por mes entre abril y octubre de 2026: pushes a Pull Requests, previews de backend y web, y despliegues a producción.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+</defs>
+<rect width="1080" height="520" fill="#ffffff" />
+<rect x="78" y="23" width="15" height="15" rx="3" fill="#2a78d6" />
+<text x="100" y="37" font-size="17" fill="#1c1a16">Pushes a Pull Requests (lint, tipos y app móvil)</text>
+<rect x="490" y="23" width="15" height="15" rx="3" fill="#eb6834" />
+<text x="512" y="37" font-size="17" fill="#1c1a16">Previews de backend y web</text>
+<rect x="759" y="23" width="15" height="15" rx="3" fill="#1baf7a" />
+<text x="781" y="37" font-size="17" fill="#1c1a16">Despliegues a producción</text>
+<text x="70" y="88" text-anchor="start" font-size="15" fill="#5f5a50">Corridas por mes</text>
+<line x1="78" y1="440" x2="1050" y2="440" stroke="#cdc7ba" stroke-width="1" />
+<text x="68" y="444.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">0</text>
+<line x1="78" y1="385" x2="1050" y2="385" stroke="#ebe8e1" stroke-width="1" />
+<text x="68" y="389.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">20</text>
+<line x1="78" y1="330" x2="1050" y2="330" stroke="#ebe8e1" stroke-width="1" />
+<text x="68" y="334.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">40</text>
+<line x1="78" y1="275" x2="1050" y2="275" stroke="#ebe8e1" stroke-width="1" />
+<text x="68" y="279.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">60</text>
+<line x1="78" y1="220" x2="1050" y2="220" stroke="#ebe8e1" stroke-width="1" />
+<text x="68" y="224.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">80</text>
+<line x1="78" y1="165" x2="1050" y2="165" stroke="#ebe8e1" stroke-width="1" />
+<text x="68" y="169.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">100</text>
+<line x1="78" y1="110" x2="1050" y2="110" stroke="#ebe8e1" stroke-width="1" />
+<text x="68" y="114.5" text-anchor="end" font-size="15" fill="#5f5a50" style="font-variant-numeric: tabular-nums">120</text>
+<path d="M109.42857142857144,440 V430.25 Q109.42857142857144,426.2 113.4,426.2 H129.42857142857144 Q133.42857142857144,426.2 133.4,430.2 V440 Z" fill="#2a78d6" />
+<path d="M161.42857142857144,440 V405.5 Q161.42857142857144,401.5 165.4,401.5 H181.42857142857144 Q185.42857142857144,401.5 185.4,405.5 V440 Z" fill="#1baf7a" />
+<text x="147.4" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">abr</text>
+<path d="M248.28571428571428,440 V364.25 Q248.28571428571428,360.2 252.3,360.2 H268.2857142857143 Q272.2857142857143,360.2 272.3,364.2 V440 Z" fill="#2a78d6" />
+<path d="M300.2857142857143,440 V378.0 Q300.2857142857143,374 304.3,374 H320.2857142857143 Q324.2857142857143,374 324.3,378 V440 Z" fill="#1baf7a" />
+<text x="286.3" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">may</text>
+<path d="M387.14285714285717,440 V279.0 Q387.14285714285717,275 391.1,275 H407.14285714285717 Q411.14285714285717,275 411.1,279 V440 Z" fill="#2a78d6" />
+<path d="M413.14285714285717,440 V334.0 Q413.14285714285717,330 417.1,330 H433.14285714285717 Q437.14285714285717,330 437.1,334 V440 Z" fill="#eb6834" />
+<path d="M439.14285714285717,440 V397.25 Q439.14285714285717,393.2 443.1,393.2 H459.14285714285717 Q463.14285714285717,393.2 463.1,397.2 V440 Z" fill="#1baf7a" />
+<text x="425.1" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">jun</text>
+<path d="M526.0,440 V361.5 Q526.0,357.5 530,357.5 H546.0 Q550.0,357.5 550,361.5 V440 Z" fill="#2a78d6" />
+<path d="M552.0,440 V361.5 Q552.0,357.5 556,357.5 H572.0 Q576.0,357.5 576,361.5 V440 Z" fill="#eb6834" />
+<path d="M578.0,440 V422.0 Q578.0,418 582,418 H598.0 Q602.0,418 602,422 V440 Z" fill="#1baf7a" />
+<text x="564" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">jul</text>
+<path d="M664.8571428571429,440 V127.75 Q664.8571428571429,123.8 668.9,123.8 H684.8571428571429 Q688.8571428571429,123.8 688.9,127.8 V440 Z" fill="#2a78d6" />
+<path d="M690.8571428571429,440 V160.75 Q690.8571428571429,156.8 694.9,156.8 H710.8571428571429 Q714.8571428571429,156.8 714.9,160.8 V440 Z" fill="#eb6834" />
+<path d="M716.8571428571429,440 V334.0 Q716.8571428571429,330 720.9,330 H736.8571428571429 Q740.8571428571429,330 740.9,334 V440 Z" fill="#1baf7a" />
+<text x="702.9" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">ago</text>
+<path d="M803.7142857142858,440 V303.75 Q803.7142857142858,299.8 807.7,299.8 H823.7142857142858 Q827.7142857142858,299.8 827.7,303.8 V440 Z" fill="#2a78d6" />
+<path d="M829.7142857142858,440 V424.75 Q829.7142857142858,420.8 833.7,420.8 H849.7142857142858 Q853.7142857142858,420.8 853.7,424.8 V440 Z" fill="#eb6834" />
+<path d="M855.7142857142858,440 V375.25 Q855.7142857142858,371.2 859.7,371.2 H875.7142857142858 Q879.7142857142858,371.2 879.7,375.2 V440 Z" fill="#1baf7a" />
+<text x="841.7" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">sep</text>
+<path d="M942.5714285714286,440 V287.25 Q942.5714285714286,283.2 946.6,283.2 H962.5714285714286 Q966.5714285714286,283.2 966.6,287.2 V440 Z" fill="#2a78d6" />
+<path d="M968.5714285714286,440 V408.25 Q968.5714285714286,404.2 972.6,404.2 H988.5714285714286 Q992.5714285714286,404.2 992.6,408.2 V440 Z" fill="#eb6834" />
+<path d="M994.5714285714286,440 V378.0 Q994.5714285714286,374 998.6,374 H1014.5714285714286 Q1018.5714285714286,374 1018.6,378 V440 Z" fill="#1baf7a" />
+<text x="980.6" y="464" text-anchor="middle" font-size="17" fill="#1c1a16">oct*</text>
+<text x="425.1" y="323" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">40</text>
+<text x="564" y="350.5" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">30</text>
+<text x="702.9" y="149.8" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">103</text>
+<text x="841.7" y="413.8" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">7</text>
+<text x="980.6" y="397.2" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">13</text>
+<text x="676.9" y="116.8" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">115</text>
+<text x="728.9" y="323" text-anchor="middle" font-size="15" font-weight="600" fill="#1c1a16">40</text>
+<line x1="841.7" y1="396.8" x2="841.7" y2="162" stroke="#8a8478" stroke-width="1" />
+<text x="837.7" y="144" font-size="15.5" fill="#1c1a16">Desde el 22/8 los previews</text>
+<text x="837.7" y="163" font-size="15.5" fill="#1c1a16">se crean a pedido, con etiqueta</text>
+<text x="70" y="506" font-size="14" fill="#5f5a50">* Octubre hasta el 28.</text>
+</svg>
