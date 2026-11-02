@@ -1,0 +1,24 @@
+appId: live.walletbot.app
+---
+- tapOn: "Cuentas.*"
+- runFlow: { file: ../pause.yaml, env: { MS: 2500 } }
+- tapOn: "Nueva cuenta"
+- runFlow: { file: ../pause.yaml, env: { MS: 800 } }
+- tapOn: "Banco"
+- inputText: " Santander"
+- tapOn: { point: "54%,40%" }
+- tapOn: "Balance inicial \\(opcional\\)"
+- inputText: "350000"
+- hideKeyboard
+- runFlow: { file: ../pause.yaml, env: { MS: 1200 } }
+- tapOn: "Crear cuenta"
+- runFlow: { file: ../pause.yaml, env: { MS: 2000 } }
+- tapOn: "Nueva cuenta"
+- runFlow: { file: ../pause.yaml, env: { MS: 800 } }
+- tapOn: "Tarjeta"
+- inputText: " Mastercard"
+- tapOn: { point: "85%,44%" }
+- hideKeyboard
+- runFlow: { file: ../pause.yaml, env: { MS: 1200 } }
+- tapOn: "Crear cuenta"
+- runFlow: { file: ../pause.yaml, env: { MS: 2500 } }

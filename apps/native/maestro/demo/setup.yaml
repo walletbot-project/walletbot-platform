@@ -1,0 +1,15 @@
+appId: live.walletbot.app
+---
+- launchApp
+- tapOn: "Correo"
+- inputText: ${EMAIL}
+- tapOn: "Contraseña"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn: "Iniciar sesión"
+- extendedWaitUntil:
+    visible: "Inicio"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Sincronizado"
+    timeout: 60000

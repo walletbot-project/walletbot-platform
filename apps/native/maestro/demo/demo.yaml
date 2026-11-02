@@ -1,0 +1,11 @@
+appId: live.walletbot.app
+---
+- runFlow: scenes/home.yaml
+- runFlow: scenes/activity.yaml
+- runFlow: scenes/accounts.yaml
+- runFlow: scenes/manual-expense.yaml
+- runFlow: scenes/assistant.yaml
+- runFlow: scenes/home-widget.yaml
+- runFlow: scenes/organization.yaml
+- tapOn: "Inicio.*"
+- runFlow: { file: pause.yaml, env: { MS: 3000 } }

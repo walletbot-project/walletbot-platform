@@ -1,0 +1,23 @@
+appId: live.walletbot.app
+---
+- tapOn: "Tarjeta Mastercard.*"
+- runFlow: { file: ../pause.yaml, env: { MS: 1500 } }
+- tapOn: "Añadir movimiento"
+- runFlow: { file: ../pause.yaml, env: { MS: 1000 } }
+- tapOn: "Gasto"
+- tapOn: "Monto"
+- inputText: "12500"
+- tapOn: "Título"
+- inputText: "Farmacia"
+- hideKeyboard
+- runFlow: { file: ../pause.yaml, env: { MS: 800 } }
+- tapOn: "Supermercado"
+- runFlow: { file: ../pause.yaml, env: { MS: 800 } }
+- tapOn: "Salud"
+- runFlow: { file: ../pause.yaml, env: { MS: 1000 } }
+- scrollUntilVisible:
+    element: "Anotar"
+- tapOn: "Anotar"
+- runFlow: { file: ../pause.yaml, env: { MS: 3000 } }
+- back
+- runFlow: { file: ../pause.yaml, env: { MS: 1000 } }

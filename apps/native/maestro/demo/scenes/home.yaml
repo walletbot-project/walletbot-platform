@@ -1,0 +1,7 @@
+appId: live.walletbot.app
+---
+- runFlow: { file: ../pause.yaml, env: { MS: 3000 } }
+- swipe: { start: "50%,75%", end: "50%,35%", duration: 1500 }
+- runFlow: { file: ../pause.yaml, env: { MS: 2500 } }
+- swipe: { start: "50%,35%", end: "50%,75%", duration: 1500 }
+- runFlow: { file: ../pause.yaml, env: { MS: 1500 } }

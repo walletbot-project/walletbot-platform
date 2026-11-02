@@ -1,0 +1,9 @@
+appId: live.walletbot.app
+---
+- tapOn: "Inicio.*"
+- runFlow: { file: ../pause.yaml, env: { MS: 1500 } }
+- scrollUntilVisible:
+    element: "Gastos del mes pasado.*"
+    centerElement: true
+    speed: 20
+- runFlow: { file: ../pause.yaml, env: { MS: 4000 } }

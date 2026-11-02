@@ -12,7 +12,11 @@ import {
     scenario0Plan,
     scenario2Plan,
 } from './datasets'
-import { insertPlanEntities, insertPlanTransaction } from './utils'
+import {
+    insertPlanEntities,
+    insertPlanTransaction,
+    type PlanIds,
+} from './utils'
 
 /** Movements per mutation. Each one touches the sync counter and two aggregates. */
 const BATCH_SIZE = 40
@@ -124,6 +128,34 @@ export const seedScenario2Batch = internalMutation({
         }
         await ctx.db.patch(sessionId, { scenario2Cursor: to })
         return { done: to >= plan.transactions.length }
+    },
+})
+
+export const seedDemoEntities = internalMutation({
+    args: { userId: v.string(), sessionDay: v.string() },
+    handler: async (ctx, { userId, sessionDay }): Promise<PlanIds> => {
+        const { plan } = scenario2Plan(sessionDayOf(sessionDay))
+        return await insertPlanEntities(ctx, userId, plan)
+    },
+})
+
+export const seedDemoMovements = internalMutation({
+    args: {
+        userId: v.string(),
+        sessionDay: v.string(),
+        ids: v.record(v.string(), v.string()),
+        cursor: v.number(),
+    },
+    handler: async (
+        ctx,
+        { userId, sessionDay, ids, cursor },
+    ): Promise<{ cursor: number; done: boolean }> => {
+        const { plan } = scenario2Plan(sessionDayOf(sessionDay))
+        const to = Math.min(cursor + BATCH_SIZE, plan.transactions.length)
+        for (const txn of plan.transactions.slice(cursor, to)) {
+            await insertPlanTransaction(ctx, userId, plan, ids, txn)
+        }
+        return { cursor: to, done: to >= plan.transactions.length }
     },
 })
 

@@ -1,0 +1,18 @@
+appId: live.walletbot.app
+---
+- tapOn: "Comandos de voz"
+- extendedWaitUntil:
+    visible: "Iniciar llamada"
+    timeout: 10000
+- runFlow: { file: ../pause.yaml, env: { MS: 2000 } }
+- tapOn:
+    text: "Iniciar llamada"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*ya lo tenés en Inicio.*"
+    timeout: 120000
+- runFlow: { file: ../pause.yaml, env: { MS: 3500 } }
+- tapOn: "Terminar llamada"
+- runFlow: { file: ../pause.yaml, env: { MS: 1000 } }
+- tapOn: "Atrás"
+- runFlow: { file: ../pause.yaml, env: { MS: 1000 } }

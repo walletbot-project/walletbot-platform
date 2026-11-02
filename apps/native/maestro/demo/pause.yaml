@@ -1,0 +1,6 @@
+appId: live.walletbot.app
+---
+- extendedWaitUntil:
+    visible: "__demo_pause__"
+    timeout: ${MS}
+    optional: true

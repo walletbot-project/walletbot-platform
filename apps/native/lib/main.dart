@@ -34,6 +34,7 @@ import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:app/user_settings/language_sync_controller.dart';
 import 'package:app/voice/agent_context.dart';
+import 'package:app/voice/demo_voice_expense_command.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
@@ -662,7 +663,9 @@ class _AppMainState extends State<AppMain> {
     // here, and dismiss the route if the account changes while open so
     // the agent can never write to a closed/foreign database.
     final repositories = context.read<AppRepositories>();
-    final commandFactory = context.read<GeminiVoiceExpenseCommandFactory>();
+    final commandFactory = kDemoAssistant
+        ? DemoVoiceExpenseCommandFactory(repositories)
+        : context.read<GeminiVoiceExpenseCommandFactory>();
     final accountId = context.read<AuthController>().activeAccount?.id;
     // The AI-consent gate is account-scoped too, so it has to travel with the
     // route for the same reason: read from inside VoiceScreen it would resolve

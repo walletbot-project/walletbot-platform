@@ -1,0 +1,10 @@
+appId: live.walletbot.app
+---
+- tapOn: "Actividad.*"
+- runFlow: { file: ../pause.yaml, env: { MS: 2500 } }
+- tapOn: "Gastos"
+- runFlow: { file: ../pause.yaml, env: { MS: 2500 } }
+- tapOn: "Todos"
+- runFlow: { file: ../pause.yaml, env: { MS: 1500 } }
+- swipe: { start: "50%,75%", end: "50%,35%", duration: 1500 }
+- runFlow: { file: ../pause.yaml, env: { MS: 1500 } }
