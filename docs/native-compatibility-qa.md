@@ -1,8 +1,12 @@
 # Native backward compatibility — PR #263
 
+> **Superseded (2026-10-05):** the minimum native version is now **0.6.0**
+> (R-056 in `docs/riesgos.md`). Clients from 0.3.x to 0.5.x no longer sync, so
+> this document only describes the period when 0.3.0 was the floor.
+
 ## Accepted behavior
 
-The minimum native version remains **0.3.0**; the new app is **0.4.0+9**.
+The minimum native version remained **0.3.0**; the new app was **0.4.0+9**.
 Older clients keep syncing without a mandatory upgrade. They receive future
 movements and their tags immediately, as ordinary rows without recurrence
 metadata. **Their activity, balances and summaries may include future amounts.**

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="520" viewBox="0 0 1080 520" role="img" aria-labelledby="title desc">
+<title id="title">Integración y despliegue continuos</title><desc id="desc">Qué corre en cada Pull Request, al integrar a main y cuando cambia la versión de la app.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1080" height="520" fill="#ffffff" />
+<rect x="15" y="15" width="1050" height="225" rx="16" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="33" y="45" text-anchor="start" font-size="20" font-weight="700" fill="#24467a">Cada Pull Request</text>
+<rect x="15" y="275" width="500" height="230" rx="16" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="33" y="305" text-anchor="start" font-size="20" font-weight="700" fill="#2b5b34">Merge a main</text>
+<text x="33" y="325" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">producción</text>
+<rect x="565" y="275" width="500" height="230" rx="16" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="583" y="305" text-anchor="start" font-size="20" font-weight="700" fill="#1c1a16">Cambio de versión</text>
+<text x="583" y="325" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">de la app móvil</text>
+<rect x="35" y="70" width="325" height="46" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="197.5" y="90" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Lint</text>
+<text x="197.5" y="110" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Biome y ESLint</text>
+<rect x="377" y="70" width="325" height="46" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="539.5" y="90" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Chequeo de tipos</text>
+<text x="539.5" y="110" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">TypeScript</text>
+<rect x="719" y="70" width="325" height="46" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="881.5" y="90" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">App móvil</text>
+<text x="881.5" y="110" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">flutter analyze y flutter test</text>
+<rect x="35" y="172" width="325" height="46" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="197.5" y="201" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Backend y web de preview</text>
+<rect x="377" y="172" width="325" height="46" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="539.5" y="201" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Landing de preview</text>
+<rect x="719" y="172" width="325" height="46" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="881.5" y="192" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">APK de prueba</text>
+<text x="881.5" y="212" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">conectado al backend de preview</text>
+<rect x="35" y="335" width="460" height="46" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="265" y="355" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Backend</text>
+<text x="265" y="375" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Convex Cloud</text>
+<rect x="35" y="389" width="460" height="46" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="265" y="409" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Web y landing</text>
+<text x="265" y="429" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Cloudflare Pages</text>
+<rect x="35" y="443" width="460" height="46" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="265" y="463" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">APK firmado</text>
+<text x="265" y="483" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">como artefacto del workflow</text>
+<rect x="585" y="335" width="460" height="46" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="815" y="355" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Android</text>
+<text x="815" y="375" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">release en GitHub con APK y AAB</text>
+<rect x="585" y="389" width="460" height="46" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="815" y="409" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">iOS</text>
+<text x="815" y="429" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">build y subida a TestFlight</text>
+<text x="35" y="158" text-anchor="start" font-size="13.5" font-weight="600" fill="#24467a">A pedido, con una etiqueta en el PR:</text>
+<path d="M 265 240 V 275" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 515 390 H 565" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+
+</svg>

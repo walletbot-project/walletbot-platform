@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="440" viewBox="0 0 1100 440" role="img" aria-labelledby="title desc">
+<title id="title">Cuentas locales y remotas</title><desc id="desc">Cada perfil del celular tiene su propia base SQLite; solo los perfiles remotos se sincronizan, y un perfil local puede pasar a remoto.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1100" height="440" fill="#ffffff" />
+<rect x="15" y="15" width="750" height="405" rx="16" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="33" y="45" text-anchor="start" font-size="20" font-weight="700" fill="#24467a">Celular</text>
+<rect x="40" y="65" width="700" height="66" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="390" y="95" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Almacenamiento seguro</text>
+<text x="390" y="115" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">lista de perfiles, perfil activo y secretos de sesión</text>
+<rect x="40" y="160" width="270" height="70" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="175" y="192" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Perfil local</text>
+<text x="175" y="212" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">solo un nombre, sin login</text>
+<rect x="470" y="160" width="270" height="70" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="605" y="192" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Perfil remoto</text>
+<text x="605" y="212" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Google, Apple o email</text>
+<rect x="40" y="270" width="270" height="70" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="175" y="302" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Base SQLite propia</text>
+<text x="175" y="322" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">no se sincroniza</text>
+<rect x="470" y="270" width="270" height="70" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="605" y="302" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">Base SQLite propia</text>
+<text x="605" y="322" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">se sincroniza</text>
+<rect x="830" y="263" width="250" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="955" y="302" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Backend</text>
+<text x="955" y="322" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Convex</text>
+<text x="390" y="385" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">Un solo perfil está abierto a la vez: al cambiar, se cierra su base y se abre la del otro.</text>
+<path d="M 175 230 V 270" fill="none" stroke="#24467a" stroke-width="1.6" marker-end="url(#arrow-client)" />
+<path d="M 605 230 V 270" fill="none" stroke="#24467a" stroke-width="1.6" marker-end="url(#arrow-client)" />
+<path d="M 310 195 H 470" fill="none" stroke="#24467a" stroke-width="1.6" marker-end="url(#arrow-client)" />
+<text x="390" y="185" text-anchor="middle" font-size="13.5" font-weight="600" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">pasa a remota</text>
+<text x="390" y="214" text-anchor="middle" font-size="12.5" font-weight="400" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">conserva su base</text>
+<path d="M 740 305 H 830" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" marker-start="url(#arrow-dark)" />
+<text x="785" y="296" text-anchor="middle" font-size="13.5" font-weight="600" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">sync</text>
+
+</svg>

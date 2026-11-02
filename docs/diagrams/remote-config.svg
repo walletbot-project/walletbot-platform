@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="460" viewBox="0 0 1120 460" role="img" aria-labelledby="title desc">
+<title id="title">Configuración remota y feature flags</title><desc id="desc">Lo que la app resuelve al arrancar: a qué backend conectarse, si su versión está soportada y qué funcionalidades tiene habilitadas.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1120" height="460" fill="#ffffff" />
+<rect x="20" y="30" width="400" height="84" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="220" y="69" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">1. ¿A qué backend me conecto?</text>
+<text x="220" y="89" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">antes de abrir la conexión</text>
+<rect x="20" y="160" width="400" height="84" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="220" y="199" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">2. ¿Mi versión está soportada?</text>
+<text x="220" y="219" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">por dispositivo, sin sesión</text>
+<rect x="20" y="290" width="400" height="84" rx="12" fill="#f0f5fb" stroke="#a8bfdf" stroke-width="1.5" />
+<text x="220" y="329" text-anchor="middle" font-size="16" font-weight="700" fill="#24467a">3. ¿Qué funciones tengo?</text>
+<text x="220" y="349" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">por cuenta; la web usa una consulta reactiva</text>
+<rect x="600" y="30" width="300" height="84" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="750" y="69" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Host estático</text>
+<text x="750" y="89" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">URLs del backend, solo https</text>
+<rect x="600" y="160" width="300" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="750" y="199" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">/v1/config</text>
+<text x="750" y="219" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">versión mínima y última, avisos y versiones</text>
+<text x="750" y="236" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">legales</text>
+<rect x="600" y="290" width="300" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="750" y="329" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Feature flags</text>
+<text x="750" y="349" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">valor global, o el del usuario si tiene uno</text>
+<rect x="950" y="290" width="150" height="84" rx="12" fill="#fbfaf8" stroke="#e1ddd3" stroke-width="1.5" />
+<text x="1025" y="329" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Back office</text>
+<text x="1025" y="349" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">edita los flags</text>
+<text x="560" y="420" text-anchor="middle" font-size="14" font-weight="400" fill="#5f5a50">La URL del backend y la respuesta de /v1/config quedan en caché: si la descarga falla, la app usa la última conocida o los valores que trae empaquetados.</text>
+<path d="M 420 72 H 600" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<text x="510" y="62" text-anchor="middle" font-size="13.5" font-weight="600" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">bootstrap</text>
+<path d="M 420 202 H 600" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<text x="510" y="192" text-anchor="middle" font-size="13.5" font-weight="600" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">GET</text>
+<path d="M 420 332 H 600" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<text x="510" y="322" text-anchor="middle" font-size="13.5" font-weight="600" fill="#5f5a50" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" paint-order="stroke">/v1/account-config</text>
+<path d="M 950 332 H 900" fill="none" stroke="#8a8478" stroke-width="1.6" marker-end="url(#arrow-gray)" />
+
+</svg>

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="470" viewBox="0 0 1100 470" role="img" aria-labelledby="title desc">
+<title id="title">Publicación de la app móvil</title><desc id="desc">Desde el cambio de versión hasta las tiendas: pasos automáticos del CI y pasos manuales en Play Console y App Store Connect.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1100" height="470" fill="#ffffff" />
+<rect x="20" y="168" width="175" height="84" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="107.5" y="207" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Versión nueva</text>
+<text x="107.5" y="227" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">se sube en pubspec.yaml</text>
+<text x="107.5" y="244" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">dentro de un PR</text>
+<rect x="225" y="168" width="160" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="305" y="207" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Merge a main</text>
+<text x="305" y="227" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">el CI detecta el</text>
+<text x="305" y="244" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">cambio</text>
+<rect x="425" y="60" width="185" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="517.5" y="99" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Build firmado</text>
+<text x="517.5" y="119" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">APK y AAB con la clave de</text>
+<text x="517.5" y="136" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">release</text>
+<rect x="640" y="60" width="185" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="732.5" y="99" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Release en GitHub</text>
+<text x="732.5" y="119" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">etiqueta vX.Y.Z con el APK</text>
+<text x="732.5" y="136" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">y el AAB</text>
+<rect x="855" y="60" width="225" height="84" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="967.5" y="99" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Play Console</text>
+<text x="967.5" y="119" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">subimos el AAB y Google lo</text>
+<text x="967.5" y="136" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">revisa</text>
+<rect x="425" y="276" width="185" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="517.5" y="315" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Build en macOS</text>
+<text x="517.5" y="335" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">firmado y sin credenciales</text>
+<text x="517.5" y="352" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">en el bundle</text>
+<rect x="640" y="276" width="185" height="84" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="732.5" y="315" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">TestFlight</text>
+<text x="732.5" y="335" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">subida automática</text>
+<rect x="855" y="276" width="225" height="84" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="967.5" y="315" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">App Store Connect</text>
+<text x="967.5" y="335" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">lo enviamos a revisión de Apple</text>
+<rect x="20" y="412" width="22" height="16" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="31" y="426" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34"></text>
+<rect x="190" y="412" width="22" height="16" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="201" y="426" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16"></text>
+<text x="425" y="46" text-anchor="start" font-size="16" font-weight="700" fill="#1c1a16">Android</text>
+<text x="425" y="262" text-anchor="start" font-size="16" font-weight="700" fill="#1c1a16">iOS</text>
+<text x="52" y="425" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Automático en CI</text>
+<text x="222" y="425" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">Paso manual</text>
+<text x="1080" y="425" text-anchor="end" font-size="14" font-weight="400" fill="#5f5a50">Con la versión publicada en las dos tiendas, recién ahí se puede subir la versión mínima.</text>
+<path d="M 195 210 H 225" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 385 210 H 402 V 102 H 425" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 385 210 H 402 V 318 H 425" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 610 102 H 640" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 825 102 H 855" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 610 318 H 640" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 825 318 H 855" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+
+</svg>

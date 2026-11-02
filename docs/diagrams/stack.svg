@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="500" viewBox="0 0 1100 500" role="img" aria-labelledby="title desc">
+<title id="title">Stack por parte del monorepo</title><desc id="desc">Herramientas usadas en cada parte del monorepo y dónde se publica cada una.</desc>
+<defs>
+<style>text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }</style>
+<marker id="arrow-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3a3730" /></marker>
+<marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#8a8478" /></marker>
+<marker id="arrow-client" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#24467a" /></marker>
+<marker id="arrow-backend" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2b5b34" /></marker>
+<marker id="arrow-voice" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#6d3fb0" /></marker>
+<marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#b5651d" /></marker>
+</defs>
+<rect width="1100" height="500" fill="#ffffff" />
+<rect x="15" y="15" width="1070" height="350" rx="16" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="33" y="45" text-anchor="start" font-size="20" font-weight="700" fill="#1c1a16">Monorepo</text>
+<text x="33" y="65" text-anchor="start" font-size="14" font-weight="400" fill="#5f5a50">pnpm</text>
+<rect x="35" y="75" width="194" height="184" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="49" y="100" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">App móvil</text>
+<text x="49" y="118" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50">apps/native</text>
+<path d="M 35 125 H 229" stroke="#d3dff0" stroke-width="1.2" />
+<text x="49" y="147" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Flutter (Dart)</text>
+<text x="49" y="167" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Drift (SQLite)</text>
+<text x="49" y="187" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">flutter_test</text>
+<text x="49" y="207" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">flutter_lints</text>
+<rect x="244" y="75" width="194" height="184" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="258" y="100" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">App web</text>
+<text x="258" y="118" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50">apps/web</text>
+<path d="M 244 125 H 438" stroke="#d3dff0" stroke-width="1.2" />
+<text x="258" y="147" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">React y React Router</text>
+<text x="258" y="167" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Vite</text>
+<text x="258" y="187" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Tailwind CSS y shadcn</text>
+<text x="258" y="207" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Actify</text>
+<text x="258" y="227" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">ESLint</text>
+<text x="258" y="247" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Vitest</text>
+<rect x="453" y="75" width="194" height="184" rx="12" fill="#f6f9fd" stroke="#d3dff0" stroke-width="1.5" />
+<text x="467" y="100" text-anchor="start" font-size="16" font-weight="700" fill="#24467a">Landing</text>
+<text x="467" y="118" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50">apps/landing</text>
+<path d="M 453 125 H 647" stroke="#d3dff0" stroke-width="1.2" />
+<text x="467" y="147" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Astro</text>
+<text x="467" y="167" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Tailwind CSS</text>
+<rect x="662" y="75" width="194" height="184" rx="12" fill="#ffffff" stroke="#c8dcc4" stroke-width="1.5" />
+<text x="676" y="100" text-anchor="start" font-size="16" font-weight="700" fill="#2b5b34">Backend</text>
+<text x="676" y="118" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50">packages/backend</text>
+<path d="M 662 125 H 856" stroke="#c8dcc4" stroke-width="1.2" />
+<text x="676" y="147" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Convex</text>
+<text x="676" y="167" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Better Auth</text>
+<text x="676" y="187" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Resend y React Email</text>
+<text x="676" y="207" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">convex-test</text>
+<text x="676" y="227" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Vitest</text>
+<rect x="871" y="75" width="194" height="184" rx="12" fill="#ffffff" stroke="#c8dcc4" stroke-width="1.5" />
+<text x="885" y="100" text-anchor="start" font-size="16" font-weight="700" fill="#2b5b34">Compartido</text>
+<text x="885" y="118" text-anchor="start" font-size="13" font-weight="400" fill="#5f5a50">packages/shared</text>
+<path d="M 871 125 H 1065" stroke="#c8dcc4" stroke-width="1.2" />
+<text x="885" y="147" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">TypeScript y zod</text>
+<text x="885" y="167" text-anchor="start" font-size="13.5" font-weight="400" fill="#5f5a50">Vitest</text>
+<rect x="35" y="285" width="1030" height="60" rx="12" fill="#fbfaf8" stroke="#e1ddd3" stroke-width="1.5" />
+<text x="550" y="312" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">En todo el monorepo</text>
+<text x="550" y="332" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Biome para formato y lint del TypeScript · devenv para el entorno · GitHub Actions con Blacksmith para CI/CD</text>
+<rect x="35" y="420" width="194" height="56" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="132" y="445" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Tiendas</text>
+<text x="132" y="465" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Google Play y App Store</text>
+<rect x="244" y="420" width="403" height="56" rx="12" fill="#f7f6f3" stroke="#cdc7ba" stroke-width="1.5" />
+<text x="445.5" y="454" text-anchor="middle" font-size="16" font-weight="700" fill="#1c1a16">Cloudflare Pages</text>
+<rect x="662" y="420" width="194" height="56" rx="12" fill="#f1f7f0" stroke="#a6c8a2" stroke-width="1.5" />
+<text x="759" y="454" text-anchor="middle" font-size="16" font-weight="700" fill="#2b5b34">Convex Cloud</text>
+<text x="968" y="445" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">Lo importan la web</text>
+<text x="968" y="463" text-anchor="middle" font-size="13.5" font-weight="400" fill="#5f5a50">y el backend</text>
+<path d="M 132 365 V 420" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 341 365 V 420" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 550 365 V 420" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+<path d="M 759 365 V 420" fill="none" stroke="#3a3730" stroke-width="1.6" marker-end="url(#arrow-dark)" />
+
+</svg>
