@@ -3,6 +3,7 @@ import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
+import 'package:app/auth/promotion_carryover.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
@@ -66,6 +67,41 @@ Future<void> showAccountSwitcher(
   );
 }
 
+/// Turns the active local account into an online one. The sign-in screen does
+/// the work and pops with `true`, which this returns as a bool.
+Future<bool> openLocalPromotion(
+  BuildContext context,
+  UserAccount account,
+  AppDatabase database,
+) async {
+  // Read before the route is pushed: the sign-in screen only has the new
+  // session's server to hand it to, so it has to travel with the request.
+  final carryover = await buildPromotionCarryover(
+    database: database,
+    accountId: account.id,
+    clientInfo: context.read<ClientInfo?>(),
+    locale: Localizations.localeOf(context).toLanguageTag(),
+    versions: context.read<AppConfigController>().legalVersions,
+  );
+  if (!context.mounted) return false;
+  final promoted = await Navigator.of(context).push<bool>(
+    MaterialPageRoute<bool>(
+      builder: (_) => PopOnAccountSwitch(
+        accountId: account.id,
+        child: LoginScreen(
+          canDismiss: true,
+          promotion: LocalPromotion(
+            accountId: account.id,
+            beforeConvert: () => markAllSyncedTablesDirty(database),
+            carryover: carryover,
+          ),
+        ),
+      ),
+    ),
+  );
+  return promoted == true;
+}
+
 /// The switcher's content: the active account and the actions that act on it,
 /// then the other accounts on this device, then "add account".
 ///
@@ -116,7 +152,12 @@ class AccountSwitcherView extends StatelessWidget {
     final whatsapp =
         context.watch<AppConfigController?>()?.isFlagEnabled(kWhatsappFlag) ??
         false;
-    final topCount = (currency == null ? 2 : 3) + (whatsapp ? 1 : 0);
+    // Offered only for a local account, and only with its open database in
+    // hand: promotion flags that database's rows for the first push.
+    final localDatabase = database;
+    final promote = active?.type == AccountType.local && localDatabase != null;
+    final topCount =
+        (currency == null ? 2 : 3) + (whatsapp ? 1 : 0) + (promote ? 1 : 0);
 
     return SafeArea(
       top: false,
@@ -145,8 +186,20 @@ class AccountSwitcherView extends StatelessWidget {
               _ActionTile(
                 icon: Icons.chat_bubble_outline_rounded,
                 title: l10n.whatsappTitle,
-                borderRadius: groupedRadius(topCount - 2, topCount),
+                borderRadius: groupedRadius(
+                  topCount - (promote ? 3 : 2),
+                  topCount,
+                ),
                 onTap: () => _openWhatsapp(context, active),
+              ),
+            ],
+            if (promote) ...[
+              const SizedBox(height: kGroupSpacing),
+              _ActionTile(
+                icon: Icons.cloud_upload_outlined,
+                title: l10n.promoteBackUpData,
+                borderRadius: groupedRadius(topCount - 2, topCount),
+                onTap: () => _openPromote(context, active, localDatabase),
               ),
             ],
             const SizedBox(height: kGroupSpacing),
@@ -246,6 +299,17 @@ class AccountSwitcherView extends StatelessWidget {
           ),
         )
         .whenComplete(() => aiConsent?.dispose());
+  }
+
+  Future<void> _openPromote(
+    BuildContext context,
+    UserAccount account,
+    AppDatabase database,
+  ) async {
+    final promoted = await openLocalPromotion(context, account, database);
+    // The switcher closes too, since what it showed (a local account) is no
+    // longer true.
+    if (promoted && context.mounted) Navigator.of(context).pop();
   }
 
   void _openAddAccount(BuildContext context, String? activeId) {

@@ -1379,6 +1379,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'An account with that email already exists. Sign in with your password or with Google.';
 
   @override
+  String get promoteBackUpData => 'Back up my data';
+
+  @override
+  String get promoteIntro =>
+      'Create an online account and everything you have so far will be synced to it.';
+
+  @override
+  String get promoteAccountExists =>
+      'An online account already exists for that email or login. Pick a different one, or use “Add account” to sign in to it separately.';
+
+  @override
+  String get promoteAccountExistsSignIn =>
+      'An account with that email already exists. If you started this backup earlier, verify the email and sign in to finish it; otherwise use a different email.';
+
+  @override
+  String get promoteAccountClaimed =>
+      'This account was already linked to another online account. Sign in with that one to finish backing up your data.';
+
+  @override
+  String promoteFailed(Object error) {
+    return 'Could not back up your data: $error';
+  }
+
+  @override
   String get emailSignInFailedGoogleHint =>
       'Sign-in failed. If you registered with Google, use “Continue with Google”.';
 

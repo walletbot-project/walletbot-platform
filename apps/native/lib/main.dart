@@ -342,6 +342,13 @@ class _AuthGate extends StatelessWidget {
           ? const LoginScreen()
           : const AccountChooserScreen();
     }
+    // A local account is being converted to an online one over the same
+    // database. Its subtree has to be gone — connection closed — before it is
+    // rebuilt as a remote one, so this frame builds nothing of it. See
+    // `AuthController._promoteInPlace`.
+    if (auth.promotingId == active.id) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return MultiProvider(
       // Device-scoped half: everything that owns, or is derived from, this
       // account's local database. Keyed by the account *id*, so re-auth —
@@ -456,7 +463,7 @@ class _AuthGate extends StatelessWidget {
               create: (ctx) {
                 final sync = VoiceSessionRemoteSync(
                   repository: ctx.read<VoiceSessionRepository>(),
-                  ownerId: active.id,
+                  ownerId: active.serverUserId,
                   client: ctx.read<ConvexClient?>(),
                 );
                 sync.schedule(delay: Duration.zero);

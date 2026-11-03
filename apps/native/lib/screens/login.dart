@@ -33,14 +33,42 @@ enum _LoginPath { remote, local }
 /// form; the other two replace it entirely until the user navigates back.
 enum _RemoteFlow { credentials, forgotPassword, verifyPending }
 
+/// An error message in the sign-in screen's own look: a floating, rounded card
+/// tinted with the theme's error colours, instead of the default flat bar.
+SnackBar _errorSnackBar(ColorScheme colors, String message) => SnackBar(
+  behavior: SnackBarBehavior.floating,
+  backgroundColor: colors.errorContainer,
+  margin: const EdgeInsets.all(16),
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(16),
+    side: BorderSide(color: colors.error.withValues(alpha: 0.5)),
+  ),
+  content: Row(
+    children: [
+      Icon(Icons.error_outline_rounded, color: colors.onErrorContainer),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Text(message, style: TextStyle(color: colors.onErrorContainer)),
+      ),
+    ],
+  ),
+);
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.canDismiss = false});
+  const LoginScreen({super.key, this.canDismiss = false, this.promotion});
 
   /// When true the screen was surfaced on top of an active account (via the
   /// account switcher's "add account" action), so it shows a close button that
   /// returns to the current account. When false it is the app root shown at
   /// first launch and offers no way out but signing in.
   final bool canDismiss;
+
+  /// Set when the screen turns the active local account into an online one
+  /// ("Back up my data"). The screen then offers only the online sign-up /
+  /// sign-in panel, every auth call carries the promotion, and success pops
+  /// with `true` instead of switching accounts.
+  final LocalPromotion? promotion;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -81,6 +109,20 @@ class _LoginScreenState extends State<LoginScreen> {
   int _resendCooldown = 0;
   Timer? _resendTimer;
 
+  bool get _promoting => widget.promotion != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Promotion assumes the user has no online account yet and never merges
+    // into an existing one, so it opens on sign-up. See docs/riesgos.md R-060.
+    if (_promoting) _emailMode = _EmailAuthMode.signUp;
+  }
+
+  void _finishPromotion() {
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
   @override
   void dispose() {
     _resendTimer?.cancel();
@@ -110,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     final auth = context.read<AuthController>();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -119,15 +162,18 @@ class _LoginScreenState extends State<LoginScreen> {
         await auth.signInWithEmail(
           email: email,
           password: password,
-          rejectExisting: widget.canDismiss,
+          rejectExisting: widget.canDismiss && !_promoting,
+          promotion: widget.promotion,
         );
+        if (_promoting) _finishPromotion();
       } else {
         final clientInfo = context.read<ClientInfo?>();
         await auth.signUpWithEmail(
           name: _remoteNameController.text.trim(),
           email: email,
           password: password,
-          rejectExisting: widget.canDismiss,
+          rejectExisting: widget.canDismiss && !_promoting,
+          promotion: widget.promotion,
           // Both documents: a new account accepts the whole agreement, and the
           // button cannot be pressed unless both boxes are ticked.
           acceptance: LegalAcceptancePayload(
@@ -140,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.accountAlreadyAdded));
     } on AccountExistsException {
       // Registering an existing address used to land on the verify-pending
       // screen waiting for mail the backend never sends. Say what happened
@@ -148,7 +194,29 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _emailMode = _EmailAuthMode.signIn);
       }
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountExistsSignIn)));
+      // While promoting, the address may be this very backup's own account —
+      // signed up, then the screen closed before the verification finished —
+      // and signing in finishes it. The backend only lets that through for an
+      // account linked to this local one, and refuses any other.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            _promoting
+                ? l10n.promoteAccountExistsSignIn
+                : l10n.accountExistsSignIn,
+          ),
+        ),
+      );
+    } on LocalAccountClaimedException {
+      // An earlier attempt of this backup already created an online account
+      // for it (with another email or login). Only that account can finish it,
+      // so sign-in is where this goes on.
+      if (mounted) {
+        setState(() => _emailMode = _EmailAuthMode.signIn);
+      }
+      messenger.showSnackBar(
+        _errorSnackBar(colors, l10n.promoteAccountClaimed),
+      );
     } on EmailNotVerifiedException {
       // The backend already (re-)sent the verification email on this attempt.
       if (mounted) {
@@ -161,17 +229,19 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_emailMode == _EmailAuthMode.signIn) {
         // Repeat attempt (e.g. tapped "I verified" too early): say so.
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.emailStillNotVerified)),
+          _errorSnackBar(colors, l10n.emailStillNotVerified),
         );
       }
     } catch (e) {
       // Generic, account-independent hint: many failed sign-ins are users who
       // actually registered with Google. Avoids leaking whether the email
       // exists or which provider it uses.
-      final message = _emailMode == _EmailAuthMode.signIn
+      final message = _promoting
+          ? l10n.promoteFailed(e)
+          : _emailMode == _EmailAuthMode.signIn
           ? l10n.emailSignInFailedGoogleHint
           : l10n.emailAuthFailed(_emailMode.actionLabel(l10n), e);
-      messenger.showSnackBar(SnackBar(content: Text(message)));
+      messenger.showSnackBar(_errorSnackBar(colors, message));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -294,23 +364,30 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     try {
       await context.read<AuthController>().signInWithApple(
-        rejectExisting: widget.canDismiss,
+        rejectExisting: widget.canDismiss && !_promoting,
+        promotion: widget.promotion,
       );
+      if (_promoting) _finishPromotion();
     } on SignInWithAppleAuthorizationException catch (e) {
       // Dismissing Apple's sheet is a choice, not a failure.
       if (e.code != AuthorizationErrorCode.canceled) {
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.appleSignInFailed(e))),
+          _errorSnackBar(colors, l10n.appleSignInFailed(e)),
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
-    } catch (e) {
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.accountAlreadyAdded));
+    } on AccountExistsException {
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.promoteAccountExists));
+    } on LocalAccountClaimedException {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.appleSignInFailed(e))),
+        _errorSnackBar(colors, l10n.promoteAccountClaimed),
       );
+    } catch (e) {
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.appleSignInFailed(e)));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -320,22 +397,31 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
     try {
       await context.read<AuthController>().signInWithGoogle(
-        rejectExisting: widget.canDismiss,
+        rejectExisting: widget.canDismiss && !_promoting,
+        promotion: widget.promotion,
       );
+      if (_promoting) _finishPromotion();
     } on GoogleSignInException catch (e) {
       // The user dismissing the Google sheet isn't an error worth surfacing.
       if (e.code != GoogleSignInExceptionCode.canceled) {
         messenger.showSnackBar(
-          SnackBar(content: Text(l10n.googleSignInFailed(e))),
+          _errorSnackBar(colors, l10n.googleSignInFailed(e)),
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.accountAlreadyAdded));
+    } on AccountExistsException {
+      messenger.showSnackBar(_errorSnackBar(colors, l10n.promoteAccountExists));
+    } on LocalAccountClaimedException {
+      messenger.showSnackBar(
+        _errorSnackBar(colors, l10n.promoteAccountClaimed),
+      );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.googleSignInFailed(e))),
+        _errorSnackBar(colors, l10n.googleSignInFailed(e)),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -361,18 +447,28 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const _HeroHeader(),
+                            _HeroHeader(
+                              intro: _promoting
+                                  ? context.l10n.promoteIntro
+                                  : context.l10n.loginIntro,
+                            ),
                             const SizedBox(height: 22),
                             const AppConfigBannerList(
                               placement: 'auth',
                               bottomSpacing: 14,
                             ),
-                            _PathPicker(
-                              selected: _path,
-                              enabled: !_submitting,
-                              onChanged: (path) => setState(() => _path = path),
-                            ),
-                            const SizedBox(height: 14),
+                            // Promoting leaves no choice to make: the account
+                            // already exists locally, so only the online path
+                            // is offered.
+                            if (!_promoting) ...[
+                              _PathPicker(
+                                selected: _path,
+                                enabled: !_submitting,
+                                onChanged: (path) =>
+                                    setState(() => _path = path),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
                             _AuthPathSwitcher(
                               path: _path,
                               remote: KeyedSubtree(
@@ -455,7 +551,9 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader();
+  const _HeroHeader({required this.intro});
+
+  final String intro;
 
   @override
   Widget build(BuildContext context) {
@@ -493,7 +591,7 @@ class _HeroHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    context.l10n.loginIntro,
+                    intro,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w600,

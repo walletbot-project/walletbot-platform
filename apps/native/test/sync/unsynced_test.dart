@@ -71,4 +71,30 @@ void main() {
       );
     }
   });
+
+  test(
+    'markAllSyncedTablesDirty flags clean rows so a first push sends them',
+    () async {
+      await db.customStatement(
+        "INSERT INTO accounts (id, name, currency, created_at, updated_at, dirty)"
+        " VALUES ('a', 'Cash', 'USD', 0, 0, 0)",
+      );
+      await db.customStatement(
+        "INSERT INTO categories (id, name, created_at, updated_at, dirty)"
+        " VALUES ('c', 'Food', 0, 0, 0)",
+      );
+      expect(await hasUnsyncedChanges(db), isFalse);
+
+      await markAllSyncedTablesDirty(db);
+
+      expect(await hasUnsyncedChanges(db), isTrue);
+      final clean = await db
+          .customSelect(
+            'SELECT (SELECT COUNT(*) FROM accounts WHERE dirty = 0)'
+            ' + (SELECT COUNT(*) FROM categories WHERE dirty = 0) AS n',
+          )
+          .getSingle();
+      expect(clean.read<int>('n'), 0);
+    },
+  );
 }

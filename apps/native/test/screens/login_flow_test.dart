@@ -4,13 +4,16 @@ import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/config.dart';
+import 'package:app/l10n/app_localizations.dart';
 import 'package:app/main.dart';
+import 'package:app/screens/login.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:provider/provider.dart';
 
 import '../helpers/memory_display_settings_store.dart';
 
@@ -362,5 +365,131 @@ void main() {
     );
     // And no cooldown, so the reason stays reachable instead of a dead button.
     expect(find.text('Reenviar correo'), findsOneWidget);
+  });
+
+  testWidgets('promoting offers only the online path, with its own intro', (
+    tester,
+  ) async {
+    final auth = AuthController(awaitFrame: () async {});
+    final local = await auth.addLocal(name: 'Mine');
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthController>.value(value: auth),
+          ChangeNotifierProvider<AppConfigController>(
+            create: (_) => AppConfigController(),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: LoginScreen(
+            canDismiss: true,
+            promotion: LocalPromotion(
+              accountId: local.id,
+              beforeConvert: () async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Create an online account and everything you have so far will be '
+        'synced to it.',
+      ),
+      findsOneWidget,
+    );
+    // No local-account option: the account being promoted already is one.
+    expect(find.text('Local account'), findsNothing);
+    // Opens on sign-up, but can switch to sign-in: a backup begun by email and
+    // interrupted before the verification finished is completed by signing in.
+    expect(find.text('Sign up'), findsWidgets);
+    expect(find.text('Forgot your password?'), findsNothing);
+    expect(find.text('Already have an account? Sign in'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  Future<void> promoteWithRefusal(
+    WidgetTester tester,
+    Map<String, String> error,
+  ) async {
+    final auth = AuthController(
+      awaitFrame: () async {},
+      httpClient: MockClient(
+        (_) async => http.Response(jsonEncode(error), 409),
+      ),
+    );
+    final local = await auth.addLocal(name: 'Mine');
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthController>.value(value: auth),
+          ChangeNotifierProvider<AppConfigController>(
+            create: (_) => AppConfigController(),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: LoginScreen(
+              canDismiss: true,
+              promotion: LocalPromotion(
+                accountId: local.id,
+                beforeConvert: () async {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Mine');
+    await tester.enterText(find.byType(TextFormField).at(1), 'a@b.c');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    for (final box in find.byType(Checkbox).evaluate()) {
+      await tester.tap(find.byWidget(box.widget));
+    }
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign up').last);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('promoting: an existing address drops the user into sign-in', (
+    tester,
+  ) async {
+    await promoteWithRefusal(tester, {
+      'code': 'account_exists',
+      'message': 'Ya existe una cuenta con ese correo.',
+    });
+
+    // Now on sign-in, which a promotion allows for the address it began with.
+    expect(find.text('Need an account? Sign up'), findsOneWidget);
+    expect(find.textContaining('If you started this backup earlier'), findsOne);
+  });
+
+  testWidgets('promoting: an already-linked account is explained, not dumped', (
+    tester,
+  ) async {
+    await promoteWithRefusal(tester, {
+      'code': 'local_account_claimed',
+      'message': 'Esta cuenta local ya fue vinculada a otra cuenta online.',
+    });
+
+    expect(
+      find.textContaining('already linked to another online account'),
+      findsOne,
+    );
+    // None of the raw response reaches the user.
+    expect(find.textContaining('HTTP 409'), findsNothing);
+    expect(find.textContaining('local_account_claimed'), findsNothing);
+    // And sign-in, where that other account finishes the backup, is offered.
+    expect(find.text('Need an account? Sign up'), findsOneWidget);
   });
 }

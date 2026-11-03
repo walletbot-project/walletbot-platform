@@ -723,11 +723,10 @@ void main() {
     final options = widget['options'] as Map;
     expect(options['limit'], 8);
     expect((options['background'] as Map)['fixedColor'], '#C7E5FF');
-    expect(
-      options['layout'],
-      {'row': 0, 'col': 0},
-      reason: 'content edits must preserve the manual grid coordinate',
-    );
+    expect(options['layout'], {
+      'row': 0,
+      'col': 0,
+    }, reason: 'content edits must preserve the manual grid coordinate');
 
     final archived = await tools.execute('archiveDashboardWidget', {'id': id});
     expect(archived, {'ok': true, 'id': id});

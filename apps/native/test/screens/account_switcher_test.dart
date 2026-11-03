@@ -250,6 +250,28 @@ void main() {
     expect(find.text('Bruno'), findsOneWidget);
   });
 
+  testWidgets('a local account is offered "Back up my data"', (tester) async {
+    await tester.pumpWidget(_gate(_FakeAuth([_ana], 'a'), const _Host()));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Back up my data'), findsOneWidget);
+    // It joins the group; nothing else in it moved or went missing.
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Delete this account'), findsOneWidget);
+  });
+
+  testWidgets('a remote account is not offered "Back up my data"', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_gate(_FakeAuth([_rita], 'r'), const _Host()));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Back up my data'), findsNothing);
+    expect(find.text('Sign out'), findsOneWidget);
+  });
+
   testWidgets('WhatsApp sits in the current-account group and opens', (
     tester,
   ) async {

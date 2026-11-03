@@ -9,11 +9,37 @@ import 'package:app/database.dart';
 import 'package:app/legal/legal_acceptance_payload.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:uuid/uuid.dart';
+
+/// A request to turn the local account [accountId] into an online one, handed
+/// to the sign-in/sign-up calls of [AuthController].
+class LocalPromotion {
+  const LocalPromotion({
+    required this.accountId,
+    required this.beforeConvert,
+    this.carryover = const {},
+  });
+
+  /// [UserAccount.id] of the local account being promoted.
+  final String accountId;
+
+  /// What the local account already settled on the device — the terms it
+  /// accepted, its AI consent, its default currency. The new online session
+  /// does not exist yet when the request goes out, so the server records it
+  /// for the user the promotion creates. See `buildPromotionCarryover`.
+  final Map<String, Object?> carryover;
+
+  /// Runs once the server has accepted the promotion and before the account
+  /// is converted, while the account's database is still open: it flags the
+  /// account's rows for the first push. Throwing aborts the conversion; the
+  /// server side is idempotent, so the user can simply retry.
+  final Future<void> Function() beforeConvert;
+}
 
 /// Owns the device's account list and the active Convex auth session.
 /// Token refresh scheduling is delegated to [ConvexClient.setAuth].
@@ -23,7 +49,9 @@ class AuthController extends ChangeNotifier {
     http.Client? httpClient,
     FlutterSecureStorage? storage,
     String Function()? localeTag,
+    Future<void> Function()? awaitFrame,
   }) : _convex = convex,
+       _awaitFrame = awaitFrame ?? (() => WidgetsBinding.instance.endOfFrame),
        _storage = storage ?? const FlutterSecureStorage(),
        _http = httpClient ?? http.Client(),
        _localeTag = localeTag {
@@ -53,14 +81,26 @@ class AuthController extends ChangeNotifier {
   /// to its default locale.
   final String Function()? _localeTag;
 
+  /// Resolves once the frame in progress has been built. Promotion needs it to
+  /// let the account's UI subtree (and the database connection it owns) go
+  /// away before the same database is reopened as a remote account. Injected
+  /// so tests need not pump frames.
+  final Future<void> Function() _awaitFrame;
+
   List<UserAccount> _accounts = const [];
   String? _activeId;
   StreamSubscription<AuthState>? _authStateSub;
   bool _convexAuthenticated = false;
   Future<void> _persistQueue = Future.value();
+  String? _promotingId;
 
   List<UserAccount> get accounts => List.unmodifiable(_accounts);
   String? get activeId => _activeId;
+
+  /// The local account being converted to an online one right now, if any.
+  /// While set, the app shows a bare placeholder instead of that account's
+  /// subtree so its database connection is closed before it is reopened.
+  String? get promotingId => _promotingId;
   bool get convexAuthenticated => _convexAuthenticated;
   UserAccount? get activeAccount {
     if (_activeId == null) return null;
@@ -98,17 +138,24 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<UserAccount> signInWithGoogle({bool rejectExisting = false}) async {
+  Future<UserAccount> signInWithGoogle({
+    bool rejectExisting = false,
+    LocalPromotion? promotion,
+  }) async {
     final googleAccount = await GoogleSignIn.instance.authenticate();
     final idToken = googleAccount.authentication.idToken;
     if (idToken == null) {
       throw StateError('Google sign-in returned no idToken');
     }
 
-    final body = await _postJson('/auth/google', {'idToken': idToken});
+    final body = await _postJson('/auth/google', {
+      'idToken': idToken,
+      ..._promotionFields(promotion),
+    });
     return _saveRemoteAccountFromAuthResponse(
       body,
       rejectExisting: rejectExisting,
+      promotion: promotion,
     );
   }
 
@@ -124,7 +171,10 @@ class AuthController extends ChangeNotifier {
   /// `givenName`/`familyName` are only ever populated on the user's FIRST
   /// authorization of this app; every later sign-in returns them null and the
   /// name already stored on the account stands.
-  Future<UserAccount> signInWithApple({bool rejectExisting = false}) async {
+  Future<UserAccount> signInWithApple({
+    bool rejectExisting = false,
+    LocalPromotion? promotion,
+  }) async {
     final rawNonce = _generateNonce();
     final credential = await SignInWithApple.getAppleIDCredential(
       scopes: const [
@@ -144,10 +194,12 @@ class AuthController extends ChangeNotifier {
       'nonce': rawNonce,
       if (credential.givenName != null) 'givenName': credential.givenName,
       if (credential.familyName != null) 'familyName': credential.familyName,
+      ..._promotionFields(promotion),
     });
     return _saveRemoteAccountFromAuthResponse(
       body,
       rejectExisting: rejectExisting,
+      promotion: promotion,
     );
   }
 
@@ -155,14 +207,17 @@ class AuthController extends ChangeNotifier {
     required String email,
     required String password,
     bool rejectExisting = false,
+    LocalPromotion? promotion,
   }) async {
     final body = await _postJson('/auth/email/sign-in', {
       'email': email,
       'password': password,
+      ..._promotionFields(promotion),
     });
     return _saveRemoteAccountFromAuthResponse(
       body,
       rejectExisting: rejectExisting,
+      promotion: promotion,
     );
   }
 
@@ -181,16 +236,19 @@ class AuthController extends ChangeNotifier {
     required String password,
     LegalAcceptancePayload? acceptance,
     bool rejectExisting = false,
+    LocalPromotion? promotion,
   }) async {
     final body = await _postJson('/auth/email/sign-up', {
       'name': name,
       'email': email,
       'password': password,
       if (acceptance != null) 'acceptance': acceptance.toJson(),
+      ..._promotionFields(promotion),
     });
     return _saveRemoteAccountFromAuthResponse(
       body,
       rejectExisting: rejectExisting,
+      promotion: promotion,
     );
   }
 
@@ -308,25 +366,132 @@ class AuthController extends ChangeNotifier {
   // Internals
   // ---------------------------------------------------------------------------
 
+  /// The body fields that put an auth request in promotion mode: the backend
+  /// then refuses to sign in to a pre-existing online account. Empty for an
+  /// ordinary sign-in.
+  Map<String, Object?> _promotionFields(LocalPromotion? promotion) {
+    if (promotion == null) return const {};
+    final local = _accounts.firstWhere(
+      (a) => a.id == promotion.accountId && a.type == AccountType.local,
+      orElse: () => throw StateError(
+        'Promotion requires a local account: ${promotion.accountId}',
+      ),
+    );
+    final localAccountId = local.localAccountId;
+    if (localAccountId == null) {
+      throw StateError('Local account has no localAccountId: ${local.id}');
+    }
+    return {
+      'promoteLocalAccountId': localAccountId,
+      if (promotion.carryover.isNotEmpty) 'carryover': promotion.carryover,
+    };
+  }
+
+  /// Converts the local account in place: same [UserAccount.id] — it names the
+  /// on-device database, so the data never moves — but now a remote account
+  /// carrying the server's user id and the new session.
+  ///
+  /// Remote accounts attach a sync engine, voice sync and server-backed
+  /// settings when their subtree is built, and the subtree is only rebuilt
+  /// when the account changes. So the local subtree is taken down first, for
+  /// one frame, and only then rebuilt as a remote one over the same database
+  /// file: reopening it in the frame its predecessor is torn down in is the
+  /// two-connections-to-one-file case `_AuthGate` warns about.
+  Future<UserAccount> _promoteInPlace(
+    LocalPromotion promotion,
+    Map<String, Object?> body,
+  ) async {
+    final userJson = body['user'] as Map<String, Object?>?;
+    if (userJson == null) {
+      throw StateError('Sign-in response missing user');
+    }
+    final serverId = userJson['id'] as String;
+    final index = _accounts.indexWhere(
+      (a) => a.id == promotion.accountId && a.type == AccountType.local,
+    );
+    if (index == -1) {
+      throw StateError('Promoted account is gone: ${promotion.accountId}');
+    }
+    final local = _accounts[index];
+
+    // The server only lets a promotion through for an account this very
+    // promotion created, but the user may since have signed into it from the
+    // regular sign-in screen. Two entries for one user would split its data.
+    if (_accounts.any((a) => a.id == serverId || a.remoteUserId == serverId)) {
+      throw AccountAlreadyAddedError(userJson['email'] as String?);
+    }
+
+    await promotion.beforeConvert();
+
+    final promoted = UserAccount(
+      id: local.id,
+      type: AccountType.remote,
+      // The user named this account when they made it; keep that over
+      // whatever the identity provider calls them.
+      name: local.name ?? userJson['name'] as String?,
+      email: userJson['email'] as String?,
+      picture: userJson['image'] as String?,
+      sessionToken: body['refreshToken'] as String,
+      remoteUserId: serverId,
+    );
+
+    _promotingId = local.id;
+    notifyListeners();
+    try {
+      await _awaitFrame();
+      _accounts = [
+        for (final a in _accounts)
+          if (a.id == local.id) promoted else a,
+      ];
+      _activeId = promoted.id;
+      await _persist();
+      await _attachAuthForActive();
+    } finally {
+      _promotingId = null;
+      notifyListeners();
+    }
+    return promoted;
+  }
+
   Future<UserAccount> _saveRemoteAccountFromAuthResponse(
     Map<String, Object?> body, {
     bool rejectExisting = false,
+    LocalPromotion? promotion,
   }) async {
+    if (promotion != null) return _promoteInPlace(promotion, body);
+
     final userJson = body['user'] as Map<String, Object?>?;
     if (userJson == null) {
       throw StateError('Sign-in response missing user');
     }
 
-    final account = UserAccount(
-      id: userJson['id'] as String,
-      type: AccountType.remote,
-      name: userJson['name'] as String?,
-      email: userJson['email'] as String?,
-      picture: userJson['image'] as String?,
-      // Wire format kept as `refreshToken` for backward compat with the
-      // backend response.
-      sessionToken: body['refreshToken'] as String,
-    );
+    final serverId = userJson['id'] as String;
+    // An account promoted from a local one keeps its local id, so signing in
+    // again (re-auth after its session died) must land on that entry instead
+    // of minting a second, empty one under the server id.
+    UserAccount? promotedEntry;
+    for (final a in _accounts) {
+      if (a.remoteUserId == serverId) promotedEntry = a;
+    }
+    final account =
+        promotedEntry?.copyWith(
+          name: userJson['name'] as String?,
+          email: userJson['email'] as String?,
+          picture: userJson['image'] as String?,
+          sessionToken: body['refreshToken'] as String,
+          requiresReauth: false,
+          serverDeleted: false,
+        ) ??
+        UserAccount(
+          id: serverId,
+          type: AccountType.remote,
+          name: userJson['name'] as String?,
+          email: userJson['email'] as String?,
+          picture: userJson['image'] as String?,
+          // Wire format kept as `refreshToken` for backward compat with the
+          // backend response.
+          sessionToken: body['refreshToken'] as String,
+        );
 
     // When the user is explicitly adding an account (vs. re-authenticating an
     // existing one), signing into an account already on the device is a no-op
@@ -412,7 +577,7 @@ class AuthController extends ChangeNotifier {
       // now the token row is gone and the id is all it can look up.
       final body = await _postJson('/auth/refresh', {
         'refreshToken': session,
-        'userId': active.id,
+        'userId': active.serverUserId,
       });
       return body['accessToken'] as String;
     } catch (e) {
@@ -518,6 +683,14 @@ class AuthController extends ChangeNotifier {
           response.body,
         );
       }
+      if (decoded is Map<String, Object?> &&
+          decoded['code'] == 'local_account_claimed') {
+        throw LocalAccountClaimedException(
+          response.statusCode,
+          decoded,
+          response.body,
+        );
+      }
       throw AuthHttpError(response.statusCode, decoded, response.body);
     }
     return jsonDecode(response.body) as Map<String, Object?>;
@@ -602,4 +775,11 @@ class EmailNotVerifiedException extends AuthHttpError {
 /// either without narrowing it down.
 class AccountExistsException extends AuthHttpError {
   AccountExistsException(super.statusCode, super.body, super.rawBody);
+}
+
+/// A promotion named a local account that is already linked to a different
+/// online account (`local_account_claimed`): an earlier attempt created one
+/// with another email or login. Only that account can finish the backup.
+class LocalAccountClaimedException extends AuthHttpError {
+  LocalAccountClaimedException(super.statusCode, super.body, super.rawBody);
 }

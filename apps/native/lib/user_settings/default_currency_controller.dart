@@ -48,7 +48,11 @@ class DefaultCurrencyController extends ChangeNotifier {
   // overwrites the user's just-made choice with a stale backend value.
   bool _setValueInProgress = false;
 
-  String get _cacheKey => 'default_currency_$accountId';
+  /// Where [accountId]'s device cache lives. Public so a local account's
+  /// promotion can read it without a controller.
+  static String cacheKey(String accountId) => 'default_currency_$accountId';
+
+  String get _cacheKey => cacheKey(accountId);
 
   /// Restores the cached value immediately, then (for remote accounts)
   /// refreshes from the backend in the background. Never throws — startup

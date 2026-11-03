@@ -39,7 +39,11 @@ class AiConsentController extends ChangeNotifier {
   final FlutterSecureStorage _storage;
   final ConvexClient? _client;
 
-  String get _key => 'ai_consent:$accountId';
+  /// Where the device record of [accountId]'s consent lives. Public so a local
+  /// account's promotion can read it without a controller.
+  static String storageKey(String accountId) => 'ai_consent:$accountId';
+
+  String get _key => storageKey(accountId);
 
   String? _accepted;
   bool _resolved = false;
